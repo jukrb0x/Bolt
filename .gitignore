@@ -30,6 +30,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # worktrees
 .worktrees/
 
+# local/private files (not for version control)
+.local/
+
 # IntelliJ based IDEs
 .idea
 
