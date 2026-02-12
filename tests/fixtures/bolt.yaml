@@ -1,0 +1,27 @@
+project:
+  name: MyProject
+  ue_path: D:/dev/UE
+  project_path: D:/dev/NRC/Project
+  project_name: MyProject
+
+targets:
+  editor:
+    type: editor
+    build_type: development
+  client:
+    type: program
+    name: MyClient
+    build_type: shipping
+
+actions:
+  build_editor:
+    steps:
+      - uses: ue/build
+        with:
+          target: editor
+  daily_check:
+    steps:
+      - uses: ue/update
+      - uses: ue/build
+        with:
+          target: editor
