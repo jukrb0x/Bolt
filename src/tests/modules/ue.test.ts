@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { UeModule } from "../modules/ue"
-import { testCfg, PROJECT_NAME } from "./env"
+import { UeModule } from "../../modules/ue"
+import { testCfg, PROJECT_NAME } from "../env"
 
 test("build command for editor target", () => {
   const ue = new UeModule(testCfg, { dryRun: true })
