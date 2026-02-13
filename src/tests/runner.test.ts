@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test"
-import { Runner } from "./runner"
-import type { BoltConfig } from "./config"
+import { Runner } from "../runner"
+import { testCfg } from "./env"
+import type { BoltConfig } from "../config"
 
 const cfg: BoltConfig = {
-  project: { name: "NRC", ue_path: "D:/UE", project_path: "D:/proj", project_name: "NRC" },
-  targets: { editor: { type: "editor", build_type: "development" } },
+  ...testCfg,
   actions: {
     a: { steps: [{ run: "echo a" }] },
     b: { depends: ["a"], steps: [{ run: "echo b" }] },

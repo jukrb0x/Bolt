@@ -1,13 +1,14 @@
 import { expect, test } from "bun:test"
-import { interpolate } from "./interpolate"
+import { interpolate } from "../interpolate"
+import { UE_PATH, PROJECT_NAME } from "./env"
 
 const ctx = {
-  project: { name: "NRC", ue_path: "D:/UE" },
+  project: { name: PROJECT_NAME, ue_path: UE_PATH },
   env: { BUILD_VERSION: "1.2.3" },
 }
 
 test("interpolates project variable", () => {
-  expect(interpolate("Hello ${{ project.name }}", ctx)).toBe("Hello NRC")
+  expect(interpolate("Hello ${{ project.name }}", ctx)).toBe(`Hello ${PROJECT_NAME}`)
 })
 
 test("interpolates env variable", () => {

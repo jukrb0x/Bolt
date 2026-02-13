@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test"
-import { loadConfig } from "./config"
+import { loadConfig } from "../config"
+import { UE_PATH, PROJECT_PATH } from "./env"
 import path from "path"
 
-const fixture = path.join(import.meta.dir, "../tests/fixtures/bolt.yaml")
+const fixture = path.join(import.meta.dir, "../../tests/fixtures/bolt.yaml")
 
 test("loads project fields", async () => {
   const cfg = await loadConfig(fixture)
   expect(cfg.project.name).toBe("NRC")
-  expect(cfg.project.ue_path).toBe("D:/dev/UE")
+  expect(cfg.project.ue_path).toBe(UE_PATH)
+  expect(cfg.project.project_path).toBe(PROJECT_PATH)
 })
 
 test("loads targets", async () => {
@@ -25,6 +27,6 @@ test("loads actions", async () => {
 })
 
 test("throws on missing project.ue_path", async () => {
-  expect(loadConfig(path.join(import.meta.dir, "../tests/fixtures/invalid.yaml")))
+  expect(loadConfig(path.join(import.meta.dir, "../../tests/fixtures/invalid.yaml")))
     .rejects.toThrow()
 })
