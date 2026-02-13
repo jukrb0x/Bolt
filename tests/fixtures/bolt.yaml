@@ -8,7 +8,7 @@ project:
 targets:
   editor:
     type: editor
-    build_type: development
+    build_type: debug
   client:
     type: program
     name: MyClient
