@@ -1,5 +1,5 @@
 import { z } from "zod"
-import yaml from "js-yaml"
+import { YAML } from "bun"
 import { readFileSync } from "fs"
 
 const StepSchema = z.object({
@@ -40,6 +40,6 @@ export type Target     = z.infer<typeof TargetSchema>
 
 export async function loadConfig(filepath: string): Promise<BoltConfig> {
   const raw = readFileSync(filepath, "utf8")
-  const parsed = yaml.load(raw)
+  const parsed = YAML.parse(raw)
   return BoltConfigSchema.parse(parsed)
 }
