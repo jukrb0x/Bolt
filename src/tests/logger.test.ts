@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { Logger } from "./logger"
+import { Logger } from "../logger"
 
 test("info logs with prefix", () => {
   const lines: string[] = []
