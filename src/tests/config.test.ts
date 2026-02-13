@@ -1,15 +1,14 @@
 import { expect, test } from "bun:test"
 import { loadConfig } from "../config"
-import { UE_PATH, PROJECT_PATH } from "./env"
 import path from "path"
 
 const fixture = path.join(import.meta.dir, "../../tests/fixtures/bolt.yaml")
 
 test("loads project fields", async () => {
   const cfg = await loadConfig(fixture)
-  expect(cfg.project.name).toBe("NRC")
-  expect(cfg.project.ue_path).toBe(UE_PATH)
-  expect(cfg.project.project_path).toBe(PROJECT_PATH)
+  expect(cfg.project.name).toBe("MyProject")
+  expect(cfg.project.ue_path).toBe("C:/UnrealEngine")
+  expect(cfg.project.project_path).toBe("C:/Projects/MyProject")
 })
 
 test("loads targets", async () => {
