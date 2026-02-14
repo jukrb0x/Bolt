@@ -1,0 +1,194 @@
+# bolt.yaml — Bolt project configuration template
+# Copy this file to your project root and fill in the project section.
+# Run `bolt list` to see all available actions.
+# Run `bolt <action> --dry-run` to preview steps without executing.
+
+# ---------------------------------------------------------------------------
+# Project settings
+# ---------------------------------------------------------------------------
+project:
+  name: MyProject                              # Project name (used for target names, e.g. MyProjectEditor)
+  ue_path: C:/UnrealEngine                     # Path to Unreal Engine root (Git repo)
+  project_path: C:/Projects/MyProject          # Path to .uproject directory (SVN repo)
+  project_name: MyProject                      # .uproject filename (without extension)
+  svn_root: C:/Projects                        # SVN root to run `svn update` from
+  git_branch: main                             # Engine Git branch to pull
+
+# ---------------------------------------------------------------------------
+# Build targets
+# ---------------------------------------------------------------------------
+targets:
+  editor:
+    type: editor
+    build_type: development                    # development | debug | shipping | test
+
+  editor_debug:
+    type: editor
+    build_type: debug
+
+  client:
+    type: program
+    name: MyClient                             # Target name passed to Build.bat
+    build_type: shipping
+
+  client_debug:
+    type: program
+    name: MyClient
+    build_type: debug
+
+# ---------------------------------------------------------------------------
+# Actions
+# Equivalent Run.bat commands are shown in comments.
+# ---------------------------------------------------------------------------
+actions:
+
+  # ---------- Source control -----------------------------------------------
+
+  # Run.bat /update:git
+  update_engine:
+    steps:
+      - uses: ue/update-git
+
+  # Run.bat /update:svn
+  update_project:
+    steps:
+      - uses: ue/update-svn
+
+  # Run.bat /update  (= /update:git + /update:svn)
+  update:
+    steps:
+      - uses: ue/update-git
+      - uses: ue/update-svn
+
+  # Run.bat /cleanup
+  svn_cleanup:
+    steps:
+      - uses: ue/svn-cleanup
+
+  # Run.bat /revert:dataconfig
+  revert_dataconfig:
+    steps:
+      - uses: ue/svn-revert
+        with:
+          path: ${{ project.project_path }}/Config/DataConfig
+
+  # ---------- Build --------------------------------------------------------
+
+  # Run.bat /gen
+  generate_project:
+    steps:
+      - uses: ue/generate-project
+
+  # Run.bat /build:editor
+  build_editor:
+    steps:
+      - uses: ue/build
+        with:
+          target: editor
+
+  # Run.bat /build:editor /type:debug
+  build_editor_debug:
+    steps:
+      - uses: ue/build
+        with:
+          target: editor_debug
+
+  # Run.bat /build:program /target:MyClient
+  build_client:
+    steps:
+      - uses: ue/build
+        with:
+          target: client
+
+  # Run.bat /build:program /target:MyClient /type:debug
+  build_client_debug:
+    steps:
+      - uses: ue/build
+        with:
+          target: client_debug
+
+  # Run.bat /build  (= /build:engine + /gen + /build:editor)
+  build:
+    steps:
+      - uses: ue/generate-project
+      - uses: ue/build
+        with:
+          target: editor
+
+  # ---------- Runtime ------------------------------------------------------
+
+  # Run.bat /start
+  start:
+    steps:
+      - uses: ue/start
+
+  # Run.bat /killue4
+  kill:
+    steps:
+      - uses: ue/kill
+
+  # Run.bat /fillddc
+  fill_ddc:
+    steps:
+      - uses: ue/fillddc
+
+  # Run.bat /fixdll
+  fix_dll:
+    steps:
+      - run: powershell -Command "Get-ChildItem '${{ project.project_path }}' -Recurse -Filter '*.dll' | Where-Object { $_.Length -eq 0 } | Remove-Item -Force"
+        continue-on-error: true
+
+  # ---------- Compound workflows -------------------------------------------
+
+  # Run.bat /update /build  (daily full sync + build)
+  daily_build:
+    steps:
+      - uses: ue/update-git
+      - uses: ue/update-svn
+      - uses: ue/generate-project
+      - uses: ue/build
+        with:
+          target: editor
+
+  # Run.bat /update /build /start
+  daily_build_and_start:
+    depends:
+      - daily_build
+    steps:
+      - uses: ue/start
+
+  # Run.bat /killue4 /update:svn /build:editor /start  (quick iteration cycle)
+  sync_and_rebuild:
+    steps:
+      - uses: ue/kill
+      - uses: ue/update-svn
+      - uses: ue/build
+        with:
+          target: editor
+      - uses: ue/start
+
+  # Run.bat /killue4 /update /build /fillddc /start  (full clean pipeline)
+  full_pipeline:
+    steps:
+      - uses: ue/kill
+      - uses: ue/update-git
+      - uses: ue/svn-cleanup
+      - uses: ue/update-svn
+      - uses: ue/generate-project
+      - uses: ue/build
+        with:
+          target: editor
+      - uses: ue/fillddc
+      - uses: ue/start
+
+  # ---------- Shipping build pipeline --------------------------------------
+
+  # Build shipping client
+  ship:
+    steps:
+      - uses: ue/kill
+      - uses: ue/update-git
+      - uses: ue/update-svn
+      - uses: ue/build
+        with:
+          target: client
