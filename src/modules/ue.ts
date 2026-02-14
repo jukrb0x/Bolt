@@ -32,8 +32,44 @@ export class UeModule {
   }
 
   update(): void {
-    this.gitPull()
-    this.svnUpdate()
+    this.updateGit()
+    this.updateSvn()
+  }
+
+  updateGit(): void {
+    const branch = (this.cfg.project as any).git_branch ?? "main"
+    const cmd = `git -C "${this.cfg.project.ue_path}" pull origin ${branch} --autostash --no-edit`
+    this.commandSink?.(cmd)
+    if (!this.opts.dryRun) this.exec(cmd)
+  }
+
+  updateSvn(): void {
+    const root = (this.cfg.project as any).svn_root ?? this.cfg.project.project_path
+    const cmd = `svn update "${root}" --non-interactive --trust-server-cert`
+    this.commandSink?.(cmd)
+    if (!this.opts.dryRun) this.exec(cmd)
+  }
+
+  svnCleanup(): void {
+    const root = (this.cfg.project as any).svn_root ?? this.cfg.project.project_path
+    const cmd = `svn cleanup "${root}"`
+    this.commandSink?.(cmd)
+    if (!this.opts.dryRun) this.exec(cmd)
+  }
+
+  svnRevert(params: Record<string, string>): void {
+    const target = params.path ?? this.cfg.project.project_path
+    const cmd = `svn revert -R "${target}"`
+    this.commandSink?.(cmd)
+    if (!this.opts.dryRun) this.exec(cmd)
+  }
+
+  generateProject(): void {
+    const uePath = this.cfg.project.ue_path
+    const projFile = path.join(this.cfg.project.project_path, `${this.cfg.project.project_name}.uproject`)
+    const cmd = `"${uePath}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`
+    this.commandSink?.(cmd)
+    if (!this.opts.dryRun) this.exec(cmd)
   }
 
   start(): void {
@@ -73,19 +109,6 @@ export class UeModule {
       }
       fs.writeFileSync(projFile, content)
     }
-  }
-
-  private gitPull(): void {
-    const cmd = `git -C "${this.cfg.project.ue_path}" pull origin ${this.cfg.project.project_name} --autostash --no-edit`
-    this.commandSink?.(cmd)
-    if (!this.opts.dryRun) this.exec(cmd)
-  }
-
-  private svnUpdate(): void {
-    const root = (this.cfg.project as any).svn_root ?? this.cfg.project.project_path
-    const cmd = `svn update "${root}" --non-interactive --trust-server-cert`
-    this.commandSink?.(cmd)
-    if (!this.opts.dryRun) this.exec(cmd)
   }
 
   private exec(cmd: string): void {
