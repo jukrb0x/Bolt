@@ -4,6 +4,7 @@ node_modules
 # output
 out
 dist
+build
 *.tgz
 
 # code coverage
@@ -26,6 +27,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .eslintcache
 .cache
 *.tsbuildinfo
+
+# runtime logs
+.bolt/
 
 # worktrees
 .worktrees/
