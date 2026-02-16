@@ -9,6 +9,14 @@ const StepSchema = z.object({
   "continue-on-error": z.boolean().optional(),
 })
 
+const OpVariantSchema = z.array(StepSchema)
+const OpSchema        = z.record(z.string(), OpVariantSchema)
+
+const PipelineSchema = z.object({
+  order:      z.array(z.string()).default([]),
+  fail_stops: z.array(z.string()).default([]),
+})
+
 const ActionSchema = z.object({
   depends: z.array(z.string()).optional(),
   steps:   z.array(StepSchema),
@@ -30,14 +38,19 @@ const ProjectSchema = z.object({
 })
 
 const BoltConfigSchema = z.object({
-  project: ProjectSchema,
-  targets: z.record(TargetSchema).default({}),
-  actions: z.record(ActionSchema).default({}),
+  project:  ProjectSchema,
+  targets:  z.record(TargetSchema).default({}),
+  actions:  z.record(ActionSchema).default({}),
+  ops:      z.record(z.string(), OpSchema).default({}),
+  pipeline: PipelineSchema.default({ order: [], fail_stops: [] }),
 })
 
-export type BoltConfig = z.infer<typeof BoltConfigSchema>
-export type Step       = z.infer<typeof StepSchema>
-export type Target     = z.infer<typeof TargetSchema>
+export type BoltConfig  = z.infer<typeof BoltConfigSchema>
+export type Step        = z.infer<typeof StepSchema>
+export type Target      = z.infer<typeof TargetSchema>
+export type Pipeline    = z.infer<typeof PipelineSchema>
+export type OpVariant   = z.infer<typeof OpVariantSchema>
+export type OpsMap      = Record<string, Record<string, OpVariant>>
 
 export async function loadConfig(filepath: string): Promise<BoltConfig> {
   const raw = readFileSync(filepath, "utf8")
