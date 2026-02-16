@@ -2,6 +2,7 @@ import { defineCommand, runMain } from "citty"
 import runCmd  from "./commands/run"
 import listCmd from "./commands/list"
 import infoCmd from "./commands/info"
+import goCmd   from "./commands/go"
 import pkg from "../package.json"
 
 const main = defineCommand({
@@ -14,6 +15,7 @@ const main = defineCommand({
     run:  runCmd,
     list: listCmd,
     info: infoCmd,
+    go:   goCmd,
   },
 })
 

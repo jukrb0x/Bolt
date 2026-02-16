@@ -1,0 +1,91 @@
+# bolt.yaml — project automation config
+
+project:
+  name: MyProject
+  ue_path: C:/UnrealEngine
+  project_path: C:/Projects/MyProject
+  project_name: MyProject
+  svn_root: C:/Projects/svn
+  git_branch: main
+
+targets:
+  editor:
+    type: editor
+    build_type: development
+  client:
+    type: program
+    name: MyClient
+    build_type: shipping
+
+# Op definitions for `bolt go`
+# Each op has named variants; "default" is used when no value is given.
+ops:
+  kill:
+    default:
+      - uses: ue/kill
+
+  update:
+    default:
+      - uses: ue/update-git
+      - uses: ue/update-svn
+    git:
+      - uses: ue/update-git
+    svn:
+      - uses: ue/update-svn
+
+  svn-cleanup:
+    default:
+      - uses: ue/svn-cleanup
+
+  generate-project:
+    default:
+      - uses: ue/generate-project
+
+  build:
+    default:
+      - uses: ue/build
+        with:
+          target: editor
+    # Use --build=<target-key> to override the target at runtime
+
+  fillddc:
+    default:
+      - uses: ue/fillddc
+
+  start:
+    default:
+      - uses: ue/start
+
+# Pipeline controls bolt go execution order and failure behaviour
+pipeline:
+  order:
+    - kill
+    - update
+    - svn-cleanup
+    - generate-project
+    - build
+    - fillddc
+    - start
+  fail_stops:
+    - build      # if build fails, stop; other ops continue on failure
+
+# Named action profiles (reusable, runnable with `bolt run <name>`)
+actions:
+  build_editor:
+    steps:
+      - uses: ops/build
+
+  daily_check:
+    steps:
+      - uses: ops/update:svn
+      - uses: ops/build
+      - uses: ops/start
+        continue-on-error: true
+
+  full_reset:
+    steps:
+      - uses: ops/kill
+        continue-on-error: true
+      - uses: ops/update
+      - uses: ops/generate-project
+      - uses: ops/build

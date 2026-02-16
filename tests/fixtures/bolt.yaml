@@ -26,3 +26,51 @@ actions:
       - uses: ue/build
         with:
           target: editor
+
+ops:
+  kill:
+    default:
+      - uses: ue/kill
+
+  update:
+    default:
+      - uses: ue/update-git
+      - uses: ue/update-svn
+    git:
+      - uses: ue/update-git
+    svn:
+      - uses: ue/update-svn
+
+  svn-cleanup:
+    default:
+      - uses: ue/svn-cleanup
+
+  generate-project:
+    default:
+      - uses: ue/generate-project
+
+  build:
+    default:
+      - uses: ue/build
+        with:
+          target: editor
+
+  fillddc:
+    default:
+      - uses: ue/fillddc
+
+  start:
+    default:
+      - uses: ue/start
+
+pipeline:
+  order:
+    - kill
+    - update
+    - svn-cleanup
+    - generate-project
+    - build
+    - fillddc
+    - start
+  fail_stops:
+    - build
