@@ -6,11 +6,19 @@
     - [ ] 
 - [ ] universal VCS - currently engine (git), project (svn), make this configurable
 - [ ] `bolt init` - init enigne and project repo with boltrepo format, or custom paths
-- [ ] `bolt check` - check bolt.yaml validation
 - [ ] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
-- [ ] distribution and version management, bolt.yaml should be compatibility versioned
-- [ ] `bolt apply` - apply templated profile bolt.yaml from built-in OR gh repo (or any git repo.. specify domain)
+- [ ] [ecosystem] shell command runs
+- [ ] [config] `bolt check` - check bolt.yaml validation
+- [ ] [config] `bolt apply` - apply templated profile bolt.yaml from built-in OR gh repo (or any git repo.. specify domain)
+- [ ] [config] `bolt config` - open $editor for current bolt yaml
+- [ ] `bolt help` - details
 
+## Dist
+- [ ] distribution and version management, bolt.yaml should be compatibility versioned
+
+## SVN
+- [ ] support to use tortoise svn in some cases or simply svn
+- [ ] support gfsvn
 
 ## Advanced
 - [ ] `bolt mcp` - to be brainstroming

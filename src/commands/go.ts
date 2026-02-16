@@ -13,7 +13,7 @@ function timestamp() {
 }
 
 export default defineCommand({
-  meta: { description: "Run ad-hoc ops in pipeline order (e.g. --update=svn --build --start)" },
+  meta: { description: "Run ad-hoc ops in pipeline order (e.g. bolt go update:svn build start)" },
   args: {
     "dry-run": { type: "boolean", default: false, description: "Print steps without executing" },
   },
@@ -22,10 +22,12 @@ export default defineCommand({
 
     // Slice raw op tokens from process.argv — op names are dynamic, can't be citty args
     const goIdx = process.argv.indexOf("go")
-    const rawTokens = process.argv.slice(goIdx + 1).filter(t => t.startsWith("--") && t !== "--dry-run")
+    const rawTokens = process.argv.slice(goIdx + 1).filter(t =>
+      (t.startsWith("--") && t !== "--dry-run") || !t.startsWith("-")
+    )
 
     if (rawTokens.length === 0) {
-      console.error("[ERROR] No ops specified. Example: bolt go --update=svn --build --start")
+      console.error("[ERROR] No ops specified. Example: bolt go update:svn build start")
       process.exit(1)
     }
 
