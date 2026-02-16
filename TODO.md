@@ -23,3 +23,10 @@
 
 ## Advanced
 - [ ] `bolt mcp` - to be brainstroming
+
+
+## cross-platform
+> Win is first-class supported
+
+- [x] bolt itself
+- [ ] ue/build
