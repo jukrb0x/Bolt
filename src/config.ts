@@ -12,7 +12,7 @@ const StepSchema = z.object({
 const OpVariantSchema = z.array(StepSchema)
 const OpSchema        = z.record(z.string(), OpVariantSchema)
 
-const PipelineSchema = z.object({
+const GoPipelineSchema = z.object({
   order:      z.array(z.string()).default([]),
   fail_stops: z.array(z.string()).default([]),
 })
@@ -41,14 +41,14 @@ const BoltConfigSchema = z.object({
   project:  ProjectSchema,
   targets:  z.record(TargetSchema).default({}),
   actions:  z.record(ActionSchema).default({}),
-  ops:      z.record(z.string(), OpSchema).default({}),
-  pipeline: PipelineSchema.default({ order: [], fail_stops: [] }),
+  ops:          z.record(z.string(), OpSchema).default({}),
+  "go-pipeline": GoPipelineSchema.default({ order: [], fail_stops: [] }),
 })
 
 export type BoltConfig  = z.infer<typeof BoltConfigSchema>
 export type Step        = z.infer<typeof StepSchema>
 export type Target      = z.infer<typeof TargetSchema>
-export type Pipeline    = z.infer<typeof PipelineSchema>
+export type GoPipeline  = z.infer<typeof GoPipelineSchema>
 export type OpVariant   = z.infer<typeof OpVariantSchema>
 export type OpsMap      = Record<string, Record<string, OpVariant>>
 
