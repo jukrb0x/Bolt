@@ -13,20 +13,22 @@ export interface ResolvedOp {
 
 export function parseGoArgs(tokens: string[]): ParsedOp[] {
   return tokens.map(token => {
-    const stripped = token.slice(2) // remove leading "--"
-    const eqIdx = stripped.indexOf("=")
-    if (eqIdx !== -1) {
-      return {
-        name:    stripped.slice(0, eqIdx),
-        value:   stripped.slice(eqIdx + 1),
-        isExact: true,
+    if (token.startsWith("--")) {
+      // --name  or  --name=value
+      const stripped = token.slice(2)
+      const eqIdx = stripped.indexOf("=")
+      if (eqIdx !== -1) {
+        return { name: stripped.slice(0, eqIdx), value: stripped.slice(eqIdx + 1), isExact: true }
       }
+      return { name: stripped, value: "default", isExact: false }
     }
-    return {
-      name:    stripped,
-      value:   "default",
-      isExact: false,
+
+    // name  or  name:value
+    const colonIdx = token.indexOf(":")
+    if (colonIdx !== -1) {
+      return { name: token.slice(0, colonIdx), value: token.slice(colonIdx + 1), isExact: true }
     }
+    return { name: token, value: "default", isExact: false }
   })
 }
 

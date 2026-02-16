@@ -27,6 +27,21 @@ describe("parseGoArgs", () => {
     expect(result).toEqual({ name: "build", value: "default", isExact: false })
   })
 
+  test("word style: bare word → default variant", () => {
+    const [result] = parseGoArgs(["update"])
+    expect(result).toEqual({ name: "update", value: "default", isExact: false })
+  })
+
+  test("word style: name:value → isExact", () => {
+    const [result] = parseGoArgs(["update:svn"])
+    expect(result).toEqual({ name: "update", value: "svn", isExact: true })
+  })
+
+  test("word style: build:client → isExact target override", () => {
+    const [result] = parseGoArgs(["build:client"])
+    expect(result).toEqual({ name: "build", value: "client", isExact: true })
+  })
+
   test("multiple tokens → array of ParsedOp", () => {
     const result = parseGoArgs(["--update=svn", "--build", "--start"])
     expect(result).toHaveLength(3)
