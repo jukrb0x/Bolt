@@ -2,11 +2,12 @@ import { defineCommand, runMain } from "citty"
 import runCmd  from "./commands/run"
 import listCmd from "./commands/list"
 import infoCmd from "./commands/info"
+import pkg from "../package.json"
 
 const main = defineCommand({
   meta: {
     name: "bolt",
-    version: "0.1.0",
+    version: pkg.version,
     description: "Unreal Engine build automation",
   },
   subCommands: {
