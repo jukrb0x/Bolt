@@ -24,4 +24,15 @@ export const testCfg: BoltConfig = {
     client: { type: "program", name: "MyClient", build_type: "shipping" },
   },
   actions: {},
+  ops: {
+    kill:   { default: [{ uses: "ue/kill" }] },
+    update: {
+      default: [{ uses: "ue/update-git" }, { uses: "ue/update-svn" }],
+      git:     [{ uses: "ue/update-git" }],
+      svn:     [{ uses: "ue/update-svn" }],
+    },
+    build:  { default: [{ uses: "ue/build", with: { target: "editor" } }] },
+    start:  { default: [{ uses: "ue/start" }] },
+  },
+  pipeline: { order: [], fail_stops: [] },
 }

@@ -1,9 +1,16 @@
-import type { BoltConfig, Step } from "./config"
+import type { BoltConfig, Step, Pipeline } from "./config"
 import { Logger } from "./logger"
 import { interpolate } from "./interpolate"
 import { UeModule }   from "./modules/ue"
 import { FsModule }   from "./modules/fs"
 import { JsonModule } from "./modules/json"
+import { sortByPipeline, type ResolvedOp } from "./go"
+
+export const DEFAULT_PIPELINE_ORDER = [
+  "kill", "update", "svn-cleanup", "generate-project", "build", "fillddc", "start",
+]
+
+export const DEFAULT_FAIL_STOPS = ["build"]
 
 interface RunnerOptions {
   dryRun?:  boolean
@@ -26,6 +33,25 @@ export class Runner {
 
     for (const step of action.steps) {
       await this.execStep(step)
+    }
+  }
+
+  async runOps(ops: ResolvedOp[], pipeline: Pipeline): Promise<void> {
+    const order     = pipeline.order.length      > 0 ? pipeline.order      : DEFAULT_PIPELINE_ORDER
+    const failStops = pipeline.fail_stops.length > 0 ? pipeline.fail_stops : DEFAULT_FAIL_STOPS
+    const sorted    = sortByPipeline(ops, order)
+
+    for (const op of sorted) {
+      const t0 = Date.now()
+      this.opts.logger?.step(op.name)
+      try {
+        for (const step of op.steps) await this.execStep(step)
+        this.opts.logger?.success(op.name, (Date.now() - t0) / 1000)
+      } catch (e: any) {
+        this.opts.logger?.fail(op.name, (Date.now() - t0) / 1000)
+        if (failStops.includes(op.name)) throw e
+        this.opts.logger?.warn(`"${op.name}" failed but is not in fail_stops — continuing`)
+      }
     }
   }
 
@@ -61,6 +87,17 @@ export class Runner {
       Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)])
     )
     const [ns, op] = uses.split("/")
+
+    if (ns === "ops") {
+      // "ops/update:svn" → opName="update", variant="svn"
+      const [opName, variant = "default"] = op.split(":")
+      const opDef = this.cfg.ops[opName]
+      if (!opDef) throw new Error(`Unknown op: "${opName}"`)
+      const steps = opDef[variant]
+      if (!steps) throw new Error(`Unknown variant "${variant}" for op "${opName}"`)
+      for (const s of steps) await this.execStep(s)
+      return
+    }
 
     if (ns === "ue") {
       const ue = new UeModule(this.cfg, { dryRun: this.opts.dryRun })
