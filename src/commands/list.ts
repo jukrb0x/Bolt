@@ -23,8 +23,12 @@ export default defineCommand({
     } else {
       for (const [name, op] of ops) {
         const variants = Object.keys(op).filter(v => v !== "default")
-        const suffix = variants.length > 0 ? pc.dim(`[${variants.join(", ")}]`) : ""
-        console.log(`  ${pc.cyan(("--" + name).padEnd(24))}${suffix}`)
+        console.log(`  ${pc.cyan(name)}`)
+        if (variants.length > 0) {
+          for (const v of variants) {
+            console.log(`    ${pc.dim(`${name}:${v}`)}`)
+          }
+        }
       }
     }
 
