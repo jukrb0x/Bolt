@@ -9,7 +9,7 @@ export default defineCommand({
     if (!configPath) { console.error("bolt.yaml not found"); process.exit(1) }
     const cfg = await loadConfig(configPath)
     console.log(`Project:  ${cfg.project.name}`)
-    console.log(`UE path:  ${cfg.project.ue_path}`)
+    console.log(`UE Path:  ${cfg.project.ue_path}`)
     console.log(`Path:     ${cfg.project.project_path}`)
     console.log(`Targets:  ${Object.keys(cfg.targets).join(", ")}`)
     console.log(`Actions:  ${Object.keys(cfg.actions).join(", ")}`)

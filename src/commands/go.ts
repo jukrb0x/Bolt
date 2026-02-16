@@ -51,7 +51,7 @@ export default defineCommand({
     const runner = new Runner(cfg, { dryRun, logger })
     const start  = Date.now()
     try {
-      await runner.runOps(resolved, cfg.pipeline)
+      await runner.runOps(resolved, cfg["go-pipeline"])
       logger.info(`Done in ${((Date.now() - start) / 1000).toFixed(1)}s`)
       logger.info(`Log: ${logFile}`)
       logger.close()

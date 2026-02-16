@@ -63,7 +63,7 @@ ops:
     default:
       - uses: ue/start
 
-pipeline:
+go-pipeline:
   order:
     - kill
     - update
