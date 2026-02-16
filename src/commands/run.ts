@@ -5,8 +5,7 @@ import { Runner }      from "../runner"
 import { Logger }      from "../logger"
 import path from "path"
 import { mkdirSync } from "fs"
-
-const VERSION = "0.1.0"
+import pkg from "../../package.json"
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
@@ -43,7 +42,7 @@ export default defineCommand({
     const logFile = path.join(logDir, `bolt_${timestamp()}.log`)
     const logger = new Logger({ logFile })
 
-    logger.info(`bolt ${VERSION}`)
+    logger.info(`bolt ${pkg.version}`)
     logger.info(`Config: ${configPath}`)
     logger.info(`Action: ${action}${dryRun ? " (dry-run)" : ""}`)
 
