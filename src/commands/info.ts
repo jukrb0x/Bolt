@@ -10,7 +10,7 @@ export default defineCommand({
     const cfg = await loadConfig(configPath)
     console.log(`Project:  ${cfg.project.name}`)
     console.log(`UE path:  ${cfg.project.ue_path}`)
-    console.log(`Project:  ${cfg.project.project_path}`)
+    console.log(`Path:     ${cfg.project.project_path}`)
     console.log(`Targets:  ${Object.keys(cfg.targets).join(", ")}`)
     console.log(`Actions:  ${Object.keys(cfg.actions).join(", ")}`)
   },
