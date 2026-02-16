@@ -1,16 +1,10 @@
-import type { BoltConfig, Step, Pipeline } from "./config"
+import type { BoltConfig, Step, GoPipeline } from "./config"
 import { Logger } from "./logger"
 import { interpolate } from "./interpolate"
 import { UeModule }   from "./modules/ue"
 import { FsModule }   from "./modules/fs"
 import { JsonModule } from "./modules/json"
 import { sortByPipeline, type ResolvedOp } from "./go"
-
-export const DEFAULT_PIPELINE_ORDER = [
-  "kill", "update", "svn-cleanup", "generate-project", "build", "fillddc", "start",
-]
-
-export const DEFAULT_FAIL_STOPS = ["build"]
 
 interface RunnerOptions {
   dryRun?:  boolean
@@ -36,10 +30,8 @@ export class Runner {
     }
   }
 
-  async runOps(ops: ResolvedOp[], pipeline: Pipeline): Promise<void> {
-    const order     = pipeline.order.length      > 0 ? pipeline.order      : DEFAULT_PIPELINE_ORDER
-    const failStops = pipeline.fail_stops.length > 0 ? pipeline.fail_stops : DEFAULT_FAIL_STOPS
-    const sorted    = sortByPipeline(ops, order)
+  async runOps(ops: ResolvedOp[], pipeline: GoPipeline): Promise<void> {
+    const sorted = pipeline.order.length > 0 ? sortByPipeline(ops, pipeline.order) : ops
 
     for (const op of sorted) {
       const t0 = Date.now()
@@ -49,7 +41,7 @@ export class Runner {
         this.opts.logger?.success(op.name, (Date.now() - t0) / 1000)
       } catch (e: any) {
         this.opts.logger?.fail(op.name, (Date.now() - t0) / 1000)
-        if (failStops.includes(op.name)) throw e
+        if (pipeline.fail_stops.includes(op.name)) throw e
         this.opts.logger?.warn(`"${op.name}" failed but is not in fail_stops — continuing`)
       }
     }

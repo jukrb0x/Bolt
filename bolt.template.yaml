@@ -37,7 +37,7 @@ ops:
     default:
       - uses: ue/svn-cleanup
 
-  generate-project:
+  genproj:
     default:
       - uses: ue/generate-project
 
@@ -56,13 +56,13 @@ ops:
     default:
       - uses: ue/start
 
-# Pipeline controls bolt go execution order and failure behaviour
-pipeline:
+# go-pipeline controls bolt go execution order and failure behaviour
+go-pipeline:
   order:
     - kill
     - update
     - svn-cleanup
-    - generate-project
+    - genproj
     - build
     - fillddc
     - start
@@ -87,5 +87,5 @@ actions:
       - uses: ops/kill
         continue-on-error: true
       - uses: ops/update
-      - uses: ops/generate-project
+      - uses: ops/genproj
       - uses: ops/build

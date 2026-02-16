@@ -34,5 +34,5 @@ export const testCfg: BoltConfig = {
     build:  { default: [{ uses: "ue/build", with: { target: "editor" } }] },
     start:  { default: [{ uses: "ue/start" }] },
   },
-  pipeline: { order: [], fail_stops: [] },
+  "go-pipeline": { order: [], fail_stops: [] },
 }
