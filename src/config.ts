@@ -17,6 +17,11 @@ const GoPipelineSchema = z.object({
   fail_stops: z.array(z.string()).default([]),
 })
 
+const PluginEntrySchema = z.object({
+  namespace: z.string(),
+  path:      z.string(),
+})
+
 const ActionSchema = z.object({
   depends: z.array(z.string()).optional(),
   steps:   z.array(StepSchema),
@@ -43,6 +48,8 @@ const BoltConfigSchema = z.object({
   actions:  z.record(ActionSchema).default({}),
   ops:          z.record(z.string(), OpSchema).default({}),
   "go-pipeline": GoPipelineSchema.default({ order: [], fail_stops: [] }),
+  plugins:       z.array(PluginEntrySchema).default([]),
+  timeout_hours: z.number().positive().optional(),
 })
 
 export type BoltConfig  = z.infer<typeof BoltConfigSchema>
@@ -51,6 +58,7 @@ export type Target      = z.infer<typeof TargetSchema>
 export type GoPipeline  = z.infer<typeof GoPipelineSchema>
 export type OpVariant   = z.infer<typeof OpVariantSchema>
 export type OpsMap      = Record<string, Record<string, OpVariant>>
+export type PluginEntry = z.infer<typeof PluginEntrySchema>
 
 export async function loadConfig(filepath: string): Promise<BoltConfig> {
   const raw = readFileSync(filepath, "utf8")
