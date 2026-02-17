@@ -38,7 +38,11 @@ export class PluginRegistry {
       ]
       for (const candidate of candidates) {
         if (existsSync(candidate)) {
-          await this.loadFromPath(entry, candidate)
+          try {
+            await this.loadFromPath(entry, candidate)
+          } catch (e: any) {
+            console.warn(`[bolt] Failed to load plugin "${entry}" from ${candidate}: ${e.message}`)
+          }
           break
         }
       }
