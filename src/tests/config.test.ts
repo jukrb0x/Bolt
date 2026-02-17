@@ -30,3 +30,13 @@ test("throws on missing project.ue_path", async () => {
   expect(loadConfig(path.join(import.meta.dir, "../../tests/fixtures/invalid.yaml")))
     .rejects.toThrow()
 })
+
+test("accepts plugins array", async () => {
+  const cfg = await loadConfig(fixture)
+  expect(Array.isArray(cfg.plugins)).toBe(true)
+})
+
+test("accepts timeout_hours as undefined when not set", async () => {
+  const cfg = await loadConfig(fixture)
+  expect(cfg.timeout_hours).toBeUndefined()
+})

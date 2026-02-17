@@ -35,4 +35,6 @@ export const testCfg: BoltConfig = {
     start:  { default: [{ uses: "ue/start" }] },
   },
   "go-pipeline": { order: [], fail_stops: [] },
+  plugins:       [],
+  timeout_hours: undefined,
 }
