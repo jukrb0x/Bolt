@@ -1,5 +1,5 @@
 ## Basic
-- [ ] [DX] oxc
+- [x] [DX] oxc
 - [ ] [FEAT] chatbot webhook, wecom support
 - [ ] [FEAT] common tools
     - [ ] ue ini tool
