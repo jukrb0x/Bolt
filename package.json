@@ -10,7 +10,11 @@
     "test": "bun test --env-file .env.local",
     "build:win": "bun build src/main.ts --compile --target=bun-windows-x64  --outfile=build/bolt-win-x64.exe",
     "build:mac": "bun build src/main.ts --compile --target=bun-darwin-arm64  --outfile=build/bolt-mac-arm64",
-    "build:all": "bun run build:win && bun run build:mac"
+    "build:all": "bun run build:win && bun run build:mac",
+    "lint":      "oxlint src",
+    "lint:fix":  "oxlint --fix src",
+    "fmt":       "oxfmt --write .",
+    "fmt:check": "oxfmt --check ."
   },
   "devDependencies": {
     "@types/bun": "latest",
