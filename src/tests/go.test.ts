@@ -7,47 +7,47 @@ import { testCfg } from "./env"
 // ---------------------------------------------------------------------------
 
 describe("parseGoArgs", () => {
-  test("bare flag → default variant", () => {
+  test("bare flag default variant", () => {
     const [result] = parseGoArgs(["--update"])
-    expect(result).toEqual({ name: "update", value: "default", isExact: false })
+    expect(result).toEqual({ name: "update", value: "default", isExact: false, params: {} })
   })
 
-  test("flag=value → isExact with variant key", () => {
+  test("flag=value isExact with variant key", () => {
     const [result] = parseGoArgs(["--update=svn"])
-    expect(result).toEqual({ name: "update", value: "svn", isExact: true })
+    expect(result).toEqual({ name: "update", value: "svn", isExact: true, params: {} })
   })
 
   test("build with target override", () => {
     const [result] = parseGoArgs(["--build=client"])
-    expect(result).toEqual({ name: "build", value: "client", isExact: true })
+    expect(result).toEqual({ name: "build", value: "client", isExact: true, params: {} })
   })
 
-  test("bare build → default", () => {
+  test("bare build default", () => {
     const [result] = parseGoArgs(["--build"])
-    expect(result).toEqual({ name: "build", value: "default", isExact: false })
+    expect(result).toEqual({ name: "build", value: "default", isExact: false, params: {} })
   })
 
-  test("word style: bare word → default variant", () => {
+  test("word style: bare word default variant", () => {
     const [result] = parseGoArgs(["update"])
-    expect(result).toEqual({ name: "update", value: "default", isExact: false })
+    expect(result).toEqual({ name: "update", value: "default", isExact: false, params: {} })
   })
 
-  test("word style: name:value → isExact", () => {
+  test("word style: name:value isExact", () => {
     const [result] = parseGoArgs(["update:svn"])
-    expect(result).toEqual({ name: "update", value: "svn", isExact: true })
+    expect(result).toEqual({ name: "update", value: "svn", isExact: true, params: {} })
   })
 
-  test("word style: build:client → isExact target override", () => {
+  test("word style: build:client isExact target override", () => {
     const [result] = parseGoArgs(["build:client"])
-    expect(result).toEqual({ name: "build", value: "client", isExact: true })
+    expect(result).toEqual({ name: "build", value: "client", isExact: true, params: {} })
   })
 
-  test("multiple tokens → array of ParsedOp", () => {
+  test("multiple tokens array of ParsedOp", () => {
     const result = parseGoArgs(["--update=svn", "--build", "--start"])
     expect(result).toHaveLength(3)
-    expect(result[0]).toEqual({ name: "update", value: "svn", isExact: true })
-    expect(result[1]).toEqual({ name: "build",  value: "default", isExact: false })
-    expect(result[2]).toEqual({ name: "start",  value: "default", isExact: false })
+    expect(result[0]).toEqual({ name: "update", value: "svn",     isExact: true,  params: {} })
+    expect(result[1]).toEqual({ name: "build",  value: "default", isExact: false, params: {} })
+    expect(result[2]).toEqual({ name: "start",  value: "default", isExact: false, params: {} })
   })
 })
 
@@ -56,7 +56,7 @@ describe("parseGoArgs", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveOps", () => {
-  test("--update → 2 steps (update-git + update-svn)", () => {
+  test("--update 2 steps (update-git + update-svn)", () => {
     const parsed = parseGoArgs(["--update"])
     const [op] = resolveOps(parsed, testCfg)
     expect(op.name).toBe("update")
@@ -65,7 +65,7 @@ describe("resolveOps", () => {
     expect(op.steps[1].uses).toBe("ue/update-svn")
   })
 
-  test("--update=svn → 1 step using svn variant", () => {
+  test("--update=svn 1 step using svn variant", () => {
     const parsed = parseGoArgs(["--update=svn"])
     const [op] = resolveOps(parsed, testCfg)
     expect(op.name).toBe("update[svn]")
@@ -73,7 +73,7 @@ describe("resolveOps", () => {
     expect(op.steps[0].uses).toBe("ue/update-svn")
   })
 
-  test("--build → steps from ops.build.default", () => {
+  test("--build steps from ops.build.default", () => {
     const parsed = parseGoArgs(["--build"])
     const [op] = resolveOps(parsed, testCfg)
     expect(op.name).toBe("build")
@@ -82,7 +82,7 @@ describe("resolveOps", () => {
     expect(op.steps[0].with?.target).toBe("editor")
   })
 
-  test("--build=client → default steps with with.target overridden", () => {
+  test("--build=client default steps with with.target overridden", () => {
     const parsed = parseGoArgs(["--build=client"])
     const [op] = resolveOps(parsed, testCfg)
     expect(op.name).toBe("build[client]")
@@ -98,12 +98,12 @@ describe("resolveOps", () => {
     expect(testCfg.ops.build.default[0].with?.target).toBe("editor")
   })
 
-  test("unknown op → throws", () => {
+  test("unknown op throws", () => {
     const parsed = parseGoArgs(["--foo"])
     expect(() => resolveOps(parsed, testCfg)).toThrow('Unknown op: "foo"')
   })
 
-  test("unknown variant → throws", () => {
+  test("unknown variant throws", () => {
     const parsed = parseGoArgs(["--update"])
     // Manually set isExact=false, value="bar" to trigger unknown-variant path
     parsed[0].value = "bar"
@@ -150,10 +150,41 @@ describe("sortByPipeline", () => {
 
   test("strips [variant] suffix when matching pipeline order", () => {
     const ops = [
-      { name: "start",      steps: [] },
+      { name: "start",       steps: [] },
       { name: "update[svn]", steps: [] },
     ]
     const sorted = sortByPipeline(ops, order)
     expect(sorted.map(o => o.name)).toEqual(["update[svn]", "start"])
   })
+})
+
+// ---------------------------------------------------------------------------
+// inline params
+// ---------------------------------------------------------------------------
+
+test("inline params parsed for single op", () => {
+  const result = parseGoArgs(["build-program", "--target=UnrealInsights"])
+  expect(result).toEqual([{
+    name: "build-program", value: "default", isExact: false,
+    params: { target: "UnrealInsights" }
+  }])
+})
+
+test("inline params scoped to their op", () => {
+  const result = parseGoArgs(["update", "build-program", "--target=AnvilSmith", "build"])
+  expect(result[0].params).toEqual({})
+  expect(result[1].params).toEqual({ target: "AnvilSmith" })
+  expect(result[2].params).toEqual({})
+})
+
+test("--dry-run not consumed as inline param", () => {
+  const result = parseGoArgs(["build", "--dry-run"])
+  expect(result[0].params).toEqual({})
+})
+
+test("variant and inline params coexist", () => {
+  const result = parseGoArgs(["build-program:debug", "--target=MyProg"])
+  expect(result[0].value).toBe("debug")
+  expect(result[0].isExact).toBe(true)
+  expect(result[0].params).toEqual({ target: "MyProg" })
 })

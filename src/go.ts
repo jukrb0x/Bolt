@@ -3,33 +3,94 @@ import type { BoltConfig, Step } from "./config"
 export interface ParsedOp {
   name:    string   // op name (e.g. "update", "build")
   value:   string   // variant key or override value (default: "default")
-  isExact: boolean  // true if separator was "=" (exact target override for build)
+  isExact: boolean  // true if separator was "=" or ":" (exact target override for build)
+  params:  Record<string, string>  // inline params from --key=val tokens following this op
 }
 
 export interface ResolvedOp {
-  name:  string  // display name (e.g. "update[svn]" or "update")
-  steps: Step[]  // resolved steps ready for execStep
+  name:   string  // display name (e.g. "update[svn]" or "update")
+  steps:  Step[]  // resolved steps ready for execStep
+  params: Record<string, string>  // inline params forwarded to execStep
 }
 
+const GLOBAL_FLAGS = new Set(["--dry-run"])
+
 export function parseGoArgs(tokens: string[]): ParsedOp[] {
-  return tokens.map(token => {
-    if (token.startsWith("--")) {
-      // --name  or  --name=value
-      const stripped = token.slice(2)
-      const eqIdx = stripped.indexOf("=")
-      if (eqIdx !== -1) {
-        return { name: stripped.slice(0, eqIdx), value: stripped.slice(eqIdx + 1), isExact: true }
+  const ops: ParsedOp[] = []
+  let i = 0
+
+  while (i < tokens.length) {
+    const token = tokens[i]
+
+    // Skip global flags at top level
+    if (GLOBAL_FLAGS.has(token)) { i++; continue }
+
+    // Non-flag token = op token
+    if (!token.startsWith("--")) {
+      const colonIdx = token.indexOf(":")
+      let name: string, value: string, isExact: boolean
+      if (colonIdx !== -1) {
+        name    = token.slice(0, colonIdx)
+        value   = token.slice(colonIdx + 1)
+        isExact = true
+      } else {
+        name    = token
+        value   = "default"
+        isExact = false
       }
-      return { name: stripped, value: "default", isExact: false }
+
+      // Consume following --key=val tokens (must contain "=") as inline params for this op
+      const params: Record<string, string> = {}
+      i++
+      while (
+        i < tokens.length &&
+        tokens[i].startsWith("--") &&
+        !GLOBAL_FLAGS.has(tokens[i]) &&
+        tokens[i].includes("=")
+      ) {
+        const param = tokens[i].slice(2)
+        const eqIdx = param.indexOf("=")
+        params[param.slice(0, eqIdx)] = param.slice(eqIdx + 1)
+        i++
+      }
+
+      ops.push({ name, value, isExact, params })
+      continue
     }
 
-    // name  or  name:value
-    const colonIdx = token.indexOf(":")
-    if (colonIdx !== -1) {
-      return { name: token.slice(0, colonIdx), value: token.slice(colonIdx + 1), isExact: true }
+    // --flag style token (e.g. --update, --build=client)
+    const stripped = token.slice(2)
+    const eqIdx = stripped.indexOf("=")
+    let name: string, value: string, isExact: boolean
+    if (eqIdx !== -1) {
+      name    = stripped.slice(0, eqIdx)
+      value   = stripped.slice(eqIdx + 1)
+      isExact = true
+    } else {
+      name    = stripped
+      value   = "default"
+      isExact = false
     }
-    return { name: token, value: "default", isExact: false }
-  })
+    i++
+
+    // Consume following --key=val tokens (must contain "=") as inline params for this op
+    const params: Record<string, string> = {}
+    while (
+      i < tokens.length &&
+      tokens[i].startsWith("--") &&
+      !GLOBAL_FLAGS.has(tokens[i]) &&
+      tokens[i].includes("=")
+    ) {
+      const param = tokens[i].slice(2)
+      const paramEqIdx = param.indexOf("=")
+      params[param.slice(0, paramEqIdx)] = param.slice(paramEqIdx + 1)
+      i++
+    }
+
+    ops.push({ name, value, isExact, params })
+  }
+
+  return ops
 }
 
 export function resolveOps(parsed: ParsedOp[], cfg: BoltConfig): ResolvedOp[] {
@@ -42,14 +103,14 @@ export function resolveOps(parsed: ParsedOp[], cfg: BoltConfig): ResolvedOp[] {
       const steps = opDef[p.value]
       if (!steps) throw new Error(`Unknown variant "${p.value}" for op "${p.name}"`)
       const displayName = p.value === "default" ? p.name : `${p.name}[${p.value}]`
-      return { name: displayName, steps }
+      return { name: displayName, steps, params: p.params }
     }
 
     // isExact: try as variant key first
     const variantSteps = opDef[p.value]
     if (variantSteps) {
       const displayName = p.value === "default" ? p.name : `${p.name}[${p.value}]`
-      return { name: displayName, steps: variantSteps }
+      return { name: displayName, steps: variantSteps, params: p.params }
     }
 
     // Fall back to "default" variant, deep-clone and override with.target
@@ -63,7 +124,7 @@ export function resolveOps(parsed: ParsedOp[], cfg: BoltConfig): ResolvedOp[] {
       return { ...step }
     })
 
-    return { name: `${p.name}[${p.value}]`, steps: cloned }
+    return { name: `${p.name}[${p.value}]`, steps: cloned, params: p.params }
   })
 }
 
