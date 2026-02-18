@@ -35,7 +35,8 @@ export default defineCommand({
       process.exit(1)
     }
 
-    const cfg = await loadConfig(configPath)
+    const cfg       = await loadConfig(configPath)
+    const configDir = path.dirname(configPath)
 
     const logDir = path.join(path.dirname(configPath), ".bolt", "logs")
     mkdirSync(logDir, { recursive: true })
@@ -46,7 +47,7 @@ export default defineCommand({
     logger.info(`Config: ${configPath}`)
     logger.info(`Action: ${action}${dryRun ? " (dry-run)" : ""}`)
 
-    const runner = new Runner(cfg, { dryRun, logger })
+    const runner = new Runner(cfg, { dryRun, logger, configDir })
 
     const start = Date.now()
     try {
