@@ -1,5 +1,14 @@
 # bolt.yaml — project automation config
 
+# Optional: stop the entire run if it exceeds this duration
+# timeout_hours: 6
+
+# Optional: declare project-scope plugins by explicit path
+# plugins:
+#   - namespace: myplugin
+#     path: ./bolt-plugins/myplugin/index.ts
+# Project-scope plugins are also auto-discovered from .bolt/plugins/<namespace>/index.ts
+
 project:
   name: MyProject
   ue_path: C:/UnrealEngine
@@ -56,15 +65,42 @@ ops:
     default:
       - uses: ue/start
 
+  info:
+    default:
+      - uses: ue/info
+
+  fix-dll:
+    default:
+      - uses: ue/fix-dll
+
+  build-engine:
+    default:
+      - uses: ue/build-engine
+        with:
+          build_type: development
+
+  build-program:
+    default:
+      - uses: ue/build-program
+        with:
+          build_type: development
+          platform: Win64
+      # Supply target at runtime:
+      #   bolt go build-program --target=UnrealInsights
+
 # go-pipeline controls bolt go execution order and failure behaviour
 go-pipeline:
   order:
     - kill
+    - info
     - update
     - svn-cleanup
     - genproj
+    - build-engine
     - build
+    - build-program
     - fillddc
+    - fix-dll
     - start
   fail_stops:
     - build      # if build fails, stop; other ops continue on failure
