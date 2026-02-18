@@ -41,3 +41,40 @@ test("throws on unknown action", async () => {
   const runner = new Runner(cfg, { dryRun: true })
   expect(runner.run("nope")).rejects.toThrow("nope")
 })
+
+test("runOps throws when timeout_hours is exceeded", async () => {
+  const cfgWithTimeout: BoltConfig = {
+    ...testCfg,
+    ops: { slow: { default: [{ run: "echo slow" }] } },
+    "go-pipeline": { order: [], fail_stops: [] },
+    timeout_hours: 0.000001,  // ~3.6ms — will be exceeded immediately
+  }
+  // Use onStep to busy-wait so elapsed time exceeds the threshold before op 2
+  let firstStep = true
+  const runner = new Runner(cfgWithTimeout, {
+    dryRun: true,
+    onStep: () => {
+      if (firstStep) {
+        firstStep = false
+        const end = Date.now() + 10  // spin for 10ms
+        while (Date.now() < end) { /* busy-wait */ }
+      }
+    },
+  })
+  const ops = [
+    { name: "slow", steps: [{ run: "echo slow" }], params: {} },
+    { name: "slow2", steps: [{ run: "echo slow2" }], params: {} },
+  ]
+  await expect(
+    runner.runOps(ops, cfgWithTimeout["go-pipeline"])
+  ).rejects.toThrow("timed out")
+})
+
+test("runOps does not timeout when timeout_hours is undefined", async () => {
+  const cfgNoTimeout: BoltConfig = { ...testCfg, timeout_hours: undefined }
+  const runner = new Runner(cfgNoTimeout, { dryRun: true })
+  const ops = [{ name: "a", steps: [{ run: "echo a" }], params: {} }]
+  await expect(
+    runner.runOps(ops, cfgNoTimeout["go-pipeline"])
+  ).resolves.toBeUndefined()
+})
