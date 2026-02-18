@@ -15,6 +15,23 @@ function run(cmd: string, ctx: BoltPluginContext): void {
   if (!ctx.dryRun) exec(cmd)
 }
 
+function findZeroByteDlls(dir: string): string[] {
+  const { existsSync, readdirSync, statSync } = require("fs")
+  if (!existsSync(dir)) return []
+  const results: string[] = []
+  const stack = [dir]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    for (const entry of readdirSync(current)) {
+      const full = path.join(current, entry)
+      const st = statSync(full)
+      if (st.isDirectory()) { stack.push(full); continue }
+      if (entry.endsWith(".dll") && st.size === 0) results.push(full)
+    }
+  }
+  return results
+}
+
 const plugin: BoltPlugin = {
   namespace: "ue",
   handlers: {
@@ -94,6 +111,103 @@ const plugin: BoltPlugin = {
         }
         fs.writeFileSync(projFile, content)
       }
+    },
+
+    "build-engine": async (params, ctx) => {
+      const uePath    = ctx.cfg.project.ue_path
+      const buildType = capitalize(params.build_type ?? "development")
+      const setupCmd  = `"${uePath}/Setup.bat" --force`
+      const genCmd    = `"${uePath}/GenerateProjectFiles.bat"`
+      const buildCmd  = `"${uePath}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`
+      ctx.logger.info(setupCmd)
+      if (!ctx.dryRun) {
+        const { existsSync } = require("fs")
+        if (existsSync(`${uePath}/Setup.bat`)) exec(setupCmd)
+      }
+      ctx.logger.info(genCmd)
+      if (!ctx.dryRun) {
+        const { existsSync } = require("fs")
+        if (existsSync(`${uePath}/GenerateProjectFiles.bat`)) exec(genCmd)
+      }
+      run(buildCmd, ctx)
+    },
+
+    "build-program": async (params, ctx) => {
+      const target = params.target
+      if (!target || target.trim() === "") {
+        throw new Error(`No target specified. Use: bolt go build-program --target=<Name>`)
+      }
+      const buildType = capitalize(params.build_type ?? "development")
+      const platform  = params.platform ?? "Win64"
+      const uePath    = ctx.cfg.project.ue_path
+      const projFile  = path.join(ctx.cfg.project.project_path, `${ctx.cfg.project.project_name}.uproject`)
+      const buildBat  = `${uePath}/Engine/Build/BatchFiles/Build.bat`
+      const cmd = `"${buildBat}" ${target} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`
+      run(cmd, ctx)
+    },
+
+    "info": async (params, ctx) => {
+      const uePath  = ctx.cfg.project.ue_path
+      const svnRoot = ctx.cfg.project.svn_root ?? ctx.cfg.project.project_path
+      ctx.logger.info("=== VCS Info ===")
+      const gitLog = Bun.spawnSync(
+        ["git", "-C", uePath, "log", "-1", "--pretty=format:%h %s", "--no-walk"],
+        { stdout: "pipe", stderr: "pipe" }
+      )
+      if (gitLog.exitCode === 0) {
+        ctx.logger.info(`Git (engine): ${gitLog.stdout.toString().trim()}`)
+      } else {
+        ctx.logger.warn("Git info unavailable")
+      }
+      const gitBranch = Bun.spawnSync(
+        ["git", "-C", uePath, "rev-parse", "--abbrev-ref", "HEAD"],
+        { stdout: "pipe", stderr: "pipe" }
+      )
+      if (gitBranch.exitCode === 0) {
+        ctx.logger.info(`Git branch:   ${gitBranch.stdout.toString().trim()}`)
+      }
+      const svnInfo = Bun.spawnSync(["svn", "info", svnRoot], { stdout: "pipe", stderr: "pipe" })
+      if (svnInfo.exitCode === 0) {
+        for (const line of svnInfo.stdout.toString().split("\n")) {
+          if (line.startsWith("URL:") || line.startsWith("Revision:") || line.startsWith("Last Changed Rev:")) {
+            ctx.logger.info(`SVN: ${line.trim()}`)
+          }
+        }
+      } else {
+        ctx.logger.warn("SVN info unavailable")
+      }
+    },
+
+    "fix-dll": async (params, ctx) => {
+      const { renameSync, mkdirSync } = require("fs")
+      const uePath      = ctx.cfg.project.ue_path
+      const projectPath = ctx.cfg.project.project_path
+      const trashDir    = path.join(projectPath, ".bolt", "trash-dlls")
+      const dirsToScan  = [
+        path.join(uePath, "Engine", "Binaries"),
+        path.join(projectPath, "Binaries"),
+        path.join(projectPath, "Plugins"),
+      ]
+      const zeroDlls: string[] = []
+      for (const dir of dirsToScan) zeroDlls.push(...findZeroByteDlls(dir))
+      if (zeroDlls.length === 0) {
+        ctx.logger.info("fix-dll: no 0-byte DLL files found")
+        return
+      }
+      ctx.logger.info(`fix-dll: found ${zeroDlls.length} 0-byte DLL(s), moving to ${trashDir}`)
+      mkdirSync(trashDir, { recursive: true })
+      let moved = 0
+      for (const dll of zeroDlls) {
+        const dest = path.join(trashDir, path.basename(dll))
+        try {
+          renameSync(dll, dest)
+          ctx.logger.info(`  moved: ${path.basename(dll)}`)
+          moved++
+        } catch (e: any) {
+          ctx.logger.warn(`  failed to move ${dll}: ${e.message}`)
+        }
+      }
+      ctx.logger.info(`fix-dll: moved ${moved}/${zeroDlls.length}`)
     },
   }
 }
