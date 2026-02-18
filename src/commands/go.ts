@@ -34,7 +34,8 @@ export default defineCommand({
     const configPath = await findConfig(process.cwd())
     if (!configPath) { console.error("[ERROR] bolt.yaml not found"); process.exit(1) }
 
-    const cfg    = await loadConfig(configPath)
+    const cfg       = await loadConfig(configPath)
+    const configDir = path.dirname(configPath)
     const parsed = parseGoArgs(rawTokens)
 
     let resolved
@@ -50,7 +51,7 @@ export default defineCommand({
     logger.info(`Config: ${configPath}`)
     logger.info(`Ops: ${resolved.map(o => o.name).join(" → ")}${dryRun ? " (dry-run)" : ""}`)
 
-    const runner = new Runner(cfg, { dryRun, logger })
+    const runner = new Runner(cfg, { dryRun, logger, configDir })
     const start  = Date.now()
     try {
       await runner.runOps(resolved, cfg["go-pipeline"])
