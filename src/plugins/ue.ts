@@ -59,7 +59,10 @@ const plugin: BoltPlugin = {
         target.type === "editor"
           ? `${ctx.cfg.project.project_name}Editor`
           : (target.name ?? targetName);
-      const cmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
+      const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
+      const cmd = target.type === "editor"
+        ? `${buildBat} -Target="${targetBin} Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -Project="${projFile}" -WaitMutex`
+        : `${buildBat} ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
       run(cmd, ctx);
     },
 

@@ -20,6 +20,8 @@ test("build editor target produces correct command", async () => {
   expect(cmd).toContain(`${PROJECT_NAME}Editor`);
   expect(cmd).toContain("Development");
   expect(cmd).toContain(`${PROJECT_NAME}.uproject`);
+  expect(cmd).toContain(`-Target="${PROJECT_NAME}Editor Win64 Development"`);
+  expect(cmd).toContain(`-Target="ShaderCompileWorker Win64 Development -Quiet"`);
 });
 
 test("build program target uses target.name", async () => {
