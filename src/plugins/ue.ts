@@ -1,4 +1,5 @@
 import type { BoltPlugin, BoltPluginContext } from "../plugin";
+import { $ } from "bun";
 import path from "path";
 
 /** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
@@ -113,7 +114,7 @@ const plugin: BoltPlugin = {
       ];
       for (const p of procs) {
         ctx.logger.info(`taskkill /f /im ${p}`);
-        if (!ctx.dryRun) Bun.spawnSync(["cmd", "/c", `taskkill /f /im "${p}" 2>nul`], { stdout: "inherit", stderr: "inherit" });
+        if (!ctx.dryRun) await $`taskkill /f /im ${p}`.nothrow().quiet();
       }
     },
 
