@@ -1,14 +1,14 @@
-import { defineCommand } from "citty"
-import { findConfig }  from "../discover"
-import { loadConfig }  from "../config"
-import { Runner }      from "../runner"
-import { Logger }      from "../logger"
-import path from "path"
-import { mkdirSync } from "fs"
-import pkg from "../../package.json"
+import { defineCommand } from "citty";
+import { findConfig } from "../discover";
+import { loadConfig } from "../config";
+import { Runner } from "../runner";
+import { Logger } from "../logger";
+import path from "path";
+import { mkdirSync } from "fs";
+import pkg from "../../package.json";
 
 function timestamp(): string {
-  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
 
 export default defineCommand({
@@ -26,42 +26,42 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const action = args.action
-    const dryRun = args["dry-run"]
+    const action = args.action;
+    const dryRun = args["dry-run"];
 
-    const configPath = await findConfig(process.cwd())
+    const configPath = await findConfig(process.cwd());
     if (!configPath) {
-      console.error("[ERROR] bolt.yaml not found (searched up from cwd)")
-      process.exit(1)
+      console.error("[ERROR] bolt.yaml not found (searched up from cwd)");
+      process.exit(1);
     }
 
-    const cfg       = await loadConfig(configPath)
-    const configDir = path.dirname(configPath)
+    const cfg = await loadConfig(configPath);
+    const configDir = path.dirname(configPath);
 
-    const logDir = path.join(path.dirname(configPath), ".bolt", "logs")
-    mkdirSync(logDir, { recursive: true })
-    const logFile = path.join(logDir, `bolt_${timestamp()}.log`)
-    const logger = new Logger({ logFile })
+    const logDir = path.join(path.dirname(configPath), ".bolt", "logs");
+    mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
+    const logger = new Logger({ logFile });
 
-    logger.info(`bolt ${pkg.version}`)
-    logger.info(`Config: ${configPath}`)
-    logger.info(`Action: ${action}${dryRun ? " (dry-run)" : ""}`)
+    logger.info(`bolt ${pkg.version}`);
+    logger.info(`Config: ${configPath}`);
+    logger.info(`Action: ${action}${dryRun ? " (dry-run)" : ""}`);
 
-    const runner = new Runner(cfg, { dryRun, logger, configDir })
+    const runner = new Runner(cfg, { dryRun, logger, configDir });
 
-    const start = Date.now()
+    const start = Date.now();
     try {
-      await runner.run(action)
-      const dur = ((Date.now() - start) / 1000).toFixed(1)
-      logger.info(`Done in ${dur}s`)
-      logger.info(`Log: ${logFile}`)
-      logger.close()
-      process.exit(0)
+      await runner.run(action);
+      const dur = ((Date.now() - start) / 1000).toFixed(1);
+      logger.info(`Done in ${dur}s`);
+      logger.info(`Log: ${logFile}`);
+      logger.close();
+      process.exit(0);
     } catch (e: any) {
-      logger.error(e.message)
-      logger.info(`Log: ${logFile}`)
-      logger.close()
-      process.exit(1)
+      logger.error(e.message);
+      logger.info(`Log: ${logFile}`);
+      logger.close();
+      process.exit(1);
     }
   },
-})
+});
