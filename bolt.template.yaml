@@ -103,7 +103,7 @@ go-pipeline:
     - fix-dll
     - start
   fail_stops:
-    - build      # if build fails, stop; other ops continue on failure
+    - build # if build fails, stop; other ops continue on failure
 
 # Named action profiles (reusable, runnable with `bolt run <name>`)
 actions:

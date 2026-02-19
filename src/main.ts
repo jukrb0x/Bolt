@@ -1,9 +1,9 @@
-import { defineCommand, runMain } from "citty"
-import runCmd  from "./commands/run"
-import listCmd from "./commands/list"
-import infoCmd from "./commands/info"
-import goCmd   from "./commands/go"
-import pkg from "../package.json"
+import { defineCommand, runMain } from "citty";
+import runCmd from "./commands/run";
+import listCmd from "./commands/list";
+import infoCmd from "./commands/info";
+import goCmd from "./commands/go";
+import pkg from "../package.json";
 
 const main = defineCommand({
   meta: {
@@ -12,11 +12,11 @@ const main = defineCommand({
     description: "Unreal Engine build automation",
   },
   subCommands: {
-    run:  runCmd,
+    run: runCmd,
     list: listCmd,
     info: infoCmd,
-    go:   goCmd,
+    go: goCmd,
   },
-})
+});
 
-runMain(main)
+runMain(main);
