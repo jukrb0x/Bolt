@@ -1,20 +1,25 @@
 {
   "name": "bolt",
-  "author": "Jabriel <jabrielah@outlook.com>",
   "version": "0.1.0",
-  "module": "index.ts",
-  "type": "module",
   "private": true,
+  "author": "Jabriel <jabrielah@outlook.com>",
+  "type": "module",
+  "module": "index.ts",
   "scripts": {
     "dev": "bun run src/main.ts",
     "test": "bun test --env-file .env.local",
     "build:win": "bun build src/main.ts --compile --target=bun-windows-x64  --outfile=build/bolt-win-x64.exe",
     "build:mac": "bun build src/main.ts --compile --target=bun-darwin-arm64  --outfile=build/bolt-mac-arm64",
     "build:all": "bun run build:win && bun run build:mac",
-    "lint":      "oxlint src",
-    "lint:fix":  "oxlint --fix src",
-    "fmt":       "oxfmt --write .",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint --fix src",
+    "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check ."
+  },
+  "dependencies": {
+    "citty": "^0.2.1",
+    "picocolors": "^1.1.1",
+    "zod": "^3"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -24,10 +29,5 @@
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "citty": "^0.2.1",
-    "picocolors": "^1.1.1",
-    "zod": "^3"
   }
 }
