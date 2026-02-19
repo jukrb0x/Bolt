@@ -10,7 +10,10 @@ function capitalize(s: string): string {
 }
 
 function exec(cmd: string): void {
-  const proc = Bun.spawnSync(["cmd", "/c", cmd], { stdout: "inherit", stderr: "inherit" });
+  // cmd /c with a quoted executable requires the whole command to be wrapped in an
+  // extra pair of outer quotes, otherwise cmd.exe strips the first quote pair and
+  // misinterprets the path (classic cmd.exe quirk).
+  const proc = Bun.spawnSync(["cmd", "/c", `"${cmd}"`], { stdout: "inherit", stderr: "inherit" });
   if (proc.exitCode !== 0) throw new Error(`Command failed: ${cmd}`);
 }
 
@@ -100,7 +103,43 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      run(`"${w(uePath)}/Engine/Binaries/Win64/UE4Editor.exe" "${projFile}"`, ctx);
+      const binDir = w(`${uePath}/Engine/Binaries/Win64`);
+
+      // Map build type to exe suffix, matching UBS behaviour
+      const suffixMap: Record<string, string> = {
+        debug: "-Win64-Debug",
+        shipping: "-Win64-Shipping",
+        test: "-Win64-Test",
+        development: "",
+      };
+      const buildType = (params.type ?? params.build_type ?? "development")
+        .toString()
+        .toLowerCase();
+      const suffix = suffixMap[buildType] ?? "";
+
+      // Try suffixed exe first (e.g. UE4Editor-Win64-Debug.exe), then plain,
+      // then UnrealEditor variants for UE5.
+      const { existsSync } = require("fs");
+      const candidates = suffix
+        ? [
+            `${binDir}\\UE4Editor${suffix}.exe`,
+            `${binDir}\\UnrealEditor${suffix}.exe`,
+            `${binDir}\\UE4Editor.exe`,
+            `${binDir}\\UnrealEditor.exe`,
+          ]
+        : [`${binDir}\\UE4Editor.exe`, `${binDir}\\UnrealEditor.exe`];
+
+      const exePath = candidates.find(existsSync);
+      if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
+
+      ctx.logger.info(`start "" "${exePath}" "${projFile}"`);
+      if (!ctx.dryRun) {
+        Bun.spawnSync(["cmd", "/c", "start", "", exePath, projFile], {
+          stdout: "ignore",
+          stderr: "ignore",
+          stdin: "ignore",
+        });
+      }
     },
 
     kill: async (params, ctx) => {
