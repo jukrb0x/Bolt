@@ -1,6 +1,9 @@
 import type { BoltPlugin, BoltPluginContext } from "../plugin";
 import path from "path";
 
+/** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
+const w = (p: string) => p.replace(/\//g, "\\");
+
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -52,7 +55,7 @@ const plugin: BoltPlugin = {
         target.type === "editor"
           ? `${ctx.cfg.project.project_name}Editor`
           : (target.name ?? targetName);
-      const cmd = `"${uePath}/Engine/Build/BatchFiles/Build.bat" ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
+      const cmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
       run(cmd, ctx);
     },
 
@@ -87,7 +90,7 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      run(`"${uePath}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`, ctx);
+      run(`"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`, ctx);
     },
 
     start: async (params, ctx) => {
@@ -96,11 +99,22 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      run(`"${uePath}/Engine/Binaries/Win64/UE4Editor.exe" "${projFile}"`, ctx);
+      run(`"${w(uePath)}/Engine/Binaries/Win64/UE4Editor.exe" "${projFile}"`, ctx);
     },
 
     kill: async (params, ctx) => {
-      run(`taskkill /f /im UE4Editor.exe`, ctx);
+      const procs = [
+        "UE4Editor.exe",
+        "UE4Editor-Win64-Debug.exe",
+        "UE4Editor-Cmd.exe",
+        "UnrealEditor.exe",
+        "UnrealEditor-Cmd.exe",
+        "CrashReportClient.exe",
+      ];
+      for (const p of procs) {
+        ctx.logger.info(`taskkill /f /im ${p}`);
+        if (!ctx.dryRun) Bun.spawnSync(["cmd", "/c", `taskkill /f /im "${p}" 2>nul`], { stdout: "inherit", stderr: "inherit" });
+      }
     },
 
     fillddc: async (params, ctx) => {
@@ -110,7 +124,7 @@ const plugin: BoltPlugin = {
         `${ctx.cfg.project.project_name}.uproject`,
       );
       run(
-        `"${uePath}/Engine/Binaries/Win64/UE4Editor-Cmd.exe" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
+        `"${w(uePath)}/Engine/Binaries/Win64/UE4Editor-Cmd.exe" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
         ctx,
       );
     },
@@ -138,18 +152,18 @@ const plugin: BoltPlugin = {
     "build-engine": async (params, ctx) => {
       const uePath = ctx.cfg.project.ue_path;
       const buildType = capitalize(params.build_type ?? "development");
-      const setupCmd = `"${uePath}/Setup.bat" --force`;
-      const genCmd = `"${uePath}/GenerateProjectFiles.bat"`;
-      const buildCmd = `"${uePath}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
+      const setupCmd = `"${w(uePath)}/Setup.bat" --force`;
+      const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
+      const buildCmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
       ctx.logger.info(setupCmd);
       if (!ctx.dryRun) {
         const { existsSync } = require("fs");
-        if (existsSync(`${uePath}/Setup.bat`)) exec(setupCmd);
+        if (existsSync(`${w(uePath)}/Setup.bat`)) exec(setupCmd);
       }
       ctx.logger.info(genCmd);
       if (!ctx.dryRun) {
         const { existsSync } = require("fs");
-        if (existsSync(`${uePath}/GenerateProjectFiles.bat`)) exec(genCmd);
+        if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) exec(genCmd);
       }
       run(buildCmd, ctx);
     },
@@ -166,7 +180,7 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      const buildBat = `${uePath}/Engine/Build/BatchFiles/Build.bat`;
+      const buildBat = `${w(uePath)}/Engine/Build/BatchFiles/Build.bat`;
       const cmd = `"${buildBat}" ${target} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
       run(cmd, ctx);
     },
