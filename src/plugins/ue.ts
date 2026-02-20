@@ -22,6 +22,33 @@ function run(cmd: string, ctx: BoltPluginContext): void {
   if (!ctx.dryRun) exec(cmd);
 }
 
+/** Find TortoiseProc.exe — checks standard install paths then PATH. Returns null if not found. */
+function findTortoiseProc(): string | null {
+  const { existsSync } = require("fs");
+  const candidates = [
+    "C:\\Program Files\\TortoiseSVN\\bin\\TortoiseProc.exe",
+    "C:\\Program Files (x86)\\TortoiseSVN\\bin\\TortoiseProc.exe",
+  ];
+  for (const c of candidates) if (existsSync(c)) return c;
+  const result = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
+  if (result.exitCode === 0) return result.stdout.toString().trim().split("\n")[0].trim();
+  return null;
+}
+
+/**
+ * Returns TortoiseProc path to use, or null to fall back to plain svn.
+ *   use_tortoise: true  → require TortoiseProc, throw if absent
+ *   use_tortoise: false → always use plain svn
+ *   absent              → auto-detect (TortoiseProc wins if found)
+ */
+function resolveTortoiseProc(ctx: BoltPluginContext): string | null {
+  const pref = ctx.cfg.project.use_tortoise;
+  if (pref === false) return null;
+  const found = findTortoiseProc();
+  if (pref === true && !found) throw new Error("TortoiseProc.exe not found but use_tortoise: true");
+  return found;
+}
+
 function findZeroByteDlls(dir: string): string[] {
   const { existsSync, readdirSync, statSync } = require("fs");
   if (!existsSync(dir)) return [];
@@ -83,12 +110,28 @@ const plugin: BoltPlugin = {
 
     "svn-cleanup": async (params, ctx) => {
       const root = ctx.cfg.project.svn_root ?? ctx.cfg.project.project_path;
-      run(`svn cleanup "${root}"`, ctx);
+      const tortoiseProc = resolveTortoiseProc(ctx);
+      if (tortoiseProc) {
+        run(
+          `"${tortoiseProc}" /command:cleanup /path:"${root}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`,
+          ctx,
+        );
+      } else {
+        run(`svn cleanup "${root}"`, ctx);
+      }
     },
 
     "svn-revert": async (params, ctx) => {
-      const target = params.path ?? ctx.cfg.project.project_path;
-      run(`svn revert -R "${target}"`, ctx);
+      const target = (params as any).path ?? ctx.cfg.project.project_path;
+      const tortoiseProc = resolveTortoiseProc(ctx);
+      if (tortoiseProc) {
+        run(
+          `"${tortoiseProc}" /command:cleanup /path:"${target}" /noui /nodlg /revert /breaklocks /vacuum /fixtimestamps`,
+          ctx,
+        );
+      } else {
+        run(`svn revert -R "${target}"`, ctx);
+      }
     },
 
     "generate-project": async (params, ctx) => {

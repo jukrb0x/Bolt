@@ -154,3 +154,38 @@ test("fix-dll does not fail when no DLLs found", async () => {
   await uePlugin.handlers["fix-dll"]({}, ctx2);
   rmSync(fakeProject, { recursive: true, force: true });
 });
+
+test("svn-cleanup with use_tortoise=false uses plain svn", async () => {
+  const logged2: string[] = [];
+  const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: false } };
+  const ctx2 = { cfg: fakeCfg, dryRun: true, logger: new Logger({ sink: (l: string) => logged2.push(l) }), logged: logged2 };
+  await uePlugin.handlers["svn-cleanup"]({}, ctx2);
+  expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
+  expect(ctx2.logged.every((l) => !l.includes("TortoiseProc"))).toBe(true);
+});
+
+test("svn-revert with use_tortoise=false uses plain svn", async () => {
+  const logged2: string[] = [];
+  const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: false } };
+  const ctx2 = { cfg: fakeCfg, dryRun: true, logger: new Logger({ sink: (l: string) => logged2.push(l) }), logged: logged2 };
+  await uePlugin.handlers["svn-revert"]({}, ctx2);
+  expect(ctx2.logged.some((l) => l.includes("svn revert"))).toBe(true);
+  expect(ctx2.logged.every((l) => !l.includes("TortoiseProc"))).toBe(true);
+});
+
+test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async () => {
+  const tp = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
+  if (tp.exitCode === 0) return; // TortoiseProc present — skip this test
+  const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: true } };
+  const ctx2 = { cfg: fakeCfg, dryRun: true, logger: new Logger({ sink: () => {} }), logged: [] as string[] };
+  await expect(uePlugin.handlers["svn-cleanup"]({}, ctx2)).rejects.toThrow("TortoiseProc.exe not found");
+});
+
+test("svn-cleanup without use_tortoise uses svn when TortoiseProc absent", async () => {
+  const tp = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
+  if (tp.exitCode === 0) return; // TortoiseProc present — auto-detect would use it, skip
+  const logged2: string[] = [];
+  const ctx2 = { cfg: testCfg, dryRun: true, logger: new Logger({ sink: (l: string) => logged2.push(l) }), logged: logged2 };
+  await uePlugin.handlers["svn-cleanup"]({}, ctx2);
+  expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
+});
