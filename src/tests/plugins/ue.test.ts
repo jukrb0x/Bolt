@@ -189,3 +189,24 @@ test("svn-cleanup without use_tortoise uses svn when TortoiseProc absent", async
   await uePlugin.handlers["svn-cleanup"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
 });
+
+test("start without target logs editor exe", async () => {
+  const ctx = makeCtx();
+  await uePlugin.handlers["start"]({}, ctx);
+  expect(ctx.logged.some((l) => l.includes("UE4Editor") || l.includes("UnrealEditor"))).toBe(true);
+});
+
+test("start with target logs target name", async () => {
+  const ctx = makeCtx();
+  await uePlugin.handlers["start"]({ target: "UnrealInsights" }, ctx).catch(() => {
+    // binary may not exist in test env — that's fine
+  });
+  expect(ctx.logged.join("\n")).toContain("UnrealInsights");
+});
+
+test("start with target throws when binary not found", async () => {
+  const ctx = makeCtx();
+  await expect(
+    uePlugin.handlers["start"]({ target: "NonExistentProgram_XYZ" }, ctx),
+  ).rejects.toThrow("No binary found");
+});
