@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { loadConfig } from "../config";
 import path from "path";
+import os from "os";
+import { writeFileSync, rmSync } from "fs";
 
 const fixture = path.join(import.meta.dir, "../../tests/fixtures/bolt.yaml");
 
@@ -40,4 +42,31 @@ test("accepts plugins array", async () => {
 test("accepts timeout_hours as undefined when not set", async () => {
   const cfg = await loadConfig(fixture);
   expect(cfg.timeout_hours).toBeUndefined();
+});
+
+test("notifications config parses wecom and telegram providers", async () => {
+  const tmpFile = `${os.tmpdir()}/bolt-notify-test.yaml`;
+  writeFileSync(tmpFile, [
+    "project:",
+    "  name: Test",
+    "  ue_path: C:/UE",
+    "  project_path: C:/proj",
+    "  project_name: Test",
+    "notifications:",
+    "  on_start: true",
+    "  on_complete: true",
+    "  on_failure: true",
+    "  providers:",
+    "    - type: wecom",
+    "      webhook_url: https://qyapi.weixin.qq.com/test",
+    "    - type: telegram",
+    "      bot_token: '123:ABC'",
+    "      chat_id: '-1001234567'",
+  ].join("\n"));
+  const cfg = await loadConfig(tmpFile);
+  expect(cfg.notifications?.on_start).toBe(true);
+  expect(cfg.notifications?.providers).toHaveLength(2);
+  expect(cfg.notifications?.providers[0].type).toBe("wecom");
+  expect(cfg.notifications?.providers[1].type).toBe("telegram");
+  rmSync(tmpFile);
 });
