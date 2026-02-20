@@ -144,39 +144,48 @@ const plugin: BoltPlugin = {
     },
 
     start: async (params, ctx) => {
+      const { existsSync } = require("fs");
       const uePath = ctx.cfg.project.ue_path;
       const projFile = path.join(
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      const binDir = w(`${uePath}/Engine/Binaries/Win64`);
 
-      // Map build type to exe suffix, matching UBS behaviour
       const suffixMap: Record<string, string> = {
         debug: "-Win64-Debug",
         shipping: "-Win64-Shipping",
         test: "-Win64-Test",
         development: "",
       };
-      const buildType = (params.type ?? params.build_type ?? "development")
-        .toString()
-        .toLowerCase();
+      const buildType = (params.type ?? params.build_type ?? "development").toString().toLowerCase();
       const suffix = suffixMap[buildType] ?? "";
+      const platform = (params.platform as string | undefined) ?? "Win64";
 
-      // Try suffixed exe first (e.g. UE4Editor-Win64-Debug.exe), then plain,
-      // then UnrealEditor variants for UE5.
-      const { existsSync } = require("fs");
-      const candidates = suffix
-        ? [
-            `${binDir}\\UE4Editor${suffix}.exe`,
-            `${binDir}\\UnrealEditor${suffix}.exe`,
-            `${binDir}\\UE4Editor.exe`,
-            `${binDir}\\UnrealEditor.exe`,
-          ]
-        : [`${binDir}\\UE4Editor.exe`, `${binDir}\\UnrealEditor.exe`];
+      let exePath: string | undefined;
 
-      const exePath = candidates.find(existsSync);
-      if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
+      if (params.target) {
+        const t = params.target as string;
+        const binName = `${t}${suffix}.exe`;
+        const candidates = [
+          path.join(ctx.cfg.project.project_path, "Binaries", platform, binName),
+          path.join(uePath, "Engine", "Binaries", platform, binName),
+        ];
+        ctx.logger.info(`Searching for ${binName}`);
+        exePath = candidates.find(existsSync);
+        if (!exePath) throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
+      } else {
+        const binDir = w(`${uePath}/Engine/Binaries/Win64`);
+        const candidates = suffix
+          ? [
+              `${binDir}\\UE4Editor${suffix}.exe`,
+              `${binDir}\\UnrealEditor${suffix}.exe`,
+              `${binDir}\\UE4Editor.exe`,
+              `${binDir}\\UnrealEditor.exe`,
+            ]
+          : [`${binDir}\\UE4Editor.exe`, `${binDir}\\UnrealEditor.exe`];
+        exePath = candidates.find(existsSync);
+        if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
+      }
 
       ctx.logger.info(`start "" "${exePath}" "${projFile}"`);
       if (!ctx.dryRun) {
