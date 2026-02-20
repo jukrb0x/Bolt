@@ -40,6 +40,7 @@ const ProjectSchema = z.object({
   project_name: z.string(),
   svn_root: z.string().optional(),
   git_branch: z.string().optional(),
+  use_tortoise: z.boolean().optional(),
 });
 
 const BoltConfigSchema = z.object({
