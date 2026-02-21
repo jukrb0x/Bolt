@@ -9,16 +9,16 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function exec(cmd: string): void {
-  // Pass cmd as a single string to cmd /c — no outer wrapping needed when Bun
-  // handles the argv array directly (no shell re-parsing of the cmd string itself).
-  const proc = Bun.spawnSync(["cmd", "/c", cmd], { stdout: "inherit", stderr: "inherit" });
-  if (proc.exitCode !== 0) throw new Error(`Command failed: ${cmd}`);
+async function exec(cmd: string): Promise<void> {
+  // Use Bun's $ shell with { raw } to pass the pre-built command string as-is,
+  // without re-escaping. Bun's shell handles .bat files and Windows quoting correctly.
+  const result = await $`${{ raw: cmd }}`.nothrow();
+  if (result.exitCode !== 0) throw new Error(`Command failed: ${cmd}`);
 }
 
-function run(cmd: string, ctx: BoltPluginContext): void {
+async function run(cmd: string, ctx: BoltPluginContext): Promise<void> {
   ctx.logger.info(cmd);
-  if (!ctx.dryRun) exec(cmd);
+  if (!ctx.dryRun) await exec(cmd);
 }
 
 /** Find TortoiseProc.exe — checks standard install paths then PATH. Returns null if not found. */
@@ -89,7 +89,7 @@ const plugin: BoltPlugin = {
       const cmd = target.type === "editor"
         ? `${buildBat} -Target="${targetBin} Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -Project="${projFile}" -WaitMutex`
         : `${buildBat} ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
-      run(cmd, ctx);
+      await run(cmd, ctx);
     },
 
     update: async (params, ctx) => {
@@ -99,24 +99,24 @@ const plugin: BoltPlugin = {
 
     "update-git": async (params, ctx) => {
       const branch = ctx.cfg.project.git_branch ?? "main";
-      run(`git -C "${ctx.cfg.project.ue_path}" pull origin ${branch} --autostash --no-edit`, ctx);
+      await run(`git -C "${ctx.cfg.project.ue_path}" pull origin ${branch} --autostash --no-edit`, ctx);
     },
 
     "update-svn": async (params, ctx) => {
       const root = ctx.cfg.project.svn_root ?? ctx.cfg.project.project_path;
-      run(`svn update "${root}" --non-interactive --trust-server-cert`, ctx);
+      await run(`svn update "${root}" --non-interactive --trust-server-cert`, ctx);
     },
 
     "svn-cleanup": async (params, ctx) => {
       const root = ctx.cfg.project.svn_root ?? ctx.cfg.project.project_path;
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        run(
+        await run(
           `"${tortoiseProc}" /command:cleanup /path:"${root}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`,
           ctx,
         );
       } else {
-        run(`svn cleanup "${root}"`, ctx);
+        await run(`svn cleanup "${root}"`, ctx);
       }
     },
 
@@ -124,12 +124,12 @@ const plugin: BoltPlugin = {
       const target = (params as any).path ?? ctx.cfg.project.project_path;
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        run(
+        await run(
           `"${tortoiseProc}" /command:cleanup /path:"${target}" /noui /nodlg /revert /breaklocks /vacuum /fixtimestamps`,
           ctx,
         );
       } else {
-        run(`svn revert -R "${target}"`, ctx);
+        await run(`svn revert -R "${target}"`, ctx);
       }
     },
 
@@ -139,7 +139,7 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      run(`"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`, ctx);
+      await run(`"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`, ctx);
     },
 
     start: async (params, ctx) => {
@@ -217,7 +217,7 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      run(
+      await run(
         `"${w(uePath)}/Engine/Binaries/Win64/UE4Editor-Cmd.exe" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
         ctx,
       );
@@ -259,7 +259,7 @@ const plugin: BoltPlugin = {
         const { existsSync } = require("fs");
         if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) exec(genCmd);
       }
-      run(buildCmd, ctx);
+      await run(buildCmd, ctx);
     },
 
     "build-program": async (params, ctx) => {
@@ -276,7 +276,7 @@ const plugin: BoltPlugin = {
       );
       const buildBat = `${w(uePath)}/Engine/Build/BatchFiles/Build.bat`;
       const cmd = `"${buildBat}" ${target} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
-      run(cmd, ctx);
+      await run(cmd, ctx);
     },
 
     info: async (params, ctx) => {
