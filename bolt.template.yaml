@@ -19,12 +19,12 @@ project:
 
 targets:
   editor:
-    type: editor
-    build_type: development
+    target: editor
+    type: development
   client:
-    type: program
+    target: program
     name: MyClient
-    build_type: shipping
+    type: shipping
 
 # Op definitions for `bolt go`
 # Each op has named variants; "default" is used when no value is given.
@@ -77,13 +77,13 @@ ops:
     default:
       - uses: ue/build-engine
         with:
-          build_type: development
+          type: development
 
   build-program:
     default:
       - uses: ue/build-program
         with:
-          build_type: development
+          type: development
           platform: Win64
       # Supply target at runtime:
       #   bolt go build-program --target=UnrealInsights

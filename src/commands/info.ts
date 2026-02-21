@@ -32,8 +32,8 @@ export default defineCommand({
     console.log("");
     for (const [name, t] of Object.entries(cfg.targets)) {
       const detail = t.name
-        ? `${t.type} · ${t.name} · ${t.build_type}`
-        : `${t.type} · ${t.build_type}`;
+        ? `${t.target} · ${t.name} · ${t.type}`
+        : `${t.target} · ${t.type}`;
       console.log(`  ${pc.cyan(name.padEnd(12))}${detail}`);
     }
 

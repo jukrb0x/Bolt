@@ -28,9 +28,9 @@ const ActionSchema = z.object({
 });
 
 const TargetSchema = z.object({
-  type: z.enum(["editor", "program"]),
+  target: z.enum(["editor", "program", "game", "client", "server"]),
   name: z.string().optional(),
-  build_type: z.enum(["development", "debug", "shipping", "test"]).default("development"),
+  type: z.enum(["development", "debug", "shipping", "test"]).default("development"),
 });
 
 const ProjectSchema = z.object({
@@ -77,6 +77,7 @@ const BoltConfigSchema = z.object({
 export type BoltConfig = z.infer<typeof BoltConfigSchema>;
 export type Step = z.infer<typeof StepSchema>;
 export type Target = z.infer<typeof TargetSchema>;
+export type TargetKind = Target["target"];
 export type GoPipeline = z.infer<typeof GoPipelineSchema>;
 export type OpVariant = z.infer<typeof OpVariantSchema>;
 export type OpsMap = Record<string, Record<string, OpVariant>>;
