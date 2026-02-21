@@ -213,3 +213,36 @@ test("variant and inline params coexist", () => {
   expect(result[0].isExact).toBe(true);
   expect(result[0].params).toEqual({ target: "MyProg" });
 });
+
+// ---------------------------------------------------------------------------
+// type shortcuts
+// ---------------------------------------------------------------------------
+
+test("type shortcut: dev expands to development", () => {
+  const result = parseGoArgs(["build", "--type=dev"]);
+  expect(result[0].params).toEqual({ type: "development" });
+});
+
+test("type shortcut: dbg expands to debug", () => {
+  const result = parseGoArgs(["build", "--type=dbg"]);
+  expect(result[0].params).toEqual({ type: "debug" });
+});
+
+test("type shortcut: full name is preserved as-is", () => {
+  const result = parseGoArgs(["build", "--type=shipping"]);
+  expect(result[0].params).toEqual({ type: "shipping" });
+});
+
+test("type shortcut expands before shared-param propagation", () => {
+  // bolt go build --type=dev start  → both get type=development (not "dev")
+  const result = parseGoArgs(["build", "--type=dev", "start"]);
+  expect(result[0].params).toEqual({ type: "development" });
+  expect(result[1].params).toEqual({ type: "development" });
+});
+
+test("type shortcut: dbg propagates as development via last-op backward fill", () => {
+  // bolt go build start --type=dbg  → both get type=debug
+  const result = parseGoArgs(["build", "start", "--type=dbg"]);
+  expect(result[0].params).toEqual({ type: "debug" });
+  expect(result[1].params).toEqual({ type: "debug" });
+});
