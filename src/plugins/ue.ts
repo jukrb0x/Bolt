@@ -10,10 +10,9 @@ function capitalize(s: string): string {
 }
 
 function exec(cmd: string): void {
-  // cmd /c with a quoted executable requires the whole command to be wrapped in an
-  // extra pair of outer quotes, otherwise cmd.exe strips the first quote pair and
-  // misinterprets the path (classic cmd.exe quirk).
-  const proc = Bun.spawnSync(["cmd", "/c", `"${cmd}"`], { stdout: "inherit", stderr: "inherit" });
+  // Pass cmd as a single string to cmd /c — no outer wrapping needed when Bun
+  // handles the argv array directly (no shell re-parsing of the cmd string itself).
+  const proc = Bun.spawnSync(["cmd", "/c", cmd], { stdout: "inherit", stderr: "inherit" });
   if (proc.exitCode !== 0) throw new Error(`Command failed: ${cmd}`);
 }
 
