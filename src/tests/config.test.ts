@@ -15,9 +15,9 @@ test("loads project fields", async () => {
 
 test("loads targets", async () => {
   const cfg = await loadConfig(fixture);
-  expect(cfg.targets.editor.type).toBe("editor");
-  expect(cfg.targets.editor.build_type).toBe("debug");
-  expect(cfg.targets.client.type).toBe("program");
+  expect(cfg.targets.editor.target).toBe("editor");
+  expect(cfg.targets.editor.type).toBe("debug");
+  expect(cfg.targets.client.target).toBe("program");
   expect(cfg.targets.client.name).toBe("MyClient");
 });
 

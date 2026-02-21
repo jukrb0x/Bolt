@@ -59,7 +59,7 @@ test("generate-project produces GenerateProjectFiles command", async () => {
 
 test("build-engine logs Setup.bat, GenerateProjectFiles.bat, and Build.bat -Target command", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({ build_type: "development" }, ctx);
+  await uePlugin.handlers["build-engine"]({ type: "development" }, ctx);
   expect(ctx.logged.some((l) => l.includes("Setup.bat"))).toBe(true);
   expect(ctx.logged.some((l) => l.includes("GenerateProjectFiles.bat"))).toBe(true);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
@@ -69,16 +69,16 @@ test("build-engine logs Setup.bat, GenerateProjectFiles.bat, and Build.bat -Targ
   expect(buildLine).toContain("ShaderCompileWorker");
 });
 
-test("build-engine defaults to development when build_type omitted", async () => {
+test("build-engine defaults to development when type omitted", async () => {
   const ctx = makeCtx();
   await uePlugin.handlers["build-engine"]({}, ctx);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
   expect(buildLine).toContain("Development");
 });
 
-test("build-engine respects debug build_type", async () => {
+test("build-engine respects debug type", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({ build_type: "debug" }, ctx);
+  await uePlugin.handlers["build-engine"]({ type: "debug" }, ctx);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
   expect(buildLine).toContain("Debug");
 });
@@ -94,10 +94,10 @@ test("build-program produces Build.bat with -project= flag", async () => {
   expect(cmd).toContain("Development");
 });
 
-test("build-program respects build_type and platform params", async () => {
+test("build-program respects type and platform params", async () => {
   const ctx = makeCtx();
   await uePlugin.handlers["build-program"](
-    { target: "AnvilSmith", build_type: "debug", platform: "Win64" },
+    { target: "AnvilSmith", type: "debug", platform: "Win64" },
     ctx,
   );
   const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";

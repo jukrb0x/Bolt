@@ -20,8 +20,8 @@ export const testCfg: BoltConfig = {
     svn_root: SVN_ROOT,
   },
   targets: {
-    editor: { type: "editor", build_type: "development" },
-    client: { type: "program", name: "MyClient", build_type: "shipping" },
+    editor: { target: "editor", type: "development" },
+    client: { target: "program", name: "MyClient", type: "shipping" },
   },
   actions: {},
   ops: {

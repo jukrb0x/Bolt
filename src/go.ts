@@ -21,7 +21,7 @@ const GLOBAL_FLAGS = new Set(["--dry-run"]);
  * how a target is built or launched. Op-specific params like `target` must not
  * leak to sibling ops.
  */
-const SHAREABLE_PARAMS = new Set(["type", "build_type", "platform"]);
+const SHAREABLE_PARAMS = new Set(["type", "platform"]);
 
 /**
  * Smart shared params (allowlisted keys only):
