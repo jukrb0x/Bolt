@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { Runner } from "../runner";
 import { testCfg } from "./env";
 import type { BoltConfig } from "../config";
+import { Notifier } from "../notify";
+import type { NotifyEvent } from "../notify";
 
 const cfg: BoltConfig = {
   ...testCfg,
@@ -75,4 +77,27 @@ test("runOps does not timeout when timeout_hours is undefined", async () => {
   const runner = new Runner(cfgNoTimeout, { dryRun: true });
   const ops = [{ name: "a", steps: [{ run: "echo a" }], params: {} }];
   await expect(runner.runOps(ops, cfgNoTimeout["go-pipeline"])).resolves.toBeUndefined();
+});
+
+test("runOps fires start and complete notifications", async () => {
+  const events: NotifyEvent[] = [];
+  const fakeNotifier = new Notifier([{ send: async (e: NotifyEvent) => { events.push(e); } }]);
+  const runner = new Runner(testCfg, { dryRun: true, notifier: fakeNotifier });
+  await runner.runOps(
+    [{ name: "kill", steps: [{ uses: "ue/kill" }] }],
+    { order: [], fail_stops: [] },
+  );
+  expect(events.some((e) => e.kind === "start")).toBe(true);
+  expect(events.some((e) => e.kind === "complete")).toBe(true);
+});
+
+test("runOps fires failure notification on step error", async () => {
+  const events: NotifyEvent[] = [];
+  const fakeNotifier = new Notifier([{ send: async (e: NotifyEvent) => { events.push(e); } }]);
+  const runner = new Runner(testCfg, { dryRun: false, notifier: fakeNotifier });
+  await runner.runOps(
+    [{ name: "bad", steps: [{ run: "exit 1" }] }],
+    { order: [], fail_stops: ["bad"] },
+  ).catch(() => {});
+  expect(events.some((e) => e.kind === "failure" && e.opName === "bad")).toBe(true);
 });

@@ -4,6 +4,7 @@ import { loadConfig } from "../config";
 import { Runner } from "../runner";
 import { Logger } from "../logger";
 import { parseGoArgs, resolveOps } from "../go";
+import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
 import pkg from "../../package.json";
@@ -58,7 +59,7 @@ export default defineCommand({
     logger.info(`Config: ${configPath}`);
     logger.info(`Ops: ${resolved.map((o) => o.name).join(" → ")}${dryRun ? " (dry-run)" : ""}`);
 
-    const runner = new Runner(cfg, { dryRun, logger, configDir });
+    const runner = new Runner(cfg, { dryRun, logger, configDir, notifier: Notifier.fromConfig(cfg.notifications) });
     const start = Date.now();
     try {
       await runner.runOps(resolved, cfg["go-pipeline"]);
