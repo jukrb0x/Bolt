@@ -15,6 +15,41 @@ export interface ResolvedOp {
 
 const GLOBAL_FLAGS = new Set(["--dry-run"]);
 
+/**
+ * Smart shared params:
+ *   - Params on any op fill forward to subsequent ops that don't have that key.
+ *   - Params on the LAST op additionally fill backward to all preceding ops.
+ *
+ * This means:
+ *   build --type=debug start           → both get type=debug  (fill-forward)
+ *   build start --type=debug           → both get type=debug  (last-op fill-backward)
+ *   build --type=debug start --type=x  → build=debug, start=x (explicit overrides shared)
+ */
+function applySharedParams(ops: ParsedOp[]): ParsedOp[] {
+  if (ops.length <= 1) return ops;
+
+  const result = ops.map((op) => ({ ...op, params: { ...op.params } }));
+
+  // Fill backward from last op's ORIGINAL params to all preceding ops (trailing params are global)
+  const lastOriginal = ops[ops.length - 1].params;
+  for (const [k, v] of Object.entries(lastOriginal)) {
+    for (let i = 0; i < result.length - 1; i++) {
+      if (!(k in result[i].params)) result[i].params[k] = v;
+    }
+  }
+
+  // Fill forward: propagate each op's (now possibly enriched) params to subsequent ops
+  for (let i = 0; i < result.length - 1; i++) {
+    for (const [k, v] of Object.entries(result[i].params)) {
+      for (let j = i + 1; j < result.length; j++) {
+        if (!(k in result[j].params)) result[j].params[k] = v;
+      }
+    }
+  }
+
+  return result;
+}
+
 export function parseGoArgs(tokens: string[]): ParsedOp[] {
   const ops: ParsedOp[] = [];
   let i = 0;
@@ -93,7 +128,7 @@ export function parseGoArgs(tokens: string[]): ParsedOp[] {
     ops.push({ name, value, isExact, params });
   }
 
-  return ops;
+  return applySharedParams(ops);
 }
 
 export function resolveOps(parsed: ParsedOp[], cfg: BoltConfig): ResolvedOp[] {
