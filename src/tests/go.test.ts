@@ -174,11 +174,32 @@ test("inline params parsed for single op", () => {
   ]);
 });
 
-test("inline params scoped to their op", () => {
+test("inline params fill forward to subsequent ops (not backward)", () => {
   const result = parseGoArgs(["update", "build-program", "--target=AnvilSmith", "build"]);
-  expect(result[0].params).toEqual({});
-  expect(result[1].params).toEqual({ target: "AnvilSmith" });
-  expect(result[2].params).toEqual({});
+  expect(result[0].params).toEqual({});                          // update: no backward fill
+  expect(result[1].params).toEqual({ target: "AnvilSmith" });   // build-program: explicit
+  expect(result[2].params).toEqual({ target: "AnvilSmith" });   // build: filled forward
+});
+
+test("shared params: type before last op fills forward", () => {
+  // bolt go build --type=debug start  → start gets type=debug
+  const result = parseGoArgs(["build", "--type=debug", "start"]);
+  expect(result[0].params).toEqual({ type: "debug" });
+  expect(result[1].params).toEqual({ type: "debug" });
+});
+
+test("shared params: type on last op fills backward", () => {
+  // bolt go build start --type=debug  → build gets type=debug
+  const result = parseGoArgs(["build", "start", "--type=debug"]);
+  expect(result[0].params).toEqual({ type: "debug" });
+  expect(result[1].params).toEqual({ type: "debug" });
+});
+
+test("shared params: explicit per-op override wins", () => {
+  // bolt go build --type=debug start --type=development  → each keeps own value
+  const result = parseGoArgs(["build", "--type=debug", "start", "--type=development"]);
+  expect(result[0].params).toEqual({ type: "debug" });
+  expect(result[1].params).toEqual({ type: "development" });
 });
 
 test("--dry-run not consumed as inline param", () => {
