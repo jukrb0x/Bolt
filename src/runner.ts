@@ -8,12 +8,14 @@ import uePlugin from "./plugins/ue";
 import fsPlugin from "./plugins/fs";
 import jsonPlugin from "./plugins/json";
 import path from "path";
+import { Notifier } from "./notify";
 
 interface RunnerOptions {
   dryRun?: boolean;
   onStep?: (cmd: string) => void;
   logger?: Logger;
   configDir?: string;
+  notifier?: Notifier;
 }
 
 export class Runner {
@@ -47,6 +49,11 @@ export class Runner {
     const sorted = pipeline.order.length > 0 ? sortByPipeline(ops, pipeline.order) : ops;
     const startTime = Date.now();
 
+    const notifier = this.opts.notifier ?? new Notifier([]);
+    const opNames = sorted.map((o) => o.name);
+    const results: { op: string; ok: boolean }[] = [];
+    await notifier.fire({ kind: "start", ops: opNames });
+
     for (const op of sorted) {
       if (this.cfg.timeout_hours) {
         const elapsedHours = (Date.now() - startTime) / 3_600_000;
@@ -60,12 +67,20 @@ export class Runner {
       try {
         for (const step of op.steps) await this.execStep(step, op.params ?? {});
         this.opts.logger?.success(op.name, (Date.now() - t0) / 1000);
+        results.push({ op: op.name, ok: true });
       } catch (e: any) {
         this.opts.logger?.fail(op.name, (Date.now() - t0) / 1000);
-        if (pipeline.fail_stops.includes(op.name)) throw e;
+        results.push({ op: op.name, ok: false });
+        await notifier.fire({ kind: "failure", opName: op.name, error: e?.message });
+        if (pipeline.fail_stops.includes(op.name)) {
+          await notifier.fire({ kind: "complete", duration: Date.now() - startTime, results });
+          throw e;
+        }
         this.opts.logger?.warn(`"${op.name}" failed but is not in fail_stops — continuing`);
       }
     }
+
+    await notifier.fire({ kind: "complete", duration: Date.now() - startTime, results });
   }
 
   private async execStep(step: Step, opParams: Record<string, string> = {}): Promise<void> {
