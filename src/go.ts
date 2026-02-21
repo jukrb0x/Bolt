@@ -16,31 +16,42 @@ export interface ResolvedOp {
 const GLOBAL_FLAGS = new Set(["--dry-run"]);
 
 /**
- * Smart shared params:
- *   - Params on any op fill forward to subsequent ops that don't have that key.
- *   - Params on the LAST op additionally fill backward to all preceding ops.
+ * Params that are allowed to propagate across ops.
+ * Only "build configuration" params make sense to share — things that affect
+ * how a target is built or launched. Op-specific params like `target` must not
+ * leak to sibling ops.
+ */
+const SHAREABLE_PARAMS = new Set(["type", "build_type", "platform"]);
+
+/**
+ * Smart shared params (allowlisted keys only):
+ *   - Shareable params on any op fill forward to subsequent ops that lack that key.
+ *   - Shareable params on the LAST op additionally fill backward to all preceding ops.
  *
- * This means:
+ * Examples:
  *   build --type=debug start           → both get type=debug  (fill-forward)
- *   build start --type=debug           → both get type=debug  (last-op fill-backward)
- *   build --type=debug start --type=x  → build=debug, start=x (explicit overrides shared)
+ *   build start --type=debug           → both get type=debug  (last-op backward fill)
+ *   build --type=debug start --type=x  → build=debug, start=x (explicit wins)
+ *   build-program --target=X start     → start does NOT get target (not shareable)
  */
 function applySharedParams(ops: ParsedOp[]): ParsedOp[] {
   if (ops.length <= 1) return ops;
 
   const result = ops.map((op) => ({ ...op, params: { ...op.params } }));
 
-  // Fill backward from last op's ORIGINAL params to all preceding ops (trailing params are global)
+  // Fill backward from last op's ORIGINAL shareable params
   const lastOriginal = ops[ops.length - 1].params;
   for (const [k, v] of Object.entries(lastOriginal)) {
+    if (!SHAREABLE_PARAMS.has(k)) continue;
     for (let i = 0; i < result.length - 1; i++) {
       if (!(k in result[i].params)) result[i].params[k] = v;
     }
   }
 
-  // Fill forward: propagate each op's (now possibly enriched) params to subsequent ops
+  // Fill forward: propagate each op's shareable params to subsequent ops
   for (let i = 0; i < result.length - 1; i++) {
     for (const [k, v] of Object.entries(result[i].params)) {
+      if (!SHAREABLE_PARAMS.has(k)) continue;
       for (let j = i + 1; j < result.length; j++) {
         if (!(k in result[j].params)) result[j].params[k] = v;
       }
