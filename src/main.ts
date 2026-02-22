@@ -3,6 +3,7 @@ import runCmd from "./commands/run";
 import listCmd from "./commands/list";
 import infoCmd from "./commands/info";
 import goCmd from "./commands/go";
+import checkCmd from "./commands/check";
 import pkg from "../package.json";
 
 const main = defineCommand({
@@ -16,6 +17,7 @@ const main = defineCommand({
     list: listCmd,
     info: infoCmd,
     go: goCmd,
+    check: checkCmd,
   },
 });
 
