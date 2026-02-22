@@ -90,3 +90,32 @@ export async function loadConfig(filepath: string): Promise<BoltConfig> {
   const parsed = YAML.parse(raw);
   return BoltConfigSchema.parse(parsed);
 }
+
+export interface ConfigCheckResult {
+  ok: boolean;
+  errors: Array<{ path: string; message: string }>;
+}
+
+export async function checkConfig(filepath: string): Promise<ConfigCheckResult> {
+  let raw: string;
+  try {
+    raw = readFileSync(filepath, "utf8");
+  } catch (e: any) {
+    return { ok: false, errors: [{ path: "<file>", message: e.message }] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(raw);
+  } catch (e: any) {
+    return { ok: false, errors: [{ path: "<yaml>", message: `YAML parse error: ${e.message}` }] };
+  }
+  const result = BoltConfigSchema.safeParse(parsed);
+  if (result.success) return { ok: true, errors: [] };
+  return {
+    ok: false,
+    errors: result.error.issues.map((issue) => ({
+      path: issue.path.join(".") || "<root>",
+      message: issue.message,
+    })),
+  };
+}
