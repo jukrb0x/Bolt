@@ -135,7 +135,11 @@ export class Runner {
       if (!opDef) throw new Error(`Unknown op: "${opName}"`);
       const steps = opDef[variant];
       if (!steps) throw new Error(`Unknown variant "${variant}" for op "${opName}"`);
-      for (const s of steps) await this.execStep(s, opParams);
+      const yamlParams = Object.fromEntries(
+        Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
+      );
+      const mergedParams = { ...yamlParams, ...opParams };
+      for (const s of steps) await this.execStep(s, mergedParams);
       return;
     }
 
