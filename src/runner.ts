@@ -36,13 +36,13 @@ export class Runner {
     return this.registry;
   }
 
-  async run(actionName: string, visited = new Set<string>()): Promise<void> {
+  async run(actionName: string, params: Record<string, string> = {}, visited = new Set<string>()): Promise<void> {
     if (!this.cfg.actions[actionName]) throw new Error(`Unknown action: ${actionName}`);
     if (visited.has(actionName)) throw new Error(`Dependency cycle detected at: ${actionName}`);
     visited.add(actionName);
     const action = this.cfg.actions[actionName];
-    for (const dep of action.depends ?? []) await this.run(dep, visited);
-    for (const step of action.steps) await this.execStep(step);
+    for (const dep of action.depends ?? []) await this.run(dep, params, visited);
+    for (const step of action.steps) await this.execStep(step, params);
   }
 
   async runOps(ops: ResolvedOp[], pipeline: GoPipeline): Promise<void> {
@@ -98,7 +98,7 @@ export class Runner {
 
     if (step.uses) {
       this.opts.onStep?.(step.uses);
-      if (!this.opts.dryRun) await this.dispatch(step, ctx, opParams);
+      await this.dispatch(step, ctx, opParams);
       return;
     }
   }
