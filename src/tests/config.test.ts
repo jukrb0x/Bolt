@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { loadConfig } from "../config";
+import { loadConfig, checkConfig } from "../config";
 import path from "path";
 import os from "os";
 import { writeFileSync, rmSync } from "fs";
@@ -69,4 +69,40 @@ test("notifications config parses wecom and telegram providers", async () => {
   expect(cfg.notifications?.providers[0].type).toBe("wecom");
   expect(cfg.notifications?.providers[1].type).toBe("telegram");
   rmSync(tmpFile);
+});
+
+// ---------------------------------------------------------------------------
+// checkConfig
+// ---------------------------------------------------------------------------
+
+test("checkConfig returns ok:true for valid fixture", async () => {
+  const result = await checkConfig(fixture);
+  expect(result.ok).toBe(true);
+  expect(result.errors).toHaveLength(0);
+});
+
+test("checkConfig returns ok:false with errors for invalid yaml", async () => {
+  const tmpFile = `${os.tmpdir()}/bolt-check-invalid.yaml`;
+  writeFileSync(tmpFile, [
+    "project:",
+    "  name: Test",
+    "  ue_path: C:/UE",
+    "  project_path: C:/proj",
+    "  project_name: Test",
+    "targets:",
+    "  editor:",
+    "    type: editor",      // old schema — type field expects build config, not kind
+  ].join("\n"));
+  const result = await checkConfig(tmpFile);
+  expect(result.ok).toBe(false);
+  expect(result.errors.length).toBeGreaterThan(0);
+  // targets.editor.target should be reported as missing/required
+  expect(result.errors.some((e) => e.path.includes("target"))).toBe(true);
+  rmSync(tmpFile);
+});
+
+test("checkConfig returns ok:false when file does not exist", async () => {
+  const result = await checkConfig("/nonexistent/path/bolt.yaml");
+  expect(result.ok).toBe(false);
+  expect(result.errors[0].path).toBe("<file>");
 });
