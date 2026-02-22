@@ -75,7 +75,9 @@ const plugin: BoltPlugin = {
       const targetName = params.target;
       const target = ctx.cfg.targets[targetName];
       if (!target) throw new Error(`Unknown target: "${targetName}"`);
-      const buildType = capitalize(target.type);
+      const buildType = capitalize(
+        (params.type as string | undefined) ?? target.type,
+      );
       const uePath = ctx.cfg.project.ue_path;
       const projFile = path.join(
         ctx.cfg.project.project_path,
