@@ -176,9 +176,9 @@ test("inline params parsed for single op", () => {
 
 test("non-shareable params (target) do not propagate to other ops", () => {
   const result = parseGoArgs(["update", "build-program", "--target=AnvilSmith", "build"]);
-  expect(result[0].params).toEqual({});                          // update: not affected
-  expect(result[1].params).toEqual({ target: "AnvilSmith" });   // build-program: explicit
-  expect(result[2].params).toEqual({});                         // build: target does not leak
+  expect(result[0].params).toEqual({}); // update: not affected
+  expect(result[1].params).toEqual({ target: "AnvilSmith" }); // build-program: explicit
+  expect(result[2].params).toEqual({}); // build: target does not leak
 });
 
 test("shared params: config before last op fills forward", () => {
