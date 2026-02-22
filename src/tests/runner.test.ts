@@ -81,24 +81,35 @@ test("runOps does not timeout when timeout_hours is undefined", async () => {
 
 test("runOps fires start and complete notifications", async () => {
   const events: NotifyEvent[] = [];
-  const fakeNotifier = new Notifier([{ send: async (e: NotifyEvent) => { events.push(e); } }]);
+  const fakeNotifier = new Notifier([
+    {
+      send: async (e: NotifyEvent) => {
+        events.push(e);
+      },
+    },
+  ]);
   const runner = new Runner(testCfg, { dryRun: true, notifier: fakeNotifier });
-  await runner.runOps(
-    [{ name: "kill", steps: [{ uses: "ue/kill" }] }],
-    { order: [], fail_stops: [] },
-  );
+  await runner.runOps([{ name: "kill", steps: [{ uses: "ue/kill" }] }], {
+    order: [],
+    fail_stops: [],
+  });
   expect(events.some((e) => e.kind === "start")).toBe(true);
   expect(events.some((e) => e.kind === "complete")).toBe(true);
 });
 
 test("runOps fires failure notification on step error", async () => {
   const events: NotifyEvent[] = [];
-  const fakeNotifier = new Notifier([{ send: async (e: NotifyEvent) => { events.push(e); } }]);
+  const fakeNotifier = new Notifier([
+    {
+      send: async (e: NotifyEvent) => {
+        events.push(e);
+      },
+    },
+  ]);
   const runner = new Runner(testCfg, { dryRun: false, notifier: fakeNotifier });
-  await runner.runOps(
-    [{ name: "bad", steps: [{ run: "exit 1" }] }],
-    { order: [], fail_stops: ["bad"] },
-  ).catch(() => {});
+  await runner
+    .runOps([{ name: "bad", steps: [{ run: "exit 1" }] }], { order: [], fail_stops: ["bad"] })
+    .catch(() => {});
   expect(events.some((e) => e.kind === "failure" && e.opName === "bad")).toBe(true);
 });
 
@@ -122,7 +133,9 @@ test("run() passes params to plugin handler via step.with merge", async () => {
   await runner.run("build_editor", { config: "debug" });
   const cmd = logged.find((l) => l.includes("Build.bat")) ?? "";
   expect(cmd).toContain("Debug");
-  expect(cmd).not.toContain("-Target=\"" + testCfg.project.project_name + "Editor Win64 Development\"");
+  expect(cmd).not.toContain(
+    '-Target="' + testCfg.project.project_name + 'Editor Win64 Development"',
+  );
 });
 
 test("run() CLI params win over step with: params", async () => {

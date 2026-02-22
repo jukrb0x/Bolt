@@ -36,7 +36,11 @@ export class Runner {
     return this.registry;
   }
 
-  async run(actionName: string, params: Record<string, string> = {}, visited = new Set<string>()): Promise<void> {
+  async run(
+    actionName: string,
+    params: Record<string, string> = {},
+    visited = new Set<string>(),
+  ): Promise<void> {
     if (!this.cfg.actions[actionName]) throw new Error(`Unknown action: ${actionName}`);
     if (visited.has(actionName)) throw new Error(`Dependency cycle detected at: ${actionName}`);
     visited.add(actionName);

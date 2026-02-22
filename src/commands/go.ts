@@ -59,7 +59,12 @@ export default defineCommand({
     logger.info(`Config: ${configPath}`);
     logger.info(`Ops: ${resolved.map((o) => o.name).join(" → ")}${dryRun ? " (dry-run)" : ""}`);
 
-    const runner = new Runner(cfg, { dryRun, logger, configDir, notifier: Notifier.fromConfig(cfg.notifications) });
+    const runner = new Runner(cfg, {
+      dryRun,
+      logger,
+      configDir,
+      notifier: Notifier.fromConfig(cfg.notifications),
+    });
     const start = Date.now();
     try {
       await runner.runOps(resolved, cfg["go-pipeline"]);
