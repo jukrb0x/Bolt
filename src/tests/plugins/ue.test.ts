@@ -32,6 +32,15 @@ test("build program target uses target.name", async () => {
   expect(cmd).toContain("Shipping");
 });
 
+test("build: params.type overrides target config type", async () => {
+  const ctx = makeCtx();
+  await uePlugin.handlers["build"]({ target: "editor", type: "debug" }, ctx);
+  const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain(`-Target="${PROJECT_NAME}Editor Win64 Debug"`);
+  // SCW is always Development regardless of build type
+  expect(cmd).toContain(`-Target="ShaderCompileWorker Win64 Development -Quiet"`);
+});
+
 test("build throws on unknown target", async () => {
   const ctx = makeCtx();
   await expect(uePlugin.handlers["build"]({ target: "nope" }, ctx)).rejects.toThrow(
