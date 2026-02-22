@@ -58,9 +58,7 @@ export class WeComProvider implements NotifyProvider {
       return `**[bolt] ❌ ${event.opName} FAILED**\nError: ${event.error ?? "unknown"}`;
     }
     const secs = Math.floor((event.duration ?? 0) / 1000);
-    const summary = (event.results ?? [])
-      .map((r) => `${r.op} ${r.ok ? "✅" : "❌"}`)
-      .join(" | ");
+    const summary = (event.results ?? []).map((r) => `${r.op} ${r.ok ? "✅" : "❌"}`).join(" | ");
     return `**[bolt] ✅ Done in ${secs}s**\n${summary}`;
   }
 
@@ -92,9 +90,7 @@ export class TelegramProvider implements NotifyProvider {
       return `*[bolt] ❌ ${event.opName} FAILED*\nError: ${event.error ?? "unknown"}`;
     }
     const secs = Math.floor((event.duration ?? 0) / 1000);
-    const summary = (event.results ?? [])
-      .map((r) => `${r.op} ${r.ok ? "✅" : "❌"}`)
-      .join(" | ");
+    const summary = (event.results ?? []).map((r) => `${r.op} ${r.ok ? "✅" : "❌"}`).join(" | ");
     return `*[bolt] ✅ Done in ${secs}s*\n${summary}`;
   }
 

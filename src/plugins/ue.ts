@@ -75,9 +75,7 @@ const plugin: BoltPlugin = {
       const targetName = params.target;
       const target = ctx.cfg.targets[targetName];
       if (!target) throw new Error(`Unknown target: "${targetName}"`);
-      const buildType = capitalize(
-        (params.config as string | undefined) ?? target.config,
-      );
+      const buildType = capitalize((params.config as string | undefined) ?? target.config);
       const uePath = ctx.cfg.project.ue_path;
       const projFile = path.join(
         ctx.cfg.project.project_path,
@@ -88,9 +86,10 @@ const plugin: BoltPlugin = {
           ? `${ctx.cfg.project.project_name}Editor`
           : (target.name ?? targetName);
       const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
-      const cmd = target.kind === "editor"
-        ? `${buildBat} -Target="${targetBin} Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -Project="${projFile}" -WaitMutex`
-        : `${buildBat} ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
+      const cmd =
+        target.kind === "editor"
+          ? `${buildBat} -Target="${targetBin} Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -Project="${projFile}" -WaitMutex`
+          : `${buildBat} ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
       await run(cmd, ctx);
     },
 
@@ -101,7 +100,10 @@ const plugin: BoltPlugin = {
 
     "update-git": async (params, ctx) => {
       const branch = ctx.cfg.project.git_branch ?? "main";
-      await run(`git -C "${ctx.cfg.project.ue_path}" pull origin ${branch} --autostash --no-edit`, ctx);
+      await run(
+        `git -C "${ctx.cfg.project.ue_path}" pull origin ${branch} --autostash --no-edit`,
+        ctx,
+      );
     },
 
     "update-svn": async (params, ctx) => {
@@ -141,7 +143,10 @@ const plugin: BoltPlugin = {
         ctx.cfg.project.project_path,
         `${ctx.cfg.project.project_name}.uproject`,
       );
-      await run(`"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`, ctx);
+      await run(
+        `"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`,
+        ctx,
+      );
     },
 
     start: async (params, ctx) => {
@@ -173,7 +178,8 @@ const plugin: BoltPlugin = {
         ];
         ctx.logger.info(`Searching for ${binName}`);
         exePath = candidates.find(existsSync);
-        if (!exePath) throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
+        if (!exePath)
+          throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
       } else {
         const binDir = w(`${uePath}/Engine/Binaries/Win64`);
         const candidates = suffix

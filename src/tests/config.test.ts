@@ -46,23 +46,26 @@ test("accepts timeout_hours as undefined when not set", async () => {
 
 test("notifications config parses wecom and telegram providers", async () => {
   const tmpFile = `${os.tmpdir()}/bolt-notify-test.yaml`;
-  writeFileSync(tmpFile, [
-    "project:",
-    "  name: Test",
-    "  ue_path: C:/UE",
-    "  project_path: C:/proj",
-    "  project_name: Test",
-    "notifications:",
-    "  on_start: true",
-    "  on_complete: true",
-    "  on_failure: true",
-    "  providers:",
-    "    - type: wecom",
-    "      webhook_url: https://qyapi.weixin.qq.com/test",
-    "    - type: telegram",
-    "      bot_token: '123:ABC'",
-    "      chat_id: '-1001234567'",
-  ].join("\n"));
+  writeFileSync(
+    tmpFile,
+    [
+      "project:",
+      "  name: Test",
+      "  ue_path: C:/UE",
+      "  project_path: C:/proj",
+      "  project_name: Test",
+      "notifications:",
+      "  on_start: true",
+      "  on_complete: true",
+      "  on_failure: true",
+      "  providers:",
+      "    - type: wecom",
+      "      webhook_url: https://qyapi.weixin.qq.com/test",
+      "    - type: telegram",
+      "      bot_token: '123:ABC'",
+      "      chat_id: '-1001234567'",
+    ].join("\n"),
+  );
   const cfg = await loadConfig(tmpFile);
   expect(cfg.notifications?.on_start).toBe(true);
   expect(cfg.notifications?.providers).toHaveLength(2);
@@ -83,16 +86,19 @@ test("checkConfig returns ok:true for valid fixture", async () => {
 
 test("checkConfig returns ok:false with errors for invalid yaml", async () => {
   const tmpFile = `${os.tmpdir()}/bolt-check-invalid.yaml`;
-  writeFileSync(tmpFile, [
-    "project:",
-    "  name: Test",
-    "  ue_path: C:/UE",
-    "  project_path: C:/proj",
-    "  project_name: Test",
-    "targets:",
-    "  editor:",
-    "    kind: invalid_kind",   // not a valid kind value
-  ].join("\n"));
+  writeFileSync(
+    tmpFile,
+    [
+      "project:",
+      "  name: Test",
+      "  ue_path: C:/UE",
+      "  project_path: C:/proj",
+      "  project_name: Test",
+      "targets:",
+      "  editor:",
+      "    kind: invalid_kind", // not a valid kind value
+    ].join("\n"),
+  );
   const result = await checkConfig(tmpFile);
   expect(result.ok).toBe(false);
   expect(result.errors.length).toBeGreaterThan(0);

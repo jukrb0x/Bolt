@@ -4,14 +4,22 @@ import type { NotifyEvent } from "../notify";
 
 test("Notifier.fire calls all providers", async () => {
   let calls = 0;
-  const fakeProvider = { send: async (_e: NotifyEvent) => { calls++; } };
+  const fakeProvider = {
+    send: async (_e: NotifyEvent) => {
+      calls++;
+    },
+  };
   const notifier = new Notifier([fakeProvider, fakeProvider]);
   await notifier.fire({ kind: "start", ops: ["build", "start"] });
   expect(calls).toBe(2);
 });
 
 test("Notifier.fire does not throw when a provider fails", async () => {
-  const badProvider = { send: async (_e: NotifyEvent) => { throw new Error("network down"); } };
+  const badProvider = {
+    send: async (_e: NotifyEvent) => {
+      throw new Error("network down");
+    },
+  };
   const notifier = new Notifier([badProvider]);
   await notifier.fire({ kind: "complete", duration: 1234, results: [] });
   // must not throw
@@ -37,7 +45,10 @@ test("WeComProvider.buildPayload complete event contains duration in seconds", (
   const payload = p.buildPayload({
     kind: "complete",
     duration: 5500,
-    results: [{ op: "build", ok: true }, { op: "start", ok: false }],
+    results: [
+      { op: "build", ok: true },
+      { op: "start", ok: false },
+    ],
   });
   expect(payload.markdown.content).toContain("5s");
   expect(payload.markdown.content).toContain("build");
