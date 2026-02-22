@@ -182,3 +182,47 @@ test("run() params propagate through depends chain", async () => {
   const buildCmd = logged.find((l) => l.includes("Build.bat")) ?? "";
   expect(buildCmd).toContain("Debug");
 });
+
+test("action step with: config passes through ops/ dispatch to plugin", async () => {
+  const logged: string[] = [];
+  const cfgOps: BoltConfig = {
+    ...testCfg,
+    ops: {
+      ...testCfg.ops,
+      build: { default: [{ uses: "ue/build", with: { target: "editor" } }] },
+    },
+    actions: {
+      build_editor: {
+        steps: [{ uses: "ops/build", with: { config: "debug" } }],
+      },
+    },
+  };
+  const { Logger } = await import("../logger");
+  const logger = new Logger({ sink: (l) => logged.push(l) });
+  const runner = new Runner(cfgOps, { dryRun: true, logger });
+  await runner.run("build_editor");
+  const cmd = logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("Debug");
+});
+
+test("CLI params win over action step with: config when using ops/ dispatch", async () => {
+  const logged: string[] = [];
+  const cfgOps: BoltConfig = {
+    ...testCfg,
+    ops: {
+      ...testCfg.ops,
+      build: { default: [{ uses: "ue/build", with: { target: "editor" } }] },
+    },
+    actions: {
+      build_editor: {
+        steps: [{ uses: "ops/build", with: { config: "shipping" } }],
+      },
+    },
+  };
+  const { Logger } = await import("../logger");
+  const logger = new Logger({ sink: (l) => logged.push(l) });
+  const runner = new Runner(cfgOps, { dryRun: true, logger });
+  await runner.run("build_editor", { config: "debug" });
+  const cmd = logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("Debug");
+});
