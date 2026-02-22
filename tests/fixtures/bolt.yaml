@@ -20,6 +20,7 @@ actions:
       - uses: ue/build
         with:
           target: editor
+          config: debug
   daily_check:
     steps:
       - uses: ue/update

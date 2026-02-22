@@ -9,7 +9,7 @@
 - [ ] [FEAT] `bolt init` - init enigne and project repo with boltrepo format, or custom paths
 - [ ] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
 - [ ] [ecosystem] shell command runs
-- [ ] [config] `bolt check` - check bolt.yaml validation
+- [x] [config] `bolt check` - check bolt.yaml validation
 - [ ] [config] `bolt apply` - apply templated profile bolt.yaml from built-in OR gh repo (or any git repo.. specify domain)
 - [ ] [config] `bolt config` - open $editor for current bolt yaml
 - [ ] `bolt help` - details

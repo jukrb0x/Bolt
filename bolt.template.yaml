@@ -65,7 +65,6 @@ ops:
         with:
           target: program
 
-
   fillddc:
     default:
       - uses: ue/fillddc
@@ -118,7 +117,32 @@ go-pipeline:
 actions:
   build_editor:
     steps:
+      - uses: ue/build
+        with:
+          target: editor
+          config: development
+
+  build_editor_with_ops:
+    steps:
       - uses: ops/build
+        with:
+          config: debug
+
+  build_editor_steps:
+    steps:
+      - uses: ue/build-engine
+        with:
+          config: development
+      - uses: ue/build-editor
+        with:
+          config: debug
+
+  build_and_start_editor:
+    steps:
+      - uses: ue/build
+        with:
+          target: editor
+      - uses: ue/start
 
   daily_check:
     steps:
