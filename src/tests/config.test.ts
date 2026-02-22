@@ -15,9 +15,9 @@ test("loads project fields", async () => {
 
 test("loads targets", async () => {
   const cfg = await loadConfig(fixture);
-  expect(cfg.targets.editor.target).toBe("editor");
-  expect(cfg.targets.editor.type).toBe("debug");
-  expect(cfg.targets.client.target).toBe("program");
+  expect(cfg.targets.editor.kind).toBe("editor");
+  expect(cfg.targets.editor.config).toBe("debug");
+  expect(cfg.targets.client.kind).toBe("program");
   expect(cfg.targets.client.name).toBe("MyClient");
 });
 
@@ -91,13 +91,12 @@ test("checkConfig returns ok:false with errors for invalid yaml", async () => {
     "  project_name: Test",
     "targets:",
     "  editor:",
-    "    type: editor",      // old schema — type field expects build config, not kind
+    "    kind: invalid_kind",   // not a valid kind value
   ].join("\n"));
   const result = await checkConfig(tmpFile);
   expect(result.ok).toBe(false);
   expect(result.errors.length).toBeGreaterThan(0);
-  // targets.editor.target should be reported as missing/required
-  expect(result.errors.some((e) => e.path.includes("target"))).toBe(true);
+  expect(result.errors.some((e) => e.path.includes("kind"))).toBe(true);
   rmSync(tmpFile);
 });
 

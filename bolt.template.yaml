@@ -19,12 +19,12 @@ project:
 
 targets:
   editor:
-    target: editor
-    type: development
+    kind: editor
+    config: development
   client:
-    target: program
+    kind: program
     name: MyClient
-    type: shipping
+    config: shipping
 
 # Op definitions for `bolt go`
 # Each op has named variants; "default" is used when no value is given.
@@ -56,6 +56,15 @@ ops:
         with:
           target: editor
     # Use --build=<target-key> to override the target at runtime
+    editor:
+      - uses: ue/build
+        with:
+          target: editor
+    program:
+      - uses: ue/build
+        with:
+          target: program
+
 
   fillddc:
     default:
@@ -77,13 +86,13 @@ ops:
     default:
       - uses: ue/build-engine
         with:
-          type: development
+          config: development
 
   build-program:
     default:
       - uses: ue/build-program
         with:
-          type: development
+          config: development
           platform: Win64
       # Supply target at runtime:
       #   bolt go build-program --target=UnrealInsights
