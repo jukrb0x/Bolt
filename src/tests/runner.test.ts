@@ -101,3 +101,84 @@ test("runOps fires failure notification on step error", async () => {
   ).catch(() => {});
   expect(events.some((e) => e.kind === "failure" && e.opName === "bad")).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// run() with params — CLI overrides propagate to handlers
+// ---------------------------------------------------------------------------
+
+test("run() passes params to plugin handler via step.with merge", async () => {
+  const logged: string[] = [];
+  const cfgWithAction: BoltConfig = {
+    ...testCfg,
+    actions: {
+      build_editor: {
+        steps: [{ uses: "ue/build", with: { target: "editor" } }],
+      },
+    },
+  };
+  const { Logger } = await import("../logger");
+  const logger = new Logger({ sink: (l) => logged.push(l) });
+  const runner = new Runner(cfgWithAction, { dryRun: true, logger });
+  await runner.run("build_editor", { config: "debug" });
+  const cmd = logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("Debug");
+  expect(cmd).not.toContain("-Target=\"" + testCfg.project.project_name + "Editor Win64 Development\"");
+});
+
+test("run() CLI params win over step with: params", async () => {
+  const logged: string[] = [];
+  const cfgWithAction: BoltConfig = {
+    ...testCfg,
+    actions: {
+      build_editor: {
+        steps: [{ uses: "ue/build", with: { target: "editor", config: "shipping" } }],
+      },
+    },
+  };
+  const { Logger } = await import("../logger");
+  const logger = new Logger({ sink: (l) => logged.push(l) });
+  const runner = new Runner(cfgWithAction, { dryRun: true, logger });
+  await runner.run("build_editor", { config: "debug" });
+  const cmd = logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("Debug");
+});
+
+test("run() with no params uses step with: defaults", async () => {
+  const logged: string[] = [];
+  const cfgWithAction: BoltConfig = {
+    ...testCfg,
+    actions: {
+      build_editor: {
+        steps: [{ uses: "ue/build", with: { target: "editor" } }],
+      },
+    },
+  };
+  const { Logger } = await import("../logger");
+  const logger = new Logger({ sink: (l) => logged.push(l) });
+  const runner = new Runner(cfgWithAction, { dryRun: true, logger });
+  await runner.run("build_editor");
+  const cmd = logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("Development");
+});
+
+test("run() params propagate through depends chain", async () => {
+  const logged: string[] = [];
+  const cfgChained: BoltConfig = {
+    ...testCfg,
+    actions: {
+      build_editor: {
+        steps: [{ uses: "ue/build", with: { target: "editor" } }],
+      },
+      full: {
+        depends: ["build_editor"],
+        steps: [{ uses: "ue/start" }],
+      },
+    },
+  };
+  const { Logger } = await import("../logger");
+  const logger = new Logger({ sink: (l) => logged.push(l) });
+  const runner = new Runner(cfgChained, { dryRun: true, logger });
+  await runner.run("full", { config: "debug" });
+  const buildCmd = logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(buildCmd).toContain("Debug");
+});
