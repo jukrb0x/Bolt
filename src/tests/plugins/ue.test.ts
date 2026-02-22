@@ -32,9 +32,9 @@ test("build program target uses target.name", async () => {
   expect(cmd).toContain("Shipping");
 });
 
-test("build: params.type overrides target config type", async () => {
+test("build: params.config overrides target config", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build"]({ target: "editor", type: "debug" }, ctx);
+  await uePlugin.handlers["build"]({ target: "editor", config: "debug" }, ctx);
   const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";
   expect(cmd).toContain(`-Target="${PROJECT_NAME}Editor Win64 Debug"`);
   // SCW is always Development regardless of build type
@@ -68,7 +68,7 @@ test("generate-project produces GenerateProjectFiles command", async () => {
 
 test("build-engine logs Setup.bat, GenerateProjectFiles.bat, and Build.bat -Target command", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({ type: "development" }, ctx);
+  await uePlugin.handlers["build-engine"]({ config: "development" }, ctx);
   expect(ctx.logged.some((l) => l.includes("Setup.bat"))).toBe(true);
   expect(ctx.logged.some((l) => l.includes("GenerateProjectFiles.bat"))).toBe(true);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
@@ -78,16 +78,16 @@ test("build-engine logs Setup.bat, GenerateProjectFiles.bat, and Build.bat -Targ
   expect(buildLine).toContain("ShaderCompileWorker");
 });
 
-test("build-engine defaults to development when type omitted", async () => {
+test("build-engine defaults to development when config omitted", async () => {
   const ctx = makeCtx();
   await uePlugin.handlers["build-engine"]({}, ctx);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
   expect(buildLine).toContain("Development");
 });
 
-test("build-engine respects debug type", async () => {
+test("build-engine respects debug config", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({ type: "debug" }, ctx);
+  await uePlugin.handlers["build-engine"]({ config: "debug" }, ctx);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
   expect(buildLine).toContain("Debug");
 });
@@ -103,10 +103,10 @@ test("build-program produces Build.bat with -project= flag", async () => {
   expect(cmd).toContain("Development");
 });
 
-test("build-program respects type and platform params", async () => {
+test("build-program respects config and platform params", async () => {
   const ctx = makeCtx();
   await uePlugin.handlers["build-program"](
-    { target: "AnvilSmith", type: "debug", platform: "Win64" },
+    { target: "AnvilSmith", config: "debug", platform: "Win64" },
     ctx,
   );
   const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";

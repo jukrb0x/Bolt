@@ -16,14 +16,14 @@ export interface ResolvedOp {
 const GLOBAL_FLAGS = new Set(["--dry-run"]);
 
 /** Shorthand aliases for the `type` (build configuration) param. */
-const TYPE_SHORTCUTS: Record<string, string> = {
+const CONFIG_SHORTCUTS: Record<string, string> = {
   dev: "development",
   dbg: "debug",
 };
 
 /** Expand shorthand aliases in a raw param value for the `type` key. */
-function expandType(value: string): string {
-  return TYPE_SHORTCUTS[value.toLowerCase()] ?? value;
+function expandConfig(value: string): string {
+  return CONFIG_SHORTCUTS[value.toLowerCase()] ?? value;
 }
 
 /**
@@ -32,7 +32,7 @@ function expandType(value: string): string {
  * how a target is built or launched. Op-specific params like `target` must not
  * leak to sibling ops.
  */
-const SHAREABLE_PARAMS = new Set(["type", "platform"]);
+const SHAREABLE_PARAMS = new Set(["config", "platform"]);
 
 /**
  * Smart shared params (allowlisted keys only):
@@ -112,7 +112,7 @@ export function parseGoArgs(tokens: string[]): ParsedOp[] {
         const eqIdx = param.indexOf("=");
         const k = param.slice(0, eqIdx);
         const v = param.slice(eqIdx + 1);
-        params[k] = k === "type" ? expandType(v) : v;
+        params[k] = k === "config" ? expandConfig(v) : v;
         i++;
       }
 
@@ -147,7 +147,7 @@ export function parseGoArgs(tokens: string[]): ParsedOp[] {
       const paramEqIdx = param.indexOf("=");
       const k = param.slice(0, paramEqIdx);
       const v = param.slice(paramEqIdx + 1);
-      params[k] = k === "type" ? expandType(v) : v;
+      params[k] = k === "config" ? expandConfig(v) : v;
       i++;
     }
 

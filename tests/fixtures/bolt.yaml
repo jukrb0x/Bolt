@@ -7,12 +7,12 @@ project:
 
 targets:
   editor:
-    target: editor
-    type: debug
+    kind: editor
+    config: debug
   client:
-    target: program
+    kind: program
     name: MyClient
-    type: shipping
+    config: shipping
 
 actions:
   build_editor:
@@ -75,13 +75,13 @@ ops:
     default:
       - uses: ue/build-engine
         with:
-          type: development
+          config: development
 
   build-program:
     default:
       - uses: ue/build-program
         with:
-          type: development
+          config: development
           platform: Win64
 
 go-pipeline:

@@ -181,25 +181,25 @@ test("non-shareable params (target) do not propagate to other ops", () => {
   expect(result[2].params).toEqual({});                         // build: target does not leak
 });
 
-test("shared params: type before last op fills forward", () => {
-  // bolt go build --type=debug start  → start gets type=debug
-  const result = parseGoArgs(["build", "--type=debug", "start"]);
-  expect(result[0].params).toEqual({ type: "debug" });
-  expect(result[1].params).toEqual({ type: "debug" });
+test("shared params: config before last op fills forward", () => {
+  // bolt go build --config=debug start  → start gets type=debug
+  const result = parseGoArgs(["build", "--config=debug", "start"]);
+  expect(result[0].params).toEqual({ config: "debug" });
+  expect(result[1].params).toEqual({ config: "debug" });
 });
 
-test("shared params: type on last op fills backward", () => {
-  // bolt go build start --type=debug  → build gets type=debug
-  const result = parseGoArgs(["build", "start", "--type=debug"]);
-  expect(result[0].params).toEqual({ type: "debug" });
-  expect(result[1].params).toEqual({ type: "debug" });
+test("shared params: config on last op fills backward", () => {
+  // bolt go build start --config=debug  → build gets type=debug
+  const result = parseGoArgs(["build", "start", "--config=debug"]);
+  expect(result[0].params).toEqual({ config: "debug" });
+  expect(result[1].params).toEqual({ config: "debug" });
 });
 
 test("shared params: explicit per-op override wins", () => {
-  // bolt go build --type=debug start --type=development  → each keeps own value
-  const result = parseGoArgs(["build", "--type=debug", "start", "--type=development"]);
-  expect(result[0].params).toEqual({ type: "debug" });
-  expect(result[1].params).toEqual({ type: "development" });
+  // bolt go build --config=debug start --config=development  → each keeps own value
+  const result = parseGoArgs(["build", "--config=debug", "start", "--config=development"]);
+  expect(result[0].params).toEqual({ config: "debug" });
+  expect(result[1].params).toEqual({ config: "development" });
 });
 
 test("--dry-run not consumed as inline param", () => {
@@ -215,34 +215,34 @@ test("variant and inline params coexist", () => {
 });
 
 // ---------------------------------------------------------------------------
-// type shortcuts
+// config shortcuts
 // ---------------------------------------------------------------------------
 
-test("type shortcut: dev expands to development", () => {
-  const result = parseGoArgs(["build", "--type=dev"]);
-  expect(result[0].params).toEqual({ type: "development" });
+test("config shortcut: dev expands to development", () => {
+  const result = parseGoArgs(["build", "--config=dev"]);
+  expect(result[0].params).toEqual({ config: "development" });
 });
 
-test("type shortcut: dbg expands to debug", () => {
-  const result = parseGoArgs(["build", "--type=dbg"]);
-  expect(result[0].params).toEqual({ type: "debug" });
+test("config shortcut: dbg expands to debug", () => {
+  const result = parseGoArgs(["build", "--config=dbg"]);
+  expect(result[0].params).toEqual({ config: "debug" });
 });
 
-test("type shortcut: full name is preserved as-is", () => {
-  const result = parseGoArgs(["build", "--type=shipping"]);
-  expect(result[0].params).toEqual({ type: "shipping" });
+test("config shortcut: full name is preserved as-is", () => {
+  const result = parseGoArgs(["build", "--config=shipping"]);
+  expect(result[0].params).toEqual({ config: "shipping" });
 });
 
-test("type shortcut expands before shared-param propagation", () => {
-  // bolt go build --type=dev start  → both get type=development (not "dev")
-  const result = parseGoArgs(["build", "--type=dev", "start"]);
-  expect(result[0].params).toEqual({ type: "development" });
-  expect(result[1].params).toEqual({ type: "development" });
+test("config shortcut expands before shared-param propagation", () => {
+  // bolt go build --config=dev start  → both get type=development (not "dev")
+  const result = parseGoArgs(["build", "--config=dev", "start"]);
+  expect(result[0].params).toEqual({ config: "development" });
+  expect(result[1].params).toEqual({ config: "development" });
 });
 
-test("type shortcut: dbg propagates as development via last-op backward fill", () => {
-  // bolt go build start --type=dbg  → both get type=debug
-  const result = parseGoArgs(["build", "start", "--type=dbg"]);
-  expect(result[0].params).toEqual({ type: "debug" });
-  expect(result[1].params).toEqual({ type: "debug" });
+test("config shortcut: dbg propagates as development via last-op backward fill", () => {
+  // bolt go build start --config=dbg  → both get type=debug
+  const result = parseGoArgs(["build", "start", "--config=dbg"]);
+  expect(result[0].params).toEqual({ config: "debug" });
+  expect(result[1].params).toEqual({ config: "debug" });
 });

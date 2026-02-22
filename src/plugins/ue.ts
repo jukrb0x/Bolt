@@ -76,7 +76,7 @@ const plugin: BoltPlugin = {
       const target = ctx.cfg.targets[targetName];
       if (!target) throw new Error(`Unknown target: "${targetName}"`);
       const buildType = capitalize(
-        (params.type as string | undefined) ?? target.type,
+        (params.config as string | undefined) ?? target.config,
       );
       const uePath = ctx.cfg.project.ue_path;
       const projFile = path.join(
@@ -84,11 +84,11 @@ const plugin: BoltPlugin = {
         `${ctx.cfg.project.project_name}.uproject`,
       );
       const targetBin =
-        target.target === "editor"
+        target.kind === "editor"
           ? `${ctx.cfg.project.project_name}Editor`
           : (target.name ?? targetName);
       const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
-      const cmd = target.target === "editor"
+      const cmd = target.kind === "editor"
         ? `${buildBat} -Target="${targetBin} Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -Project="${projFile}" -WaitMutex`
         : `${buildBat} ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
       await run(cmd, ctx);
@@ -158,7 +158,7 @@ const plugin: BoltPlugin = {
         test: "-Win64-Test",
         development: "",
       };
-      const buildType = (params.type ?? "development").toString().toLowerCase();
+      const buildType = (params.config ?? "development").toString().toLowerCase();
       const suffix = suffixMap[buildType] ?? "";
       const platform = (params.platform as string | undefined) ?? "Win64";
 
@@ -247,7 +247,7 @@ const plugin: BoltPlugin = {
 
     "build-engine": async (params, ctx) => {
       const uePath = ctx.cfg.project.ue_path;
-      const buildType = capitalize(params.type ?? "development");
+      const buildType = capitalize(params.config ?? "development");
       const setupCmd = `"${w(uePath)}/Setup.bat" --force`;
       const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
       const buildCmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
@@ -269,7 +269,7 @@ const plugin: BoltPlugin = {
       if (!target || target.trim() === "") {
         throw new Error(`No target specified. Use: bolt go build-program --target=<Name>`);
       }
-      const buildType = capitalize(params.type ?? "development");
+      const buildType = capitalize(params.config ?? "development");
       const platform = params.platform ?? "Win64";
       const uePath = ctx.cfg.project.ue_path;
       const projFile = path.join(
