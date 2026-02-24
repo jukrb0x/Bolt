@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { YAML } from "bun";
 import { readFileSync } from "fs";
+import type { BoltConfig } from "./config-types";
 
 const StepSchema = z.object({
   uses: z.string().optional(),
@@ -74,16 +75,18 @@ const BoltConfigSchema = z.object({
   notifications: NotificationsSchema.optional(),
 });
 
-export type BoltConfig = z.infer<typeof BoltConfigSchema>;
-export type Step = z.infer<typeof StepSchema>;
-export type Target = z.infer<typeof TargetSchema>;
-export type TargetKind = Target["kind"];
-export type GoPipeline = z.infer<typeof GoPipelineSchema>;
-export type OpVariant = z.infer<typeof OpVariantSchema>;
-export type OpsMap = Record<string, Record<string, OpVariant>>;
-export type PluginEntry = z.infer<typeof PluginEntrySchema>;
-export type NotificationsConfig = z.infer<typeof NotificationsSchema>;
-export type NotifyProviderCfg = z.infer<typeof NotifyProviderSchema>;
+export type {
+  BoltConfig,
+  Target,
+  TargetKind,
+  Step,
+  GoPipeline,
+  OpVariant,
+  OpsMap,
+  PluginEntry,
+  NotificationsConfig,
+  NotifyProviderCfg,
+} from "./config-types";
 
 export async function loadConfig(filepath: string): Promise<BoltConfig> {
   const raw = readFileSync(filepath, "utf8");
