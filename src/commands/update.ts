@@ -1,12 +1,16 @@
 import { defineCommand } from "citty";
 import { VERSION } from "../version";
 import { writeFileSync, renameSync, chmodSync } from "fs";
-import { tmpdir } from "os";
 import path from "path";
 import pc from "picocolors";
 
 const GITHUB_REPO = "jukrb0x/Bolt"; // TODO: update to actual repo
 const API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+
+interface GHRelease {
+  tag_name: string;
+  assets: Array<{ name: string; browser_download_url: string }>;
+}
 
 export function isNewer(current: string, latest: string): boolean {
   const parse = (v: string) => v.replace(/^v/, "").split(".").map(Number);
@@ -27,7 +31,8 @@ export default defineCommand({
     force: { type: "boolean", default: false, description: "Re-download even if already up to date" },
   },
   async run({ args }) {
-    if (process.execPath.toLowerCase().includes("bun")) {
+    const execName = path.basename(process.execPath).toLowerCase();
+    if (execName.startsWith("bun")) {
       console.error(pc.red("self-update is only available in the compiled binary, not dev mode"));
       process.exit(1);
     }
@@ -35,7 +40,7 @@ export default defineCommand({
     console.log(pc.dim(`Current version: ${VERSION}`));
     console.log(pc.dim("Checking for updates..."));
 
-    let release: any;
+    let release: GHRelease;
     try {
       const res = await fetch(API_URL, {
         headers: { "User-Agent": "bolt-self-update" },
@@ -47,7 +52,11 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const latestTag: string = release.tag_name ?? "";
+    const latestTag: string = release!.tag_name ?? "";
+    if (!latestTag) {
+      console.error(pc.red("Invalid release response: missing tag_name"));
+      process.exit(1);
+    }
     const latestVersion = latestTag.replace(/^v/, "");
 
     if (!args.force && !isNewer(VERSION, latestVersion)) {
@@ -56,21 +65,27 @@ export default defineCommand({
     }
 
     const assetName = platformAssetName();
-    const asset = (release.assets as any[]).find((a: any) => a.name === assetName);
+    const asset = release!.assets.find((a) => a.name === assetName);
     if (!asset) {
       console.error(pc.red(`No asset named "${assetName}" found in release ${latestTag}`));
       process.exit(1);
     }
 
     console.log(pc.dim(`Downloading ${assetName} v${latestVersion}...`));
-    const downloadRes = await fetch(asset.browser_download_url);
-    if (!downloadRes.ok) {
-      console.error(pc.red(`Download failed: ${downloadRes.status}`));
+    let downloadRes: Response;
+    try {
+      downloadRes = await fetch(asset.browser_download_url);
+    } catch (e: any) {
+      console.error(pc.red(`Download failed: ${e.message}`));
+      process.exit(1);
+    }
+    if (!downloadRes!.ok) {
+      console.error(pc.red(`Download failed: ${downloadRes!.status}`));
       process.exit(1);
     }
 
-    const buf = Buffer.from(await downloadRes.arrayBuffer());
-    const tmpPath = path.join(tmpdir(), assetName + ".new");
+    const buf = Buffer.from(await downloadRes!.arrayBuffer());
+    const tmpPath = path.join(path.dirname(process.execPath), assetName + ".new");
     writeFileSync(tmpPath, buf);
 
     if (process.platform !== "win32") {
