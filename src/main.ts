@@ -6,6 +6,7 @@ import goCmd from "./commands/go";
 import checkCmd from "./commands/check";
 import versionCmd from "./commands/version";
 import updateCmd from "./commands/update";
+import pluginCmd from "./commands/plugin";
 import pkg from "../package.json";
 
 const main = defineCommand({
@@ -22,6 +23,7 @@ const main = defineCommand({
     check: checkCmd,
     version: versionCmd,
     "self-update": updateCmd,
+    plugin: pluginCmd,
   },
 });
 
