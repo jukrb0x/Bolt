@@ -70,15 +70,16 @@ export default plugin;
 export default defineCommand({
   meta: { description: "Scaffold a new bolt plugin" },
   args: {
+    name: { type: "positional" as const, required: true, description: "Plugin name (lowercase alphanumeric, hyphens, underscores)" },
     user: { type: "boolean", default: false, description: "Create in user scope (~/.bolt/plugins/)" },
   },
-  async run({ args, rawArgs }) {
-    const name = rawArgs?.[0];
-    if (!name || name.startsWith("-")) {
+  async run({ args }) {
+    const name = args.name as string;
+    if (!name) {
       console.error(pc.red("Usage: bolt plugin new <name> [--user]"));
       process.exit(1);
     }
-    if (!/^[a-z0-9-_]+$/.test(name)) {
+    if (!/^[a-z0-9_-]+$/.test(name)) {
       console.error(pc.red("Plugin name must be lowercase alphanumeric with hyphens/underscores only"));
       process.exit(1);
     }
