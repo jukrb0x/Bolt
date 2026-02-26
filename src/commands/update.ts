@@ -4,7 +4,7 @@ import { writeFileSync, renameSync, chmodSync } from "fs";
 import path from "path";
 import pc from "picocolors";
 
-const GITHUB_REPO = "jukrb0x/Bolt"; // TODO: update to actual repo
+const GITHUB_REPO = "jukrb0x/Bolt";
 const API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 interface GHRelease {
