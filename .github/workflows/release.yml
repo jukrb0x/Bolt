@@ -5,9 +5,16 @@ on:
     tags:
       - "v*"
 
+# The local release script (scripts/release.ts) creates the GitHub release
+# with the native binary for the releaser's platform and pushes the tag.
+# This workflow runs on tag push and uploads the other platform's binary
+# to the already-created release.
+
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -19,21 +26,20 @@ jobs:
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
           printf '// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "%s";\n' "$VERSION" > src/version.ts
-      - name: Generate bolt.d.ts
-        run: bun run build:types
       - name: Build Windows binary
         run: bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bolt-win-x64
-          path: build/bolt-win-x64.exe
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bolt-d-ts
-          path: bolt.d.ts
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release upload "$TAG" build/bolt-win-x64.exe --clobber
 
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -46,41 +52,9 @@ jobs:
           printf '// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "%s";\n' "$VERSION" > src/version.ts
       - name: Build macOS binary
         run: bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bolt-mac-arm64
-          path: build/bolt-mac-arm64
-
-  release:
-    needs: [build-windows, build-macos]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: bolt-win-x64
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          name: bolt-mac-arm64
-          path: dist
-      # bolt.d.ts is generated and uploaded by build-windows; build-macos skips it
-      - uses: actions/download-artifact@v4
-        with:
-          name: bolt-d-ts
-          path: dist
-      - name: Make macOS binary executable
-        run: chmod +x dist/bolt-mac-arm64
-      - name: Create GitHub release
+      - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          gh release create "$TAG" \
-            dist/bolt-win-x64.exe \
-            dist/bolt-mac-arm64 \
-            dist/bolt.d.ts \
-            --title "$TAG" \
-            --generate-notes
+          gh release upload "$TAG" build/bolt-mac-arm64 --clobber
