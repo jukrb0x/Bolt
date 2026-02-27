@@ -161,7 +161,12 @@ run(
 console.log(`  Released ${TAG} (${nativeBinary} + bolt.d.ts)${PRE_RELEASE ? pc.yellow(" [pre-release]") : ""}`);
 console.log(pc.dim(`  Push the tag to trigger CI for the other platform binary.`));
 
-// 11. Internal share (optional)
+// 11. Publish bolt-ue to npm
+step("Publishing bolt-ue to npm");
+const npmTag = PRE_RELEASE ? " --tag next" : "";
+run(`npm publish --access public${npmTag}`);
+
+// 12. Internal share (optional)
 const internalShare = process.env.BOLT_INTERNAL_SHARE;
 if (internalShare) {
   step(`Copying to internal share: ${internalShare}`);
@@ -179,7 +184,7 @@ if (internalShare) {
   console.log("  Done");
 }
 
-// 12. Restore src/version.ts to dev marker
+// 13. Restore src/version.ts to dev marker
 step("Restoring src/version.ts to dev marker");
 const devVersionTs = `// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "${VERSION}-dev";\n`;
 if (!DRY_RUN) {
