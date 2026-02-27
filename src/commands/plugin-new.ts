@@ -22,9 +22,10 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  const boltDtsPath = isUser
-    ? path.join(homedir(), ".bolt", "bolt.d.ts")
-    : "../../bolt.d.ts";
+  // Relative path from pluginDir to bolt.d.ts (which lives at baseDir/bolt.d.ts):
+  //   user-scope:    ~/.bolt/plugins/<name>  → ../../bolt.d.ts
+  //   project-scope: <proj>/.bolt/plugins/<name> → ../../../bolt.d.ts
+  const boltDtsRelPath = isUser ? "../../bolt.d.ts" : "../../../bolt.d.ts";
 
   const indexTs = `import type { BoltPlugin } from "bolt";
 
@@ -48,9 +49,6 @@ export default plugin;
       moduleResolution: "bundler",
       strict: true,
       types: ["bun-types"],
-      paths: {
-        bolt: [boltDtsPath],
-      },
     },
   };
 
@@ -59,6 +57,10 @@ export default plugin;
     type: "module",
     devDependencies: {
       "bun-types": "latest",
+      // bolt is a local file package — `bun install` symlinks bolt.d.ts into
+      // node_modules/bolt so the TS LSP resolves `import type { BoltPlugin } from "bolt"`
+      // without any tsconfig `paths` needed.
+      bolt: `file:${boltDtsRelPath}`,
     },
   };
 
@@ -110,11 +112,10 @@ export default defineCommand({
     console.log("");
     console.log("Next steps:");
     console.log(`  ${pc.cyan(`cd ${pluginDir}`)}`);
-    console.log(`  ${pc.cyan("bun install")}         # installs bun-types for IDE support`);
+    console.log(`  ${pc.cyan("bun install")}         # links bolt types + installs bun-types for IDE support`);
     if (!args.user) {
       console.log("");
-      console.log(pc.dim("Place bolt.d.ts at the project root for IDE type resolution."));
-      console.log(pc.dim("Download it from the bolt release page alongside the binary."));
+      console.log(pc.dim("Ensure bolt.d.ts is at the project root (download from the bolt release page)."));
     }
   },
 });
