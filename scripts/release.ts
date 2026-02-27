@@ -184,9 +184,14 @@ step("Restoring src/version.ts to dev marker");
 const devVersionTs = `// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "${VERSION}-dev";\n`;
 if (!DRY_RUN) {
   writeFileSync(path.join(ROOT, "src", "version.ts"), devVersionTs, "utf8");
-  run("git add src/version.ts");
-  run(`git commit -m "chore: restore version.ts to dev after release ${TAG}"`);
-  run("git push origin main");
+  const dirty = execSync("git status --porcelain src/version.ts", { cwd: ROOT, encoding: "utf8" }).trim();
+  if (dirty) {
+    run("git add src/version.ts");
+    run(`git commit -m "chore: restore version.ts to dev after release ${TAG}"`);
+    run("git push origin main");
+  } else {
+    console.log("  version.ts already at dev marker, nothing to commit");
+  }
 } else {
   console.log(`  [dry-run] would write VERSION = "${VERSION}-dev"`);
 }
