@@ -1,10 +1,14 @@
 {
-  "name": "bolt",
+  "name": "bolt-ue",
   "version": "0.1.0",
-  "private": true,
+  "description": "Type definitions for bolt UE plugin authoring",
   "author": "Jabriel <jabrielah@outlook.com>",
+  "license": "MIT",
   "type": "module",
   "types": "bolt.d.ts",
+  "files": [
+    "bolt.d.ts"
+  ],
   "scripts": {
     "dev": "bun run src/main.ts",
     "test": "bun test --env-file .env.local",
