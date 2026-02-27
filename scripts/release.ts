@@ -13,8 +13,8 @@
  */
 
 import pkg from "../package.json";
-import { execSync } from "child_process";
-import { writeFileSync, copyFileSync, mkdirSync, existsSync } from "fs";
+import { execSync, spawnSync } from "child_process";
+import { writeFileSync, readFileSync, copyFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 
 const VERSION = pkg.version;
@@ -104,9 +104,38 @@ try {
 }
 const logRange = prevTag ? `${prevTag}..HEAD` : "HEAD";
 const gitLog = execSync(`git log ${logRange} --oneline`, { cwd: ROOT, encoding: "utf8" }).trim();
-const releaseNotes = `## ${TAG}\n\n${gitLog || "Initial release"}\n`;
+
+// Open editor for custom preamble (prepended before the git log)
+const notesPath = path.join(BUILD_DIR, "release-notes.md");
+const placeholder = `# Write your release notes above this line (lines starting with # are removed)\n# Leave empty to use only the auto-generated changelog\n`;
+const autoChangelog = `## Changes\n\n${gitLog || "Initial release"}\n`;
+
+let preamble = "";
 if (!DRY_RUN) {
-  writeFileSync(path.join(BUILD_DIR, "release-notes.md"), releaseNotes, "utf8");
+  const editor = process.env.EDITOR || process.env.VISUAL || (process.platform === "win32" ? "notepad" : "vi");
+  const tmpEditorPath = path.join(BUILD_DIR, "release-notes-edit.md");
+  writeFileSync(tmpEditorPath, `\n${placeholder}\n${autoChangelog}`, "utf8");
+  const result = spawnSync(editor, [tmpEditorPath], { stdio: "inherit" });
+  if (result.error) {
+    console.error(`  Could not open editor "${editor}": ${result.error.message}`);
+    console.error("  Set EDITOR env var to your preferred editor.");
+    console.error("  Proceeding with auto-generated changelog only.");
+  } else {
+    const edited = readFileSync(tmpEditorPath, "utf8");
+    preamble = edited
+      .split("\n")
+      .filter((line) => !line.startsWith("#"))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+}
+
+const releaseNotes = `## ${TAG}\n\n${preamble ? preamble + "\n\n" : ""}${autoChangelog}`;
+if (!DRY_RUN) {
+  writeFileSync(notesPath, releaseNotes, "utf8");
+} else {
+  console.log("  [dry-run] would open $EDITOR for release notes preamble");
 }
 console.log(releaseNotes);
 
