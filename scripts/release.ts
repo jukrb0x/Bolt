@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Release script for bolt.
- * Usage: bun run release [--dry-run]
+ * Usage: bun run release [--dry-run] [--pre-release]
  *
  * Prerequisites:
  *   - gh CLI installed and authenticated
@@ -16,10 +16,12 @@ import pkg from "../package.json";
 import { execSync, spawnSync } from "child_process";
 import { writeFileSync, readFileSync, copyFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
+import pc from "picocolors";
 
 const VERSION = pkg.version;
 const TAG = `v${VERSION}`;
 const DRY_RUN = process.argv.includes("--dry-run");
+const PRE_RELEASE = process.argv.includes("--pre-release");
 const ROOT = path.join(import.meta.dir, "..");
 const BUILD_DIR = path.join(ROOT, "build");
 
@@ -77,14 +79,17 @@ if (!DRY_RUN) {
 step("Generating bolt.d.ts");
 run("bun run build:types");
 
-// 6. Build binaries
+// 6. Build native binary only (bun cannot cross-compile)
 mkdirSync(BUILD_DIR, { recursive: true });
 
-step("Building bolt-win-x64.exe");
-run("bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe");
+const isWindows = process.platform === "win32";
+const nativeBinary = isWindows ? "bolt-win-x64.exe" : "bolt-mac-arm64";
+const nativeBuildCmd = isWindows
+  ? "bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe"
+  : "bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64";
 
-step("Building bolt-mac-arm64");
-run("bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64");
+step(`Building ${nativeBinary}`);
+run(nativeBuildCmd);
 
 // 7. Copy bolt.d.ts to build/
 step("Copying bolt.d.ts to build/");
@@ -144,13 +149,17 @@ step(`Tagging ${TAG}`);
 run(`git tag ${TAG}`);
 run(`git push origin ${TAG}`);
 
-// 10. Create GitHub release
+// 10. Create GitHub release with native binary + bolt.d.ts
+// The CI workflow (release.yml) will upload the other platform's binary
+// to this same release via `gh release upload` when the tag is pushed.
 step("Creating GitHub release");
+const preReleaseFlag = PRE_RELEASE ? " --prerelease" : "";
 run(
-  `gh release create ${TAG} build/bolt-win-x64.exe build/bolt-mac-arm64 build/bolt.d.ts ` +
-  `--title "${TAG}" --notes-file build/release-notes.md`
+  `gh release create ${TAG} build/${nativeBinary} build/bolt.d.ts ` +
+  `--title "${TAG}" --notes-file build/release-notes.md${preReleaseFlag}`
 );
-console.log(`  Released ${TAG}`);
+console.log(`  Released ${TAG} (${nativeBinary} + bolt.d.ts)${PRE_RELEASE ? pc.yellow(" [pre-release]") : ""}`);
+console.log(pc.dim(`  Push the tag to trigger CI for the other platform binary.`));
 
 // 11. Internal share (optional)
 const internalShare = process.env.BOLT_INTERNAL_SHARE;
@@ -160,7 +169,7 @@ if (internalShare) {
     console.error(`  BOLT_INTERNAL_SHARE path does not exist: ${internalShare}`);
     if (!DRY_RUN) process.exit(1);
   }
-  for (const file of ["bolt-win-x64.exe", "bolt-mac-arm64", "bolt.d.ts"]) {
+  for (const file of [nativeBinary, "bolt.d.ts"]) {
     if (!DRY_RUN) {
       copyFileSync(path.join(BUILD_DIR, file), path.join(internalShare, file));
     } else {
