@@ -28,7 +28,8 @@ function run(cmd: string): string {
     console.log(`  [dry-run] ${cmd}`);
     return "";
   }
-  return execSync(cmd, { cwd: ROOT, encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] }).trim();
+  execSync(cmd, { cwd: ROOT, stdio: "inherit" });
+  return "";
 }
 
 function step(msg: string) {
@@ -44,7 +45,16 @@ if (status && !DRY_RUN) {
 }
 console.log("  clean");
 
-// 2. Check gh CLI
+// 2. Verify branch is main
+step("Verifying branch is main");
+const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
+if (currentBranch !== "main" && !DRY_RUN) {
+  console.error(`Must release from main branch (currently on: ${currentBranch})`);
+  process.exit(1);
+}
+console.log(`  ${currentBranch}`);
+
+// 3. Check gh CLI
 step("Checking gh CLI");
 try {
   execSync("gh --version", { stdio: "pipe" });
@@ -54,7 +64,7 @@ try {
   if (!DRY_RUN) process.exit(1);
 }
 
-// 3. Write src/version.ts with release version (BEFORE compile)
+// 4. Write src/version.ts with release version (BEFORE compile)
 step(`Writing src/version.ts with version ${VERSION}`);
 const versionTs = `// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "${VERSION}";\n`;
 if (!DRY_RUN) {
@@ -63,11 +73,11 @@ if (!DRY_RUN) {
   console.log(`  [dry-run] would write: export const VERSION = "${VERSION}";`);
 }
 
-// 4. Generate bolt.d.ts
+// 5. Generate bolt.d.ts
 step("Generating bolt.d.ts");
 run("bun run build:types");
 
-// 5. Build binaries
+// 6. Build binaries
 mkdirSync(BUILD_DIR, { recursive: true });
 
 step("Building bolt-win-x64.exe");
@@ -76,7 +86,7 @@ run("bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bo
 step("Building bolt-mac-arm64");
 run("bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64");
 
-// 6. Copy bolt.d.ts to build/
+// 7. Copy bolt.d.ts to build/
 step("Copying bolt.d.ts to build/");
 if (!DRY_RUN) {
   copyFileSync(path.join(ROOT, "bolt.d.ts"), path.join(BUILD_DIR, "bolt.d.ts"));
@@ -84,7 +94,7 @@ if (!DRY_RUN) {
   console.log("  [dry-run] cp bolt.d.ts build/bolt.d.ts");
 }
 
-// 7. Generate release notes from git log since last tag
+// 8. Generate release notes from git log since last tag
 step("Generating release notes");
 let prevTag = "";
 try {
@@ -100,12 +110,12 @@ if (!DRY_RUN) {
 }
 console.log(releaseNotes);
 
-// 8. Git tag and push
+// 9. Git tag and push
 step(`Tagging ${TAG}`);
 run(`git tag ${TAG}`);
 run(`git push origin ${TAG}`);
 
-// 9. Create GitHub release
+// 10. Create GitHub release
 step("Creating GitHub release");
 run(
   `gh release create ${TAG} build/bolt-win-x64.exe build/bolt-mac-arm64 build/bolt.d.ts ` +
@@ -113,7 +123,7 @@ run(
 );
 console.log(`  Released ${TAG}`);
 
-// 10. Internal share (optional)
+// 11. Internal share (optional)
 const internalShare = process.env.BOLT_INTERNAL_SHARE;
 if (internalShare) {
   step(`Copying to internal share: ${internalShare}`);
@@ -131,7 +141,7 @@ if (internalShare) {
   console.log("  Done");
 }
 
-// 11. Restore src/version.ts to dev marker
+// 12. Restore src/version.ts to dev marker
 step("Restoring src/version.ts to dev marker");
 const devVersionTs = `// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "${VERSION}-dev";\n`;
 if (!DRY_RUN) {
