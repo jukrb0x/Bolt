@@ -32,18 +32,17 @@ test("scaffoldPlugin index.ts has correct namespace", async () => {
   expect(indexTs).toContain('from "bolt"');
 });
 
-test("scaffoldPlugin package.json has file: bolt dep (project-scope)", async () => {
+test("scaffoldPlugin package.json has bolt-ue devDependency (project-scope)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const pkg = JSON.parse(
     readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8")
   );
-  // project-scope: pluginDir is <base>/.bolt/plugins/<name>, bolt.d.ts is at <base>/bolt.d.ts
-  expect(pkg.devDependencies["bolt"]).toBe("file:../../../bolt.d.ts");
+  expect(pkg.devDependencies["bolt-ue"]).toBe("latest");
 });
 
-test("scaffoldPlugin package.json has file: bolt dep (user-scope)", async () => {
+test("scaffoldPlugin package.json has bolt-ue devDependency (user-scope)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   const userBase = path.join(tmpDir, "userhome");
   mkdirSync(userBase, { recursive: true });
@@ -52,8 +51,7 @@ test("scaffoldPlugin package.json has file: bolt dep (user-scope)", async () => 
   const pkg = JSON.parse(
     readFileSync(path.join(userBase, "plugins", "myplugin", "package.json"), "utf8")
   );
-  // user-scope: pluginDir is <base>/plugins/<name>, bolt.d.ts is at <base>/bolt.d.ts
-  expect(pkg.devDependencies["bolt"]).toBe("file:../../bolt.d.ts");
+  expect(pkg.devDependencies["bolt-ue"]).toBe("latest");
 });
 
 test("scaffoldPlugin throws if directory already exists", async () => {

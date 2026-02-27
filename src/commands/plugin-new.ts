@@ -22,11 +22,6 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  // Relative path from pluginDir to bolt.d.ts (which lives at baseDir/bolt.d.ts):
-  //   user-scope:    ~/.bolt/plugins/<name>  → ../../bolt.d.ts
-  //   project-scope: <proj>/.bolt/plugins/<name> → ../../../bolt.d.ts
-  const boltDtsRelPath = isUser ? "../../bolt.d.ts" : "../../../bolt.d.ts";
-
   const indexTs = `import type { BoltPlugin } from "bolt";
 
 const plugin: BoltPlugin = {
@@ -57,10 +52,9 @@ export default plugin;
     type: "module",
     devDependencies: {
       "bun-types": "latest",
-      // bolt is a local file package — `bun install` symlinks bolt.d.ts into
-      // node_modules/bolt so the TS LSP resolves `import type { BoltPlugin } from "bolt"`
-      // without any tsconfig `paths` needed.
-      bolt: `file:${boltDtsRelPath}`,
+      // bolt-ue provides `declare module "bolt"` — after `bun install` the TS LSP
+      // resolves `import type { BoltPlugin } from "bolt"` via node_modules/bolt-ue.
+      "bolt-ue": "latest",
     },
   };
 
