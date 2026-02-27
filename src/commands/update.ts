@@ -13,7 +13,13 @@ interface GHRelease {
 }
 
 export function isNewer(current: string, latest: string): boolean {
-  const parse = (v: string) => v.replace(/^v/, "").split(".").map(Number);
+  // Strip "v" prefix and any pre-release suffix (e.g. "0.1.0-dev" → "0.1.0")
+  const parse = (v: string) =>
+    v
+      .replace(/^v/, "")
+      .replace(/-.*$/, "")
+      .split(".")
+      .map((s) => parseInt(s, 10));
   const [ca, cb, cc] = parse(current);
   const [la, lb, lc] = parse(latest);
   if (la !== ca) return la > ca;
@@ -22,7 +28,10 @@ export function isNewer(current: string, latest: string): boolean {
 }
 
 function platformAssetName(): string {
-  return process.platform === "win32" ? "bolt-win-x64.exe" : "bolt-mac-arm64";
+  if (process.platform === "win32") return "bolt-win-x64.exe";
+  if (process.platform === "darwin") return "bolt-mac-arm64";
+  console.error(pc.red(`self-update is not supported on platform: ${process.platform}`));
+  process.exit(1);
 }
 
 export default defineCommand({

@@ -13,6 +13,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install
+      - name: Stamp version into src/version.ts
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          printf '// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "%s";\n' "$VERSION" > src/version.ts
       - name: Generate bolt.d.ts
         run: bun run build:types
       - name: Build Windows binary
@@ -33,6 +39,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install
+      - name: Stamp version into src/version.ts
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          printf '// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "%s";\n' "$VERSION" > src/version.ts
       - name: Build macOS binary
         run: bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64
       - uses: actions/upload-artifact@v4
@@ -55,6 +66,7 @@ jobs:
         with:
           name: bolt-mac-arm64
           path: dist
+      # bolt.d.ts is generated and uploaded by build-windows; build-macos skips it
       - uses: actions/download-artifact@v4
         with:
           name: bolt-d-ts

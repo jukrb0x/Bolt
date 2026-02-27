@@ -11,7 +11,7 @@ export interface ScaffoldOptions {
   isUser: boolean;
 }
 
-export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions): Promise<void> {
+export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions): Promise<string> {
   const pluginDir = isUser
     ? path.join(baseDir, "plugins", name)
     : path.join(baseDir, ".bolt", "plugins", name);
@@ -65,6 +65,7 @@ export default plugin;
   writeFileSync(path.join(pluginDir, "index.ts"), indexTs, "utf8");
   writeFileSync(path.join(pluginDir, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n", "utf8");
   writeFileSync(path.join(pluginDir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
+  return pluginDir;
 }
 
 export default defineCommand({
@@ -96,16 +97,13 @@ export default defineCommand({
       baseDir = path.dirname(configPath);
     }
 
+    let pluginDir: string;
     try {
-      await scaffoldPlugin({ name, baseDir, isUser: args.user });
+      pluginDir = await scaffoldPlugin({ name, baseDir, isUser: args.user });
     } catch (e: any) {
       console.error(pc.red(e.message));
       process.exit(1);
     }
-
-    const pluginDir = args.user
-      ? path.join(homedir(), ".bolt", "plugins", name)
-      : path.join(baseDir, ".bolt", "plugins", name);
 
     console.log(pc.green(`✓ Created plugin "${name}"`));
     console.log(pc.dim(`  ${pluginDir}`));
