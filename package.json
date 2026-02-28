@@ -1,6 +1,6 @@
 {
   "name": "bolt-ue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Type definitions for bolt UE plugin authoring",
   "author": "Jabriel <jabrielah@outlook.com>",
   "license": "MIT",
