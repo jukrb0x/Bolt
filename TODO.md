@@ -36,6 +36,10 @@ Let people start and setup their working environment easily.
 - [x] bolt itself
 - [ ] ue/build
 
-### Project scope 
+## Agentic
+- [ ] Generate SKILL.md
+- [ ] MCP
+
+## Project scope 
 - [ ] support community svn - project scope todo
 - [ ] move fillddc to project plugin
