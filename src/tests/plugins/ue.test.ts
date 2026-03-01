@@ -241,3 +241,28 @@ test("start with target throws when binary not found", async () => {
     uePlugin.handlers["start"]({ target: "NonExistentProgram_XYZ" }, ctx),
   ).rejects.toThrow("No binary found");
 });
+
+test("update with engine_vcs=git and project_vcs=svn calls git pull and svn update", async () => {
+  const ctx = makeCtx();
+  await uePlugin.handlers["update"]({}, ctx);
+  expect(ctx.logged.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
+  expect(ctx.logged.some((l) => l.includes("svn update"))).toBe(true);
+});
+
+test("update with engine_vcs=svn and project_vcs=git calls svn update twice", async () => {
+  const logged2: string[] = [];
+  const fakeCfg = {
+    ...testCfg,
+    project: { ...testCfg.project, engine_vcs: "svn" as const, project_vcs: "git" as const },
+  };
+  const ctx2 = {
+    cfg: fakeCfg,
+    dryRun: true,
+    logger: new Logger({ sink: (l: string) => logged2.push(l) }),
+    logged: logged2,
+  };
+  await uePlugin.handlers["update"]({}, ctx2);
+  // engine_vcs=svn → svn update engine_root; project_vcs=git → git pull project_root
+  expect(logged2.some((l) => l.includes("svn update"))).toBe(true);
+  expect(logged2.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
+});
