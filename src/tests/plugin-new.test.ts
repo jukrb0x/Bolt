@@ -42,6 +42,17 @@ test("scaffoldPlugin package.json has bolt-ue devDependency (project-scope)", as
   expect(pkg.devDependencies["bolt-ue"]).toBe("latest");
 });
 
+test("scaffoldPlugin tsconfig.json includes bolt-ue in types", async () => {
+  mkdirSync(tmpDir, { recursive: true });
+  await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
+
+  const tsconfig = JSON.parse(
+    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "tsconfig.json"), "utf8")
+  );
+  expect(tsconfig.compilerOptions.types).toContain("bolt-ue");
+  expect(tsconfig.compilerOptions.types).toContain("bun-types");
+});
+
 test("scaffoldPlugin package.json has bolt-ue devDependency (user-scope)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   const userBase = path.join(tmpDir, "userhome");
