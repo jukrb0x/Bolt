@@ -43,3 +43,7 @@ Let people start and setup their working environment easily.
 ## Project scope 
 - [ ] support community svn - project scope todo
 - [ ] move fillddc to project plugin
+
+## Fixes
+
+- [ ] remove this variant: bolt go --build=program, becuase hypen parameters are consumned by ops in bolt go, like: bolt go build:program --config=debug
