@@ -31,6 +31,7 @@ const plugin: BoltPlugin = {
 
     info: async (params, ctx) => {
       const p = resolvePath(params, ctx);
+      // Read-only query — intentionally runs in dry-run mode
       const logResult = Bun.spawnSync(
         ["git", "-C", p, "log", "-1", "--pretty=format:%h %s", "--no-walk"],
         { stdout: "pipe", stderr: "pipe" },
@@ -40,6 +41,7 @@ const plugin: BoltPlugin = {
       } else {
         ctx.logger.warn("Git info unavailable");
       }
+      // Read-only query — intentionally runs in dry-run mode
       const branchResult = Bun.spawnSync(["git", "-C", p, "rev-parse", "--abbrev-ref", "HEAD"], {
         stdout: "pipe",
         stderr: "pipe",
