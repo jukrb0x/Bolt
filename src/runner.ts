@@ -7,6 +7,7 @@ import type { BoltPluginContext } from "./plugin";
 import uePlugin from "./plugins/ue";
 import fsPlugin from "./plugins/fs";
 import jsonPlugin from "./plugins/json";
+import gitPlugin from "./plugins/git";
 import path from "path";
 import { Notifier } from "./notify";
 
@@ -32,6 +33,7 @@ export class Runner {
       uePlugin,
       fsPlugin,
       jsonPlugin,
+      gitPlugin,
     ]);
     return this.registry;
   }
