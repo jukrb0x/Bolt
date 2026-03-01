@@ -7,7 +7,7 @@
   - [ ]
 - [ ] [ecosystem] universal VCS - currently engine (git), project (svn), make this configurable
 - [ ] [FEAT] `bolt init` - init enigne and project repo with boltrepo format, or custom paths
-- [ ] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
+- [x] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
 - [ ] [ecosystem] shell command runs
 - [x] [config] `bolt check` - check bolt.yaml validation
 - [ ] [config] `bolt apply` - apply templated profile bolt.yaml from built-in OR gh repo (or any git repo.. specify domain)
