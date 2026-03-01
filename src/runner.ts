@@ -8,6 +8,7 @@ import uePlugin from "./plugins/ue";
 import fsPlugin from "./plugins/fs";
 import jsonPlugin from "./plugins/json";
 import gitPlugin from "./plugins/git";
+import svnPlugin from "./plugins/svn";
 import path from "path";
 import { Notifier } from "./notify";
 
@@ -34,6 +35,7 @@ export class Runner {
       fsPlugin,
       jsonPlugin,
       gitPlugin,
+      svnPlugin,
     ]);
     return this.registry;
   }
