@@ -43,7 +43,9 @@ export default plugin;
       module: "ESNext",
       moduleResolution: "bundler",
       strict: true,
-      types: ["bun-types"],
+      // bun-types provides Bun globals; bolt-ue provides `declare module "bolt"`
+      // which makes `import type { BoltPlugin } from "bolt"` resolvable.
+      types: ["bun-types", "bolt-ue"],
     },
   };
 
