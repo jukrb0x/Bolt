@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { interpolate } from "../interpolate";
-import { UE_PATH, PROJECT_NAME } from "./env";
+import { ENGINE_ROOT, PROJECT_NAME } from "./env";
 
 const ctx = {
-  project: { name: PROJECT_NAME, ue_path: UE_PATH },
+  project: { name: PROJECT_NAME, engine_root: ENGINE_ROOT },
   env: { BUILD_VERSION: "1.2.3" },
 };
 

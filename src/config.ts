@@ -34,15 +34,38 @@ const TargetSchema = z.object({
   config: z.enum(["development", "debug", "shipping", "test"]).default("development"),
 });
 
-const ProjectSchema = z.object({
-  name: z.string(),
-  ue_path: z.string(),
-  project_path: z.string(),
-  project_name: z.string(),
-  svn_root: z.string().optional(),
-  git_branch: z.string().optional(),
-  use_tortoise: z.boolean().optional(),
-});
+const ProjectSchema = z
+  .object({
+    name: z.string(),
+    // new canonical names
+    engine_root: z.string().optional(),
+    project_root: z.string().optional(),
+    // legacy aliases — accepted and discarded after transform
+    ue_path: z.string().optional(),
+    project_path: z.string().optional(),
+    svn_root: z.string().optional(),
+    project_name: z.string(),
+    engine_vcs: z.enum(["git", "svn"]).optional().default("git"),
+    project_vcs: z.enum(["git", "svn"]).optional().default("svn"),
+    git_branch: z.string().optional(),
+    use_tortoise: z.boolean().optional(),
+  })
+  .transform((v) => {
+    const engine_root = v.engine_root ?? v.ue_path;
+    const project_root = v.project_root ?? v.project_path ?? v.svn_root;
+    if (!engine_root) throw new Error("project.engine_root (or ue_path) is required");
+    if (!project_root) throw new Error("project.project_root (or project_path / svn_root) is required");
+    return {
+      name: v.name,
+      engine_root,
+      project_root,
+      project_name: v.project_name,
+      engine_vcs: v.engine_vcs,
+      project_vcs: v.project_vcs,
+      git_branch: v.git_branch,
+      use_tortoise: v.use_tortoise,
+    };
+  });
 
 const NotifyProviderSchema = z.discriminatedUnion("type", [
   z.object({
@@ -88,7 +111,7 @@ export type {
   NotifyProviderCfg,
 } from "./config-types";
 
-export async function loadConfig(filepath: string): Promise<BoltConfig> {
+export async function loadConfig(filepath: string) {
   const raw = readFileSync(filepath, "utf8");
   const parsed = YAML.parse(raw);
   return BoltConfigSchema.parse(parsed);
