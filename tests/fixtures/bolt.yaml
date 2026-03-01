@@ -1,9 +1,10 @@
 project:
   name: MyProject
-  ue_path: C:/UnrealEngine
-  project_path: C:/Projects/MyProject
+  engine_root: C:/UnrealEngine
+  project_root: C:/Projects/MyProject
   project_name: MyProject
-  svn_root: C:/Projects
+  engine_vcs: git
+  project_vcs: svn
 
 targets:
   editor:

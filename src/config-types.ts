@@ -34,10 +34,11 @@ export interface PluginEntry {
 
 export interface Project {
   name: string;
-  ue_path: string;
-  project_path: string;
+  engine_root: string;
+  project_root: string;
   project_name: string;
-  svn_root?: string;
+  engine_vcs?: "git" | "svn";
+  project_vcs?: "git" | "svn";
   git_branch?: string;
   use_tortoise?: boolean;
 }

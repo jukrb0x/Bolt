@@ -6,18 +6,18 @@ const required = (key: string): string => {
   return val;
 };
 
-export const UE_PATH = required("UE_PATH");
-export const PROJECT_PATH = required("PROJECT_PATH");
+export const ENGINE_ROOT = required("ENGINE_ROOT");
+export const PROJECT_ROOT = required("PROJECT_ROOT");
 export const PROJECT_NAME = required("PROJECT_NAME");
-export const SVN_ROOT = required("SVN_PROJ_ROOT");
 
 export const testCfg: BoltConfig = {
   project: {
     name: PROJECT_NAME,
-    ue_path: UE_PATH,
-    project_path: PROJECT_PATH,
+    engine_root: ENGINE_ROOT,
+    project_root: PROJECT_ROOT,
     project_name: PROJECT_NAME,
-    svn_root: SVN_ROOT,
+    engine_vcs: "git",
+    project_vcs: "svn",
   },
   targets: {
     editor: { kind: "editor", config: "development" },

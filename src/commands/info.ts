@@ -22,9 +22,10 @@ export default defineCommand({
     console.log(`${pc.underline(pc.bold("PROJECT"))}`);
     console.log("");
     row("name", cfg.project.name);
-    row("ue_path", cfg.project.ue_path);
-    row("path", cfg.project.project_path);
-    if (cfg.project.svn_root) row("svn_root", cfg.project.svn_root);
+    row("engine_root", cfg.project.engine_root);
+    row("project_root", cfg.project.project_root);
+    row("engine_vcs", cfg.project.engine_vcs ?? "git");
+    row("project_vcs", cfg.project.project_vcs ?? "svn");
     if (cfg.project.git_branch) row("git_branch", cfg.project.git_branch);
 
     console.log("");

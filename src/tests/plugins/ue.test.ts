@@ -139,7 +139,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
   mkdirSync(binariesDir, { recursive: true });
   writeFileSync(`${binariesDir}/zero.dll`, "");
   writeFileSync(`${binariesDir}/nonzero.dll`, "content");
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_path: fakeProject } };
+  const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_root: fakeProject } };
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
     dryRun: false,
@@ -154,7 +154,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
 test("fix-dll does not fail when no DLLs found", async () => {
   const fakeProject = `${os.tmpdir()}/bolt-fixdll-empty`;
   mkdirSync(fakeProject, { recursive: true });
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_path: fakeProject } };
+  const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_root: fakeProject } };
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
     dryRun: false,
