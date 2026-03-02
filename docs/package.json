@@ -8,7 +8,7 @@
     "docs:preview": "vitepress preview"
   },
   "devDependencies": {
-    "vitepress": "^1.5.0",
+    "vitepress": "^2.0.0-alpha.16",
     "@voidzero-dev/vitepress-theme": "^4.5.1"
   }
 }

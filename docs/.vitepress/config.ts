@@ -1,12 +1,12 @@
 import { defineConfig } from 'vitepress'
-import { voidzeroTheme } from '@voidzero-dev/vitepress-theme'
+import { extendConfig } from '@voidzero-dev/vitepress-theme/config'
 
-export default defineConfig({
-  extends: voidzeroTheme(),
+export default extendConfig(defineConfig({
   title: 'Bolt',
   description: 'Your daily Unreal Engine workflow, automated',
   
   themeConfig: {
+    variant: 'vite',
     logo: '/logo.svg',
     siteTitle: 'Bolt',
     
@@ -67,4 +67,4 @@ export default defineConfig({
   markdown: {
     lineNumbers: true
   }
-})
+}))
