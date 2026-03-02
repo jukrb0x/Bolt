@@ -1,0 +1,14 @@
+{
+  "name": "bolt-docs",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.5.0",
+    "@voidzero-dev/vitepress-theme": "^4.5.1"
+  }
+}
