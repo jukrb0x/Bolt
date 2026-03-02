@@ -5,12 +5,12 @@
 - [ ] [FEAT] common tools
   - [ ] ue ini tool
   - [ ]
-- [ ] [ecosystem] universal VCS - currently engine (git), project (svn), make this configurable
+- [x] [ecosystem] universal VCS - currently engine (git), project (svn), make this configurable
 - [x] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
-- [ ] [ecosystem] shell command runs
+- [x] [ecosystem] shell command runs (with:run)
 - [x] [config] `bolt check` - check bolt.yaml validation
 - [ ] [config] `bolt apply` - apply templated profile bolt.yaml from built-in OR gh repo (or any git repo.. specify domain)
-- [ ] [config] `bolt config` - open $editor for current bolt yaml
+- [x] [config] `bolt config` - open $editor for current bolt yaml
 - [ ] `bolt help` - details
 - [ ] [FEAT] bugfixes on the beta modules now, make them work as UBS
 - [ ] [FEAT] VCS providers
