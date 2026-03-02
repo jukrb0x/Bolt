@@ -1,14 +1,30 @@
 import { defineConfig } from 'vitepress'
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config'
+import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons'
 
 export default extendConfig(defineConfig({
   title: 'Bolt',
   description: 'Your daily Unreal Engine workflow, automated',
+  cleanUrls: true,
+  
+  head: [
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'Bolt' }],
+    ['meta', { property: 'og:description', content: 'Your daily Unreal Engine workflow, automated' }],
+    ['meta', { property: 'og:url', content: 'https://github.com/jukrb0x/Bolt' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'theme-color', content: '#3b82f6' }],
+  ],
   
   themeConfig: {
     variant: 'vite',
     logo: '/logo.svg',
     siteTitle: 'Bolt',
+    
+    editLink: {
+      pattern: 'https://github.com/jukrb0x/Bolt/edit/main/docs/:path',
+      text: 'Suggest changes to this page',
+    },
     
     nav: [
       { text: 'Home', link: '/' },
@@ -58,13 +74,38 @@ export default extendConfig(defineConfig({
       { icon: 'github', link: 'https://github.com/jukrb0x/Bolt' }
     ],
     
+    search: {
+      provider: 'local'
+    },
+    
     footer: {
       message: 'Released under the MIT License.',
       copyright: 'Copyright © 2024-present Jabriel'
+    },
+    
+    outline: {
+      level: [2, 3]
     }
   },
   
   markdown: {
-    lineNumbers: true
+    lineNumbers: true,
+    theme: {
+      light: 'github-light',
+      dark: 'github-dark'
+    },
+    config(md) {
+      md.use(groupIconMdPlugin, {
+        titleBar: {
+          includeSnippet: true
+        }
+      })
+    }
+  },
+  
+  vite: {
+    plugins: [
+      groupIconVitePlugin()
+    ]
   }
 }))

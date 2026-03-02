@@ -5,9 +5,6 @@ hero:
   name: "Bolt"
   text: "Your daily Unreal Engine workflow, automated"
   tagline: "Stop running Build.bat by hand. Define your workflow once, run it anywhere."
-  image:
-    src: /logo.svg
-    alt: Bolt
   actions:
     - theme: brand
       text: Get Started
