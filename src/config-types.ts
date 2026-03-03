@@ -45,14 +45,23 @@ export interface Project {
   [key: string]: string | boolean | undefined;
 }
 
+export interface BuildContext {
+  buildId: string;        // e.g. "20260303_142035"
+  projectName: string;    // from cfg.project.name
+  gitBranch?: string;     // auto-detected, omitted if not a git repo
+  logPath?: string;       // optional, passed in from runner opts
+  startTime: number;      // Date.now()
+}
+
 export type NotifyProviderCfg =
   | { type: "wecom"; webhook_url: string; chat_id?: string }
   | { type: "telegram"; bot_token: string; chat_id: string };
 
 export interface NotificationsConfig {
-  on_start: boolean;
-  on_complete: boolean;
-  on_failure: boolean;
+  on_start: boolean;       // flight plan message before first op
+  on_op_complete: boolean; // one message per op that finishes (success)
+  on_failure: boolean;     // immediate alert when any op fails
+  on_complete: boolean;    // final summary after all ops
   providers: NotifyProviderCfg[];
 }
 
