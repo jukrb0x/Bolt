@@ -13,8 +13,8 @@
 - [x] [config] `bolt config` - open $editor for current bolt yaml
 - [x] `bolt help` - TUI quick help docs
 - [x] [FEAT] VCS providers
-- [ ] [FEAT] parallel setups
-- [ ] add a dimmed logger type for commands, commands should be logged explicity for the execution
+- [ ] [FEAT] parallel steps
+- [x] add a dimmed logger type for commands, commands should be logged explicity for the execution
 
 ## Dist
 
@@ -22,9 +22,13 @@
 
 ## Setup && Pull
 Let people start and setup their working environment easily.
-- [ ] `bolt init` will initialize a bolt.yaml to the current folder with Q&A and the provided template yaml OR the remote repo.
+- [x] `bolt init` will initialize a bolt.yaml to the current folder with Q&A and the provided template yaml OR the remote repo.
 - [ ] `bolt setup` a workflow to set up the working environment (like install VS, Python, JVM set env vars, etc.) from bolt.yaml -- with Q&A
-- [ ] `bolt pull` pull engine and project from bolt.yaml, and set up for it with the desired directory structure, and start to build the editor -- opt in with Q&A
+- [ ] `bolt pull` pull engine and project from bolt.yaml, and set up for it with the desired directory structure, and start to build the editor -- opt in with Q&A --- make this to be go-ops and actions to be clear.
+
+## Ecosystem
+
+- [ ] project shared bolt.yaml -- merge bolt.yaml with prject defiend settings - no personal info like local project paths
 
 ## Advanced
 
