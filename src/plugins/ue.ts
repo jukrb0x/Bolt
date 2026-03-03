@@ -73,11 +73,11 @@ const plugin: BoltPlugin = {
     },
 
     "update-git": async (params, ctx) => {
-      await gitPlugin.handlers["pull"]({ path: ctx.cfg.project.engine_root }, ctx);
+      await gitPlugin.handlers["pull"]({ path: params.path ?? ctx.cfg.project.engine_root }, ctx);
     },
 
     "update-svn": async (params, ctx) => {
-      await svnPlugin.handlers["update"]({ path: ctx.cfg.project.project_root }, ctx);
+      await svnPlugin.handlers["update"]({ path: params.path ?? ctx.cfg.project.project_root }, ctx);
     },
 
     "svn-cleanup": async (params, ctx) => {
