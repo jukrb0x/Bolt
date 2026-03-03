@@ -10,7 +10,7 @@ import jsonPlugin from "./plugins/json";
 import gitPlugin from "./plugins/git";
 import svnPlugin from "./plugins/svn";
 import path from "path";
-import { Notifier } from "./notify";
+import { Notifier, type BuildContext } from "./notify";
 
 interface RunnerOptions {
   dryRun?: boolean;
@@ -45,12 +45,73 @@ export class Runner {
     params: Record<string, string> = {},
     visited = new Set<string>(),
   ): Promise<void> {
+    await this.runAction(actionName, params, visited);
+  }
+
+  private async runAction(
+    actionName: string,
+    params: Record<string, string>,
+    visited: Set<string>,
+  ): Promise<void> {
     if (!this.cfg.actions[actionName]) throw new Error(`Unknown action: ${actionName}`);
     if (visited.has(actionName)) throw new Error(`Dependency cycle detected at: ${actionName}`);
     visited.add(actionName);
+
+    const isTopLevel = visited.size === 1;
+    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
+    const startTime = Date.now();
+
+    let ctx: BuildContext | undefined;
+    if (isTopLevel) {
+      const now = new Date(startTime);
+      const buildId = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+        "_",
+        String(now.getHours()).padStart(2, "0"),
+        String(now.getMinutes()).padStart(2, "0"),
+        String(now.getSeconds()).padStart(2, "0"),
+      ].join("");
+
+      let gitBranch: string | undefined;
+      try {
+        const proc = Bun.spawnSync(["git", "branch", "--show-current"], { stdout: "pipe", stderr: "pipe" });
+        if (proc.exitCode === 0) gitBranch = proc.stdout.toString().trim() || undefined;
+      } catch { /* not a git repo */ }
+
+      ctx = { buildId, projectName: this.cfg.project.name, gitBranch, startTime };
+      await notifier.fire({ kind: "start", ctx, ops: [actionName] });
+    }
+
     const action = this.cfg.actions[actionName];
-    for (const dep of action.depends ?? []) await this.run(dep, params, visited);
-    for (const step of action.steps) await this.execStep(step, params);
+    const t0 = Date.now();
+    try {
+      for (const dep of action.depends ?? []) await this.runAction(dep, params, visited);
+      for (const step of action.steps) await this.execStep(step, params);
+      if (isTopLevel && ctx) {
+        const opDuration = Date.now() - t0;
+        await notifier.fire({ kind: "op_complete", ctx, opName: actionName, opDuration });
+        await notifier.fire({
+          kind: "complete",
+          ctx,
+          duration: Date.now() - startTime,
+          results: [{ op: actionName, ok: true, duration: opDuration }],
+        });
+      }
+    } catch (e: any) {
+      if (isTopLevel && ctx) {
+        const opDuration = Date.now() - t0;
+        await notifier.fire({ kind: "op_failure", ctx, opName: actionName, opDuration, error: e?.message });
+        await notifier.fire({
+          kind: "complete",
+          ctx,
+          duration: Date.now() - startTime,
+          results: [{ op: actionName, ok: false, duration: opDuration }],
+        });
+      }
+      throw e;
+    }
   }
 
   async runOps(ops: ResolvedOp[], pipeline: GoPipeline): Promise<void> {
