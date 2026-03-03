@@ -34,39 +34,31 @@ const TargetSchema = z.object({
   config: z.enum(["development", "debug", "shipping", "test"]).default("development"),
 });
 
+const RepoConfigSchema = z.object({
+  path: z.string(),
+  vcs: z.enum(["git", "svn"]).optional().default("git"),
+  url: z.string().optional(),
+  branch: z.string().optional(),
+});
+
 const ProjectSchema = z
   .object({
     name: z.string(),
-    // new canonical names
-    engine_root: z.string().optional(),
-    project_root: z.string().optional(),
-    // legacy aliases — accepted and discarded after transform
-    ue_path: z.string().optional(),
-    project_path: z.string().optional(),
-    svn_root: z.string().optional(),
-    project_name: z.string(),
-    engine_vcs: z.enum(["git", "svn"]).optional().default("git"),
-    project_vcs: z.enum(["git", "svn"]).optional().default("svn"),
-    git_branch: z.string().optional(),
+    engine_repo: RepoConfigSchema,
+    project_repo: RepoConfigSchema,
+    uproject: z.string(),  // path to .uproject file
     use_tortoise: z.boolean().optional(),
   })
-  .catchall(z.string())
+  .catchall(z.union([z.string(), z.boolean(), RepoConfigSchema]))
   .transform((v) => {
-    const engine_root = v.engine_root ?? v.ue_path;
-    const project_root = v.project_root ?? v.project_path ?? v.svn_root;
-    if (!engine_root) throw new Error("project.engine_root (or ue_path) is required");
-    if (!project_root) throw new Error("project.project_root (or project_path / svn_root) is required");
-    // Spread extra string fields (anything not in the known set) through to the output
-    const known = new Set(["name", "engine_root", "project_root", "ue_path", "project_path", "svn_root", "project_name", "engine_vcs", "project_vcs", "git_branch", "use_tortoise"]);
+    // Spread extra fields through to the output
+    const known = new Set(["name", "engine_repo", "project_repo", "uproject", "use_tortoise"]);
     const extras = Object.fromEntries(Object.entries(v).filter(([k]) => !known.has(k)));
     return {
       name: v.name,
-      engine_root,
-      project_root,
-      project_name: v.project_name,
-      engine_vcs: v.engine_vcs,
-      project_vcs: v.project_vcs,
-      git_branch: v.git_branch,
+      engine_repo: v.engine_repo,
+      project_repo: v.project_repo,
+      uproject: v.uproject,
       use_tortoise: v.use_tortoise,
       ...extras,
     };
@@ -117,6 +109,8 @@ export type {
   NotificationsConfig,
   NotifyProviderCfg,
   BuildContext,
+  RepoConfig,
+  VcsType,
 } from "./config-types";
 
 export async function loadConfig(filepath: string) {

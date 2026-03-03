@@ -8,6 +8,15 @@
 declare module "bolt" {
   export type TargetKind = "editor" | "program" | "game" | "client" | "server";
   export type BuildConfig = "development" | "debug" | "shipping" | "test";
+  export type VcsType = "git" | "svn";
+
+  export interface RepoConfig {
+    path: string;
+    vcs?: VcsType;
+    url?: string;
+    branch?: string;
+  }
+
   export interface Target {
       kind: TargetKind;
       name?: string;
@@ -31,15 +40,12 @@ declare module "bolt" {
   }
   export interface Project {
       name: string;
-      engine_root: string;
-      project_root: string;
-      project_name: string;
-      engine_vcs?: "git" | "svn";
-      project_vcs?: "git" | "svn";
-      git_branch?: string;
+      engine_repo: RepoConfig;
+      project_repo: RepoConfig;
+      uproject: string;
       use_tortoise?: boolean;
       /** Any extra string fields defined in bolt.yaml are preserved and available as ${{ project.<key> }} in interpolation. */
-      [key: string]: string | boolean | undefined;
+      [key: string]: string | boolean | undefined | RepoConfig;
   }
   export type NotifyProviderCfg = {
       type: "wecom";
