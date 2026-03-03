@@ -49,7 +49,7 @@ export function walkSteps(
         Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
       );
       const mergedParams = { ...yamlParams, ...opParams };
-      counter.n--;
+      counter.n--; // don't consume an index for the op-wrapper line; nested steps start here
       lines.push(...walkSteps(nestedSteps, cfg, ctx, mergedParams, counter));
       continue;
     }
