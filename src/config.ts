@@ -50,11 +50,15 @@ const ProjectSchema = z
     git_branch: z.string().optional(),
     use_tortoise: z.boolean().optional(),
   })
+  .catchall(z.string())
   .transform((v) => {
     const engine_root = v.engine_root ?? v.ue_path;
     const project_root = v.project_root ?? v.project_path ?? v.svn_root;
     if (!engine_root) throw new Error("project.engine_root (or ue_path) is required");
     if (!project_root) throw new Error("project.project_root (or project_path / svn_root) is required");
+    // Spread extra string fields (anything not in the known set) through to the output
+    const known = new Set(["name", "engine_root", "project_root", "ue_path", "project_path", "svn_root", "project_name", "engine_vcs", "project_vcs", "git_branch", "use_tortoise"]);
+    const extras = Object.fromEntries(Object.entries(v).filter(([k]) => !known.has(k)));
     return {
       name: v.name,
       engine_root,
@@ -64,6 +68,7 @@ const ProjectSchema = z
       project_vcs: v.project_vcs,
       git_branch: v.git_branch,
       use_tortoise: v.use_tortoise,
+      ...extras,
     };
   });
 
