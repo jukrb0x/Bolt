@@ -32,6 +32,12 @@ export class Logger {
     this.log("DEBUG", (s) => pc.dim(s), msg);
   }
 
+  cmd(msg: string) {
+    const line = `  $ ${msg}`;
+    this.sink(pc.dim(line));
+    this.file?.write(line + "\n");
+  }
+
   step(name: string) {
     this.sink(pc.blue(`>> ${name}`));
     this.file?.write(`>> ${name}\n`);
