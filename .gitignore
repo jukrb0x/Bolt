@@ -46,3 +46,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Claude local settings
 .claude/settings.local.json
+
+bolt.yaml
