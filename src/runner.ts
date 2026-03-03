@@ -101,6 +101,7 @@ export class Runner {
     if (step.run) {
       const cmd = interpolate(step.run, ctx);
       this.opts.onStep?.(cmd);
+      this.opts.logger?.step_detail(`run: ${cmd}`);
       if (!this.opts.dryRun) await this.shell(cmd, step["continue-on-error"]);
       return;
     }
@@ -129,6 +130,10 @@ export class Runner {
       const interpolatedParams = Object.fromEntries(
         Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
       );
+      const localParamStr = Object.entries(interpolatedParams)
+        .map(([k, v]) => `${k}=${v}`)
+        .join("  ");
+      this.opts.logger?.step_detail(`local: ${uses}${localParamStr ? "  " + localParamStr : ""}`);
       await this.runLocalAction(uses, interpolatedParams);
       return;
     }
@@ -156,6 +161,11 @@ export class Runner {
       Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
     );
     const mergedParams = { ...yamlParams, ...opParams };
+
+    const paramStr = Object.entries(mergedParams)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("  ");
+    this.opts.logger?.step_detail(`${uses}${paramStr ? "  " + paramStr : ""}`);
 
     const registry = await this.ensureRegistry();
     const plugin = registry.get(ns);
