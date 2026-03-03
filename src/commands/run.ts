@@ -78,7 +78,7 @@ export default defineCommand({
           logger.info(`  ${section.label}`);
         }
         for (const line of walkSteps(section.steps, cfg, ctx, {}, counter)) {
-          logger.info(line);
+          logger.info(`  ${line}`);
         }
       }
     } catch (e: any) {
