@@ -3,6 +3,7 @@ import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import { Runner } from "../runner";
 import { Logger } from "../logger";
+import { Notifier } from "../notify";
 import { makeCtx, walkSteps, collectSections } from "../inspect-utils";
 import path from "path";
 import { mkdirSync } from "fs";
@@ -87,7 +88,7 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const runner = new Runner(cfg, { dryRun, logger, configDir });
+    const runner = new Runner(cfg, { dryRun, logger, configDir, notifier: Notifier.fromConfig(cfg.notifications) });
 
     const start = Date.now();
     try {
