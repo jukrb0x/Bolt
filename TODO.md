@@ -14,6 +14,8 @@
 - [ ] `bolt help` - details
 - [ ] [FEAT] bugfixes on the beta modules now, make them work as UBS
 - [ ] [FEAT] VCS providers
+- [ ] [FEAT] parallel setups
+- [ ] add a dimmed logger type for commands, commands should be logged explicity for the execution
 
 ## Dist
 
