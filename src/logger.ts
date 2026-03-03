@@ -34,6 +34,7 @@ export class Logger {
 
   step(name: string) {
     this.sink(pc.blue(`>> ${name}`));
+    this.file?.write(`>> ${name}\n`);
   }
 
   step_detail(text: string) {
@@ -44,10 +45,12 @@ export class Logger {
 
   success(name: string, dur: number) {
     this.sink(`${pc.blue("<<")} ${name}: ${pc.green("SUCCESS")} (${dur.toFixed(1)}s)`);
+    this.file?.write(`<< ${name}: SUCCESS (${dur.toFixed(1)}s)\n`);
   }
 
   fail(name: string, dur: number) {
     this.sink(`${pc.blue("<<")} ${name}: ${pc.red("FAILED")} (${dur.toFixed(1)}s)`);
+    this.file?.write(`<< ${name}: FAILED (${dur.toFixed(1)}s)\n`);
   }
 
   close() {
