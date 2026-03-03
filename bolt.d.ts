@@ -38,6 +38,8 @@ declare module "bolt" {
       project_vcs?: "git" | "svn";
       git_branch?: string;
       use_tortoise?: boolean;
+      /** Any extra string fields defined in bolt.yaml are preserved and available as ${{ project.<key> }} in interpolation. */
+      [key: string]: string | boolean | undefined;
   }
   export type NotifyProviderCfg = {
       type: "wecom";
@@ -56,6 +58,7 @@ declare module "bolt" {
   }
   export interface BoltConfig {
       project: Project;
+      vars: Record<string, string>;
       targets: Record<string, Target>;
       actions: Record<string, {
           depends?: string[];

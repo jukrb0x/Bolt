@@ -5,7 +5,9 @@
     "moduleResolution": "bundler",
     "types": ["bun-types"],
     "strict": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   },
   "include": ["src/**/*"]
 }
