@@ -1,6 +1,28 @@
 import { interpolate } from "./interpolate";
 import type { BoltConfig, Step } from "./config";
 
+export interface ActionSection {
+  label: string;
+  steps: Step[];
+}
+
+export function collectSections(
+  name: string,
+  cfg: BoltConfig,
+  visited = new Set<string>(),
+): ActionSection[] {
+  if (!cfg.actions[name]) throw new Error(`Unknown action: "${name}"`);
+  if (visited.has(name)) throw new Error(`Dependency cycle detected at: "${name}"`);
+  visited.add(name);
+  const action = cfg.actions[name];
+  const sections: ActionSection[] = [];
+  for (const dep of action.depends ?? []) {
+    sections.push(...collectSections(dep, cfg, visited));
+  }
+  sections.push({ label: name, steps: action.steps });
+  return sections;
+}
+
 export type Ctx = Record<string, Record<string, string>>;
 
 export function makeCtx(cfg: BoltConfig): Ctx {

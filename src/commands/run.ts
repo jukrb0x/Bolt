@@ -3,6 +3,7 @@ import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import { Runner } from "../runner";
 import { Logger } from "../logger";
+import { makeCtx, walkSteps, collectSections } from "../inspect-utils";
 import path from "path";
 import { mkdirSync } from "fs";
 import pkg from "../../package.json";
@@ -64,6 +65,27 @@ export default defineCommand({
     logger.info(`bolt ${pkg.version}`);
     logger.info(`Config: ${configPath}`);
     logger.info(`Action: ${action}${dryRun ? " (dry-run)" : ""}`);
+
+    try {
+      const ctx = makeCtx(cfg);
+      const sections = collectSections(action, cfg);
+      logger.info("Plan:");
+      const counter = { n: 1 };
+      for (const section of sections) {
+        if (sections.length > 1) {
+          logger.info(`  [${section.label}]`);
+        } else {
+          logger.info(`  ${section.label}`);
+        }
+        for (const line of walkSteps(section.steps, cfg, ctx, {}, counter)) {
+          logger.info(line);
+        }
+      }
+    } catch (e: any) {
+      logger.error(e.message);
+      logger.close();
+      process.exit(1);
+    }
 
     const runner = new Runner(cfg, { dryRun, logger, configDir });
 
