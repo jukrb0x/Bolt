@@ -110,7 +110,7 @@ test("runOps fires failure notification on step error", async () => {
   await runner
     .runOps([{ name: "bad", steps: [{ run: "exit 1" }] }], { order: [], fail_stops: ["bad"] })
     .catch(() => {});
-  expect(events.some((e) => e.kind === "failure" && e.opName === "bad")).toBe(true);
+  expect(events.some((e) => e.kind === "op_failure" && e.opName === "bad")).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
