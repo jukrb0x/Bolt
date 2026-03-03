@@ -13,7 +13,7 @@
     "dev": "bun run src/main.ts",
     "test": "bun test --env-file .env.local",
     "build:types": "bunx tsc --project tsconfig.types.json && bun run scripts/gen-types.ts",
-    "build:win": "bun run build:types && bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe && cp bolt.d.ts build/bolt.d.ts",
+    "build:win": "bun run build:types && bun build --production --compile --minify --bytecode src/main.ts --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe && cp bolt.d.ts build/bolt.d.ts",
     "build:mac": "bun run build:types && bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64 && cp bolt.d.ts build/bolt.d.ts",
     "build:all": "bun run build:win && bun run build:mac",
     "release": "bun run scripts/release.ts",
