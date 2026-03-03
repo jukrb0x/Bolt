@@ -86,10 +86,10 @@ const NotifyProviderSchema = z.discriminatedUnion("type", [
 ]);
 
 const NotificationsSchema = z.object({
-  on_start: z.boolean().default(false),
-  on_op_complete: z.boolean().default(false),
-  on_failure: z.boolean().default(false),
-  on_complete: z.boolean().default(false),
+  on_start: z.boolean().default(true),
+  on_op_complete: z.boolean().default(true),
+  on_failure: z.boolean().default(true),
+  on_complete: z.boolean().default(true),
   providers: z.array(NotifyProviderSchema).default([]),
 });
 
