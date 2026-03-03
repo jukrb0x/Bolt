@@ -74,6 +74,11 @@ function ctxHeader(ctx: BuildContext): string {
   return parts.join("  ");
 }
 
+/** Escape special chars for Telegram MarkdownV2 */
+function escapeMdV2(s: string): string {
+  return s.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
+}
+
 // ─── WeCom ────────────────────────────────────────────────────────────────────
 
 type WeComCfg = Extract<NotifyProviderCfg, { type: "wecom" }>;
@@ -140,27 +145,33 @@ export class TelegramProvider implements NotifyProvider {
 
   buildText(event: NotifyEvent): string {
     const { ctx } = event;
-    const header = `*Project:* ${ctx.projectName}${ctx.gitBranch ? `  *Branch:* ${ctx.gitBranch}` : ""}  *ID:* ${ctx.buildId}`;
+    const proj = escapeMdV2(ctx.projectName);
+    const branch = ctx.gitBranch ? `  *Branch:* ${escapeMdV2(ctx.gitBranch)}` : "";
+    const id = escapeMdV2(ctx.buildId);
+    const header = `*Project:* ${proj}${branch}  *ID:* ${id}`;
 
     if (event.kind === "start") {
-      const plan = (event.ops ?? []).map((op, i) => `  ${i + 1}\\. ${op}`).join("\n");
-      return `*[bolt] Build Started*\n${header}\n*Plan:*\n${plan}`;
+      const plan = (event.ops ?? []).map((op, i) => `  ${i + 1}\\. ${escapeMdV2(op)}`).join("\n");
+      return `*\\[bolt\\] Build Started*\n${header}\n*Plan:*\n${plan}`;
     }
 
     if (event.kind === "op_complete") {
-      return `✅ ${event.opName} — ${formatDuration(event.opDuration ?? 0)}`;
+      return `✅ ${escapeMdV2(event.opName ?? "")} — ${escapeMdV2(formatDuration(event.opDuration ?? 0))}`;
     }
 
     if (event.kind === "op_failure") {
-      return `*[bolt] ❌ ${event.opName} Failed*\n${header}\n*Duration:* ${formatDuration(event.opDuration ?? 0)}\n*Error:* ${event.error ?? "unknown"}`;
+      const dur = escapeMdV2(formatDuration(event.opDuration ?? 0));
+      const err = escapeMdV2(event.error ?? "unknown");
+      return `*\\[bolt\\] ❌ ${escapeMdV2(event.opName ?? "")} Failed*\n${header}\n*Duration:* ${dur}\n*Error:* ${err}`;
     }
 
     // complete
     const allOk = (event.results ?? []).every((r) => r.ok);
     const rows = (event.results ?? [])
-      .map((r) => `  ${r.ok ? "✅" : "❌"} ${r.op} \\(${formatDuration(r.duration)}\\)`)
+      .map((r) => `  ${r.ok ? "✅" : "❌"} ${escapeMdV2(r.op)} \\(${escapeMdV2(formatDuration(r.duration))}\\)`)
       .join("\n");
-    return `*[bolt] ${allOk ? "✅ Build Complete" : "❌ Build Failed"}*\n${header}\n*Total:* ${formatDuration(event.duration ?? 0)}\n*Results:*\n${rows}`;
+    const total = escapeMdV2(formatDuration(event.duration ?? 0));
+    return `*\\[bolt\\] ${allOk ? "✅ Build Complete" : "❌ Build Failed"}*\n${header}\n*Total:* ${total}\n*Results:*\n${rows}`;
   }
 
   async send(event: NotifyEvent): Promise<void> {
