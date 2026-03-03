@@ -2,8 +2,7 @@ import { defineCommand } from "citty";
 import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import { parseGoArgs, resolveOps } from "../go";
-import type { Step } from "../config";
-import { makeCtx, walkSteps } from "../inspect-utils";
+import { makeCtx, walkSteps, collectSections, type ActionSection } from "../inspect-utils";
 
 export default defineCommand({
   meta: { description: "Inspect resolved steps for an op or action without executing" },
@@ -63,34 +62,13 @@ export default defineCommand({
         process.exit(1);
       }
 
-      interface ActionSection {
-        label: string;
-        steps: Step[];
+      let sections: ActionSection[];
+      try {
+        sections = collectSections(actionName, cfg);
+      } catch (e: any) {
+        console.error(`[ERROR] ${e.message}`);
+        process.exit(1);
       }
-
-      function collectSections(
-        name: string,
-        visited = new Set<string>(),
-      ): ActionSection[] {
-        if (!cfg.actions[name]) {
-          console.error(`[ERROR] Unknown action: "${name}"`);
-          process.exit(1);
-        }
-        if (visited.has(name)) {
-          console.error(`[ERROR] Dependency cycle detected at: "${name}"`);
-          process.exit(1);
-        }
-        visited.add(name);
-        const action = cfg.actions[name];
-        const sections: ActionSection[] = [];
-        for (const dep of action.depends ?? []) {
-          sections.push(...collectSections(dep, visited));
-        }
-        sections.push({ label: name, steps: action.steps });
-        return sections;
-      }
-
-      const sections = collectSections(actionName);
       console.log(`>> ${actionName}`);
       const counter = { n: 1 };
       for (const section of sections) {
