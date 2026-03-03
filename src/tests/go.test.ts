@@ -7,26 +7,6 @@ import { testCfg } from "./env";
 // ---------------------------------------------------------------------------
 
 describe("parseGoArgs", () => {
-  test("bare flag default variant", () => {
-    const [result] = parseGoArgs(["--update"]);
-    expect(result).toEqual({ name: "update", value: "default", isExact: false, params: {} });
-  });
-
-  test("flag=value isExact with variant key", () => {
-    const [result] = parseGoArgs(["--update=svn"]);
-    expect(result).toEqual({ name: "update", value: "svn", isExact: true, params: {} });
-  });
-
-  test("build with target override", () => {
-    const [result] = parseGoArgs(["--build=client"]);
-    expect(result).toEqual({ name: "build", value: "client", isExact: true, params: {} });
-  });
-
-  test("bare build default", () => {
-    const [result] = parseGoArgs(["--build"]);
-    expect(result).toEqual({ name: "build", value: "default", isExact: false, params: {} });
-  });
-
   test("word style: bare word default variant", () => {
     const [result] = parseGoArgs(["update"]);
     expect(result).toEqual({ name: "update", value: "default", isExact: false, params: {} });
@@ -42,13 +22,6 @@ describe("parseGoArgs", () => {
     expect(result).toEqual({ name: "build", value: "client", isExact: true, params: {} });
   });
 
-  test("multiple tokens array of ParsedOp", () => {
-    const result = parseGoArgs(["--update=svn", "--build", "--start"]);
-    expect(result).toHaveLength(3);
-    expect(result[0]).toEqual({ name: "update", value: "svn", isExact: true, params: {} });
-    expect(result[1]).toEqual({ name: "build", value: "default", isExact: false, params: {} });
-    expect(result[2]).toEqual({ name: "start", value: "default", isExact: false, params: {} });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -56,8 +29,8 @@ describe("parseGoArgs", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveOps", () => {
-  test("--update 2 steps (update-git + update-svn)", () => {
-    const parsed = parseGoArgs(["--update"]);
+  test("update 2 steps (update-git + update-svn)", () => {
+    const parsed = parseGoArgs(["update"]);
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("update");
     expect(op.steps).toHaveLength(2);
@@ -65,16 +38,16 @@ describe("resolveOps", () => {
     expect(op.steps[1].uses).toBe("ue/update-svn");
   });
 
-  test("--update=svn 1 step using svn variant", () => {
-    const parsed = parseGoArgs(["--update=svn"]);
+  test("update:svn 1 step using svn variant", () => {
+    const parsed = parseGoArgs(["update:svn"]);
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("update[svn]");
     expect(op.steps).toHaveLength(1);
     expect(op.steps[0].uses).toBe("ue/update-svn");
   });
 
-  test("--build steps from ops.build.default", () => {
-    const parsed = parseGoArgs(["--build"]);
+  test("build steps from ops.build.default", () => {
+    const parsed = parseGoArgs(["build"]);
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("build");
     expect(op.steps).toHaveLength(1);
@@ -82,8 +55,8 @@ describe("resolveOps", () => {
     expect(op.steps[0].with?.target).toBe("editor");
   });
 
-  test("--build=client default steps with with.target overridden", () => {
-    const parsed = parseGoArgs(["--build=client"]);
+  test("build:client default steps with with.target overridden", () => {
+    const parsed = parseGoArgs(["build:client"]);
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("build[client]");
     expect(op.steps).toHaveLength(1);
@@ -91,20 +64,20 @@ describe("resolveOps", () => {
     expect(op.steps[0].with?.target).toBe("client");
   });
 
-  test("--build=client does not mutate original testCfg steps", () => {
-    const parsed = parseGoArgs(["--build=client"]);
+  test("build:client does not mutate original testCfg steps", () => {
+    const parsed = parseGoArgs(["build:client"]);
     resolveOps(parsed, testCfg);
     // Original default step should still have "editor"
     expect(testCfg.ops.build.default[0].with?.target).toBe("editor");
   });
 
   test("unknown op throws", () => {
-    const parsed = parseGoArgs(["--foo"]);
+    const parsed = parseGoArgs(["foo"]);
     expect(() => resolveOps(parsed, testCfg)).toThrow('Unknown op: "foo"');
   });
 
   test("unknown variant throws", () => {
-    const parsed = parseGoArgs(["--update"]);
+    const parsed = parseGoArgs(["update"]);
     // Manually set isExact=false, value="bar" to trigger unknown-variant path
     parsed[0].value = "bar";
     expect(() => resolveOps(parsed, testCfg)).toThrow('Unknown variant "bar" for op "update"');
