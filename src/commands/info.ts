@@ -45,7 +45,7 @@ export default defineCommand({
       for (const [name, op] of Object.entries(cfg.ops)) {
         const variants = Object.keys(op).filter((v) => v !== "default");
         const suffix = variants.length > 0 ? pc.dim(`  [${variants.join(", ")}]`) : "";
-        console.log(`  ${pc.cyan(("--" + name).padEnd(24))}${suffix}`);
+        console.log(`  ${pc.cyan(name.padEnd(24))}${suffix}`);
       }
     }
 

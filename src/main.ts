@@ -8,13 +8,14 @@ import versionCmd from "./commands/version";
 import updateCmd from "./commands/update";
 import pluginCmd from "./commands/plugin";
 import configCmd from "./commands/config";
+import inspectCmd from "./commands/inspect";
 import pkg from "../package.json";
 
 const main = defineCommand({
   meta: {
     name: "bolt",
     version: pkg.version,
-    description: "Unreal Engine build automation",
+    description: "Bolt - build and workflow automation for Unreal Engine",
   },
   subCommands: {
     run: runCmd,
@@ -26,6 +27,7 @@ const main = defineCommand({
     "self-update": updateCmd,
     plugin: pluginCmd,
     config: configCmd,
+    inspect: inspectCmd,
   },
 });
 
