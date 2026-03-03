@@ -82,7 +82,7 @@ export class Runner {
       startTime,
     };
 
-    const notifier = this.opts.notifier ?? new Notifier([]);
+    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
     const opNames = sorted.map((o) => o.name);
     const results: { op: string; ok: boolean; duration: number }[] = [];
     await notifier.fire({ kind: "start", ctx, ops: opNames });
