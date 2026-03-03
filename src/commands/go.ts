@@ -66,7 +66,7 @@ export default defineCommand({
       logger.info(`  ${op.name}`);
       const counter = { n: 1 };
       for (const line of walkSteps(op.steps, cfg, ctx, op.params, counter)) {
-        logger.info(line);
+        logger.info(`  ${line}`);
       }
     }
 
