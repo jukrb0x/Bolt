@@ -63,10 +63,15 @@ export default defineCommand({
         process.exit(1);
       }
 
-      function collectSteps(
+      interface ActionSection {
+        label: string;
+        steps: Step[];
+      }
+
+      function collectSections(
         name: string,
         visited = new Set<string>(),
-      ): Step[] {
+      ): ActionSection[] {
         if (!cfg.actions[name]) {
           console.error(`[ERROR] Unknown action: "${name}"`);
           process.exit(1);
@@ -77,18 +82,24 @@ export default defineCommand({
         }
         visited.add(name);
         const action = cfg.actions[name];
-        const depSteps: Step[] = [];
+        const sections: ActionSection[] = [];
         for (const dep of action.depends ?? []) {
-          depSteps.push(...collectSteps(dep, visited));
+          sections.push(...collectSections(dep, visited));
         }
-        return [...depSteps, ...action.steps];
+        sections.push({ label: name, steps: action.steps });
+        return sections;
       }
 
-      const steps = collectSteps(actionName);
+      const sections = collectSections(actionName);
       console.log(`>> ${actionName}`);
       const counter = { n: 1 };
-      for (const line of walkSteps(steps, cfg, ctx, {}, counter)) {
-        console.log(line);
+      for (const section of sections) {
+        if (sections.length > 1) {
+          console.log(`  [${section.label}]`);
+        }
+        for (const line of walkSteps(section.steps, cfg, ctx, {}, counter)) {
+          console.log(line);
+        }
       }
       console.log();
     }
