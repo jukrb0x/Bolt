@@ -3,6 +3,20 @@
 # Optional: stop the entire run if it exceeds this duration
 # timeout_hours: 6
 
+# Optional: notify via WeCom or Telegram on build events
+# notifications:
+#   on_start: true        # flight plan message before first op
+#   on_op_complete: true  # one message per op that finishes
+#   on_failure: true      # immediate alert on op failure
+#   on_complete: true     # final summary after all ops
+#   providers:
+#     - type: wecom
+#       webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
+#       # chat_id: "YOUR_CHATID"   # optional: target a specific group chat
+#     - type: telegram
+#       bot_token: "123456:ABC-DEF"
+#       chat_id: "-1001234567890"
+
 # Optional: declare project-scope plugins by explicit path
 # plugins:
 #   - namespace: myplugin
