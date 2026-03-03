@@ -4,7 +4,7 @@ import { loadConfig } from "../config";
 import pc from "picocolors";
 
 function row(label: string, value: string) {
-  console.log(`  ${pc.cyan(label.padEnd(12))}${value}`);
+  console.log(`  ${pc.cyan(label.padEnd(13))}${value}`);
 }
 
 export default defineCommand({
