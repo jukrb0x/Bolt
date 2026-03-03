@@ -36,6 +36,12 @@ export class Logger {
     this.sink(pc.blue(`>> ${name}`));
   }
 
+  step_detail(text: string) {
+    const line = `   · ${text}`;
+    this.sink(pc.dim(line));
+    this.file?.write(line + "\n");
+  }
+
   success(name: string, dur: number) {
     this.sink(`${pc.blue("<<")} ${name}: ${pc.green("SUCCESS")} (${dur.toFixed(1)}s)`);
   }
