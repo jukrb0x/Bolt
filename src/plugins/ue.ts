@@ -4,6 +4,7 @@ import path from "path";
 import { run, execRaw as exec } from "./helpers";
 import gitPlugin from "./git";
 import svnPlugin from "./svn";
+import * as ueIni from "./ue-ini";
 
 /** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
 const w = (p: string) => p.replace(/\//g, "\\");
@@ -184,22 +185,87 @@ const plugin: BoltPlugin = {
     },
 
     "ini-set": async (params, ctx) => {
-      const { file, section, key, value } = params;
+      const { file, section, key, value, "value-list": valueList, "insert-front": insertFront } = params;
       const projFile = path.join(ctx.cfg.project.project_root, file);
-      ctx.logger.info(`ini-set ${file} [${section}] ${key}=${value}`);
+
+      // Parse value-list (semicolon-separated) if provided
+      let finalValue: string | string[] | null = null;
+      if (valueList && valueList.trim() !== "") {
+        finalValue = valueList.split(";").filter((v: string) => v.trim() !== "");
+      } else if (value !== undefined && value !== null) {
+        finalValue = value;
+      }
+
+      const displayValue = Array.isArray(finalValue)
+        ? finalValue.map((v) => `+${key}=${v}`).join(", ")
+        : `${key}=${finalValue}`;
+      ctx.logger.info(`ini-set ${file} [${section}] ${displayValue}`);
+
       if (!ctx.dryRun) {
-        const fs = require("fs");
-        let content: string = fs.existsSync(projFile) ? fs.readFileSync(projFile, "utf8") : "";
-        const pattern = new RegExp(
-          `(\\[${section.replace(/\//g, "\\/")}\\][\\s\\S]*?)${key}=.*`,
-          "m",
-        );
-        if (pattern.test(content)) {
-          content = content.replace(pattern, `$1${key}=${value}`);
-        } else {
-          content += `\n[${section}]\n${key}=${value}\n`;
+        const options = { sectionInsertFront: insertFront === "true" };
+        await ueIni.setSectionKeyValue(projFile, section, key, finalValue, options);
+      }
+    },
+
+    "ini-get": async (params, ctx) => {
+      const { file, section, key, type } = params;
+      const projFile = path.join(ctx.cfg.project.project_root, file);
+
+      const options = type ? { valueType: type as "string" | "number" | "boolean" } : undefined;
+      const value = await ueIni.readIni(projFile, section, key, options);
+
+      if (value === undefined) {
+        ctx.logger.info(`ini-get: key "${key}" not found in section [${section}]`);
+      } else if (Array.isArray(value)) {
+        value.forEach((v) => ctx.logger.info(String(v)));
+      } else {
+        ctx.logger.info(String(value));
+      }
+    },
+
+    "ini-remove": async (params, ctx) => {
+      const { file, section, key } = params;
+      const projFile = path.join(ctx.cfg.project.project_root, file);
+
+      ctx.logger.info(`ini-remove ${file} [${section}] ${key}`);
+
+      if (!ctx.dryRun) {
+        const removed = await ueIni.removeSectionKey(projFile, section, key);
+        if (!removed) {
+          ctx.logger.warn(`ini-remove: key "${key}" not found in section [${section}]`);
         }
-        fs.writeFileSync(projFile, content);
+      }
+    },
+
+    "ini-override": async (params, ctx) => {
+      const { file, "override-file": overrideFile } = params;
+      const targetPath = path.join(ctx.cfg.project.project_root, file);
+      const overridePath = path.join(ctx.cfg.project.project_root, overrideFile);
+
+      ctx.logger.info(`ini-override: applying ${overrideFile} to ${file}`);
+
+      if (!ctx.dryRun) {
+        await ueIni.overrideIniData(targetPath, overridePath);
+      }
+    },
+
+    "ini-read-all": async (params, ctx) => {
+      const { file } = params;
+      const projFile = path.join(ctx.cfg.project.project_root, file);
+
+      const data = await ueIni.readIniAll(projFile);
+
+      for (const [section, keys] of Object.entries(data)) {
+        ctx.logger.info(`[${section}]`);
+        for (const [key, value] of Object.entries(keys)) {
+          if (Array.isArray(value)) {
+            for (const v of value) {
+              ctx.logger.info(`  +${key}=${v}`);
+            }
+          } else {
+            ctx.logger.info(`  ${key}=${value}`);
+          }
+        }
       }
     },
 
