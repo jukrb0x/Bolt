@@ -9,6 +9,7 @@ import updateCmd from "./commands/update";
 import pluginCmd from "./commands/plugin";
 import configCmd from "./commands/config";
 import inspectCmd from "./commands/inspect";
+import helpCmd from "./commands/help";
 import pkg from "../package.json";
 
 const main = defineCommand({
@@ -28,6 +29,7 @@ const main = defineCommand({
     plugin: pluginCmd,
     config: configCmd,
     inspect: inspectCmd,
+    help: helpCmd,
   },
 });
 
