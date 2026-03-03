@@ -41,6 +41,8 @@ export interface Project {
   project_vcs?: "git" | "svn";
   git_branch?: string;
   use_tortoise?: boolean;
+  /** Any extra string fields defined in bolt.yaml are preserved and available as ${{ project.<key> }} in interpolation. */
+  [key: string]: string | boolean | undefined;
 }
 
 export type NotifyProviderCfg =
