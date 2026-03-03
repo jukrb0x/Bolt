@@ -94,10 +94,12 @@ export class WeComProvider implements NotifyProvider {
     const { ctx } = event;
     const header = ctxHeader(ctx);
     const now = new Date(ctx.startTime).toLocaleString("zh-CN", { hour12: false });
+    const tag = ctx.mode === "run" ? "Action" : "Build";
 
     if (event.kind === "start") {
+      const planLabel = ctx.mode === "run" ? "Action" : "Plan";
       const plan = (event.ops ?? []).map((op, i) => `> ${i + 1}. ${op}`).join("\n");
-      return `## [bolt] Build Started\n${header}\n**Time:** ${now}\n**Plan:**\n${plan}`;
+      return `## [bolt] ${tag} Started\n${header}\n**Time:** ${now}\n**${planLabel}:**\n${plan}`;
     }
 
     if (event.kind === "op_complete") {
@@ -121,7 +123,7 @@ export class WeComProvider implements NotifyProvider {
         return `> ${icon} ${r.op} (${formatDuration(r.duration)})`;
       })
       .join("\n");
-    return `## [bolt] Build <font color="${statusColor}">${statusIcon} ${allOk ? "Complete" : "Failed"}</font>\n${header}\n**Total:** ${total}\n**Results:**\n${rows}`;
+    return `## [bolt] ${tag} <font color="${statusColor}">${statusIcon} ${allOk ? "Complete" : "Failed"}</font>\n${header}\n**Total:** ${total}\n**Results:**\n${rows}`;
   }
 
   async send(event: NotifyEvent): Promise<void> {
@@ -149,10 +151,12 @@ export class TelegramProvider implements NotifyProvider {
     const branch = ctx.gitBranch ? `  *Branch:* ${escapeMdV2(ctx.gitBranch)}` : "";
     const id = escapeMdV2(ctx.buildId);
     const header = `*Project:* ${proj}${branch}  *ID:* ${id}`;
+    const tag = ctx.mode === "run" ? "Action" : "Build";
 
     if (event.kind === "start") {
+      const planLabel = ctx.mode === "run" ? "Action" : "Plan";
       const plan = (event.ops ?? []).map((op, i) => `  ${i + 1}\\. ${escapeMdV2(op)}`).join("\n");
-      return `*\\[bolt\\] Build Started*\n${header}\n*Plan:*\n${plan}`;
+      return `*\\[bolt\\] ${tag} Started*\n${header}\n*${planLabel}:*\n${plan}`;
     }
 
     if (event.kind === "op_complete") {
@@ -171,7 +175,7 @@ export class TelegramProvider implements NotifyProvider {
       .map((r) => `  ${r.ok ? "✅" : "❌"} ${escapeMdV2(r.op)} \\(${escapeMdV2(formatDuration(r.duration))}\\)`)
       .join("\n");
     const total = escapeMdV2(formatDuration(event.duration ?? 0));
-    return `*\\[bolt\\] ${allOk ? "✅ Build Complete" : "❌ Build Failed"}*\n${header}\n*Total:* ${total}\n*Results:*\n${rows}`;
+    return `*\\[bolt\\] ${allOk ? `✅ ${tag} Complete` : `❌ ${tag} Failed`}*\n${header}\n*Total:* ${total}\n*Results:*\n${rows}`;
   }
 
   async send(event: NotifyEvent): Promise<void> {

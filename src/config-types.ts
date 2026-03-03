@@ -48,6 +48,7 @@ export interface Project {
 export interface BuildContext {
   buildId: string;        // e.g. "20260303_142035"
   projectName: string;    // from cfg.project.name
+  mode: "go" | "run";    // bolt go (pipeline) vs bolt run (action)
   gitBranch?: string;     // auto-detected, omitted if not a git repo
   logPath?: string;       // optional, passed in from runner opts
   startTime: number;      // Date.now()

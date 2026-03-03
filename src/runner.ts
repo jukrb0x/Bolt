@@ -80,7 +80,7 @@ export class Runner {
         if (proc.exitCode === 0) gitBranch = proc.stdout.toString().trim() || undefined;
       } catch { /* not a git repo */ }
 
-      ctx = { buildId, projectName: this.cfg.project.name, gitBranch, startTime };
+      ctx = { buildId, projectName: this.cfg.project.name, mode: "run" as const, gitBranch, startTime };
       await notifier.fire({ kind: "start", ctx, ops: [actionName] });
     }
 
@@ -139,6 +139,7 @@ export class Runner {
     const ctx: import("./notify").BuildContext = {
       buildId,
       projectName: this.cfg.project.name,
+      mode: "go",
       gitBranch,
       startTime,
     };
