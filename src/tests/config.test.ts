@@ -147,6 +147,26 @@ test("accepts legacy svn_root as project_root fallback", async () => {
   rmSync(tmpFile);
 });
 
+test("preserves extra string fields for interpolation", async () => {
+  const tmpFile = `${os.tmpdir()}/bolt-extra-fields.yaml`;
+  writeFileSync(
+    tmpFile,
+    [
+      "project:",
+      "  name: Extra",
+      "  engine_root: C:/Engine",
+      "  project_root: C:/Project",
+      "  project_name: Extra",
+      "  svn: C:/Depot/MyProject",
+      "  tools_path: C:/Tools",
+    ].join("\n"),
+  );
+  const cfg = await loadConfig(tmpFile);
+  expect((cfg.project as Record<string, unknown>)["svn"]).toBe("C:/Depot/MyProject");
+  expect((cfg.project as Record<string, unknown>)["tools_path"]).toBe("C:/Tools");
+  rmSync(tmpFile);
+});
+
 test("engine_vcs defaults to git and project_vcs defaults to svn when omitted", async () => {
   const tmpFile = `${os.tmpdir()}/bolt-vcs-defaults.yaml`;
   writeFileSync(
