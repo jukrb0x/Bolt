@@ -25,10 +25,16 @@
 
 project:
   name: MyProject
-  ue_path: C:/UnrealEngine
-  project_path: C:/Projects/MyProject
-  project_name: MyProject
-  git_branch: main
+  engine_repo:
+    path: ./engine
+    vcs: git
+    # url: https://github.com/EpicGames/UnrealEngine.git
+    branch: main
+  project_repo:
+    path: ./project
+    vcs: svn
+    # url: svn://svn.example.com/project/trunk
+  uproject: ./project/MyProject.uproject
 
 targets:
   editor:

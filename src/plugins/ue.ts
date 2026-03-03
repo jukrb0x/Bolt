@@ -13,6 +13,17 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Extract project name from .uproject file path (filename without extension) */
+function getProjectName(uprojectPath: string): string {
+  const basename = path.basename(uprojectPath);
+  return basename.replace(/\.uproject$/i, "");
+}
+
+/** Get the directory containing the .uproject file */
+function getProjectDir(uprojectPath: string): string {
+  return path.dirname(uprojectPath);
+}
+
 function findZeroByteDlls(dir: string): string[] {
   const { existsSync, readdirSync, statSync } = require("fs");
   if (!existsSync(dir)) return [];
@@ -41,14 +52,12 @@ const plugin: BoltPlugin = {
       const target = ctx.cfg.targets[targetName];
       if (!target) throw new Error(`Unknown target: "${targetName}"`);
       const buildType = capitalize((params.config as string | undefined) ?? target.config);
-      const uePath = ctx.cfg.project.engine_root;
-      const projFile = path.join(
-        ctx.cfg.project.project_root,
-        `${ctx.cfg.project.project_name}.uproject`,
-      );
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const projFile = ctx.cfg.project.uproject;
+      const projectName = getProjectName(projFile);
       const targetBin =
         target.kind === "editor"
-          ? `${ctx.cfg.project.project_name}Editor`
+          ? `${projectName}Editor`
           : (target.name ?? targetName);
       const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
       const cmd =
@@ -59,43 +68,43 @@ const plugin: BoltPlugin = {
     },
 
     update: async (params, ctx) => {
-      const engineVcs = ctx.cfg.project.engine_vcs ?? "git";
-      const projectVcs = ctx.cfg.project.project_vcs ?? "svn";
+      const engineVcs = ctx.cfg.project.engine_repo.vcs ?? "git";
+      const projectVcs = ctx.cfg.project.project_repo.vcs ?? "svn";
+      const enginePath = ctx.cfg.project.engine_repo.path;
+      const projectPath = ctx.cfg.project.project_repo.path;
+
       if (engineVcs === "git") {
-        await gitPlugin.handlers["pull"]({ path: ctx.cfg.project.engine_root }, ctx);
+        await gitPlugin.handlers["pull"]({ path: enginePath }, ctx);
       } else {
-        await svnPlugin.handlers["update"]({ path: ctx.cfg.project.engine_root }, ctx);
+        await svnPlugin.handlers["update"]({ path: enginePath }, ctx);
       }
       if (projectVcs === "svn") {
-        await svnPlugin.handlers["update"]({ path: ctx.cfg.project.project_root }, ctx);
+        await svnPlugin.handlers["update"]({ path: projectPath }, ctx);
       } else {
-        await gitPlugin.handlers["pull"]({ path: ctx.cfg.project.project_root }, ctx);
+        await gitPlugin.handlers["pull"]({ path: projectPath }, ctx);
       }
     },
 
     "update-git": async (params, ctx) => {
-      await gitPlugin.handlers["pull"]({ path: params.path ?? ctx.cfg.project.engine_root }, ctx);
+      await gitPlugin.handlers["pull"]({ path: params.path ?? ctx.cfg.project.engine_repo.path }, ctx);
     },
 
     "update-svn": async (params, ctx) => {
-      await svnPlugin.handlers["update"]({ path: params.path ?? ctx.cfg.project.project_root }, ctx);
+      await svnPlugin.handlers["update"]({ path: params.path ?? ctx.cfg.project.project_repo.path }, ctx);
     },
 
     "svn-cleanup": async (params, ctx) => {
-      await svnPlugin.handlers["cleanup"]({ path: ctx.cfg.project.project_root }, ctx);
+      await svnPlugin.handlers["cleanup"]({ path: ctx.cfg.project.project_repo.path }, ctx);
     },
 
     "svn-revert": async (params, ctx) => {
-      const p = params.path ?? ctx.cfg.project.project_root;
+      const p = params.path ?? ctx.cfg.project.project_repo.path;
       await svnPlugin.handlers["revert"]({ path: p }, ctx);
     },
 
     "generate-project": async (params, ctx) => {
-      const uePath = ctx.cfg.project.engine_root;
-      const projFile = path.join(
-        ctx.cfg.project.project_root,
-        `${ctx.cfg.project.project_name}.uproject`,
-      );
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const projFile = ctx.cfg.project.uproject;
       await run(
         `"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`,
         ctx,
@@ -104,11 +113,9 @@ const plugin: BoltPlugin = {
 
     start: async (params, ctx) => {
       const { existsSync } = require("fs");
-      const uePath = ctx.cfg.project.engine_root;
-      const projFile = path.join(
-        ctx.cfg.project.project_root,
-        `${ctx.cfg.project.project_name}.uproject`,
-      );
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const projFile = ctx.cfg.project.uproject;
+      const projectDir = getProjectDir(projFile);
 
       const suffixMap: Record<string, string> = {
         debug: "-Win64-Debug",
@@ -126,7 +133,7 @@ const plugin: BoltPlugin = {
         const t = params.target as string;
         const binName = `${t}${suffix}.exe`;
         const candidates = [
-          path.join(ctx.cfg.project.project_root, "Binaries", platform, binName),
+          path.join(projectDir, "Binaries", platform, binName),
           path.join(uePath, "Engine", "Binaries", platform, binName),
         ];
         ctx.logger.info(`Searching for ${binName}`);
@@ -173,11 +180,8 @@ const plugin: BoltPlugin = {
     },
 
     fillddc: async (params, ctx) => {
-      const uePath = ctx.cfg.project.engine_root;
-      const projFile = path.join(
-        ctx.cfg.project.project_root,
-        `${ctx.cfg.project.project_name}.uproject`,
-      );
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const projFile = ctx.cfg.project.uproject;
       await run(
         `"${w(uePath)}/Engine/Binaries/Win64/UE4Editor-Cmd.exe" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
         ctx,
@@ -186,7 +190,8 @@ const plugin: BoltPlugin = {
 
     "ini-set": async (params, ctx) => {
       const { file, section, key, value, "value-list": valueList, "insert-front": insertFront } = params;
-      const projFile = path.join(ctx.cfg.project.project_root, file);
+      const projectPath = ctx.cfg.project.project_repo.path;
+      const projFile = path.join(projectPath, file);
 
       // Parse value-list (semicolon-separated) if provided
       let finalValue: string | string[] | null = null;
@@ -209,7 +214,8 @@ const plugin: BoltPlugin = {
 
     "ini-get": async (params, ctx) => {
       const { file, section, key, type } = params;
-      const projFile = path.join(ctx.cfg.project.project_root, file);
+      const projectPath = ctx.cfg.project.project_repo.path;
+      const projFile = path.join(projectPath, file);
 
       const options = type ? { valueType: type as "string" | "number" | "boolean" } : undefined;
       const value = await ueIni.readIni(projFile, section, key, options);
@@ -225,7 +231,8 @@ const plugin: BoltPlugin = {
 
     "ini-remove": async (params, ctx) => {
       const { file, section, key } = params;
-      const projFile = path.join(ctx.cfg.project.project_root, file);
+      const projectPath = ctx.cfg.project.project_repo.path;
+      const projFile = path.join(projectPath, file);
 
       ctx.logger.info(`ini-remove ${file} [${section}] ${key}`);
 
@@ -239,8 +246,9 @@ const plugin: BoltPlugin = {
 
     "ini-override": async (params, ctx) => {
       const { file, "override-file": overrideFile } = params;
-      const targetPath = path.join(ctx.cfg.project.project_root, file);
-      const overridePath = path.join(ctx.cfg.project.project_root, overrideFile);
+      const projectPath = ctx.cfg.project.project_repo.path;
+      const targetPath = path.join(projectPath, file);
+      const overridePath = path.join(projectPath, overrideFile);
 
       ctx.logger.info(`ini-override: applying ${overrideFile} to ${file}`);
 
@@ -251,7 +259,8 @@ const plugin: BoltPlugin = {
 
     "ini-read-all": async (params, ctx) => {
       const { file } = params;
-      const projFile = path.join(ctx.cfg.project.project_root, file);
+      const projectPath = ctx.cfg.project.project_repo.path;
+      const projFile = path.join(projectPath, file);
 
       const data = await ueIni.readIniAll(projFile);
 
@@ -270,7 +279,7 @@ const plugin: BoltPlugin = {
     },
 
     "build-engine": async (params, ctx) => {
-      const uePath = ctx.cfg.project.engine_root;
+      const uePath = ctx.cfg.project.engine_repo.path;
       const buildType = capitalize(params.config ?? "development");
       const setupCmd = `"${w(uePath)}/Setup.bat" --force`;
       const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
@@ -295,11 +304,8 @@ const plugin: BoltPlugin = {
       }
       const buildType = capitalize(params.config ?? "development");
       const platform = params.platform ?? "Win64";
-      const uePath = ctx.cfg.project.engine_root;
-      const projFile = path.join(
-        ctx.cfg.project.project_root,
-        `${ctx.cfg.project.project_name}.uproject`,
-      );
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const projFile = ctx.cfg.project.uproject;
       const buildBat = `${w(uePath)}/Engine/Build/BatchFiles/Build.bat`;
       const cmd = `"${buildBat}" ${target} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
       await run(cmd, ctx);
@@ -307,29 +313,33 @@ const plugin: BoltPlugin = {
 
     info: async (params, ctx) => {
       ctx.logger.info("=== VCS Info ===");
-      const engineVcs = ctx.cfg.project.engine_vcs ?? "git";
-      const projectVcs = ctx.cfg.project.project_vcs ?? "svn";
+      const engineVcs = ctx.cfg.project.engine_repo.vcs ?? "git";
+      const projectVcs = ctx.cfg.project.project_repo.vcs ?? "svn";
+      const enginePath = ctx.cfg.project.engine_repo.path;
+      const projectPath = ctx.cfg.project.project_repo.path;
+
       if (engineVcs === "git") {
-        await gitPlugin.handlers["info"]({ path: ctx.cfg.project.engine_root }, ctx);
+        await gitPlugin.handlers["info"]({ path: enginePath }, ctx);
       } else {
-        await svnPlugin.handlers["info"]({ path: ctx.cfg.project.engine_root }, ctx);
+        await svnPlugin.handlers["info"]({ path: enginePath }, ctx);
       }
       if (projectVcs === "svn") {
-        await svnPlugin.handlers["info"]({ path: ctx.cfg.project.project_root }, ctx);
+        await svnPlugin.handlers["info"]({ path: projectPath }, ctx);
       } else {
-        await gitPlugin.handlers["info"]({ path: ctx.cfg.project.project_root }, ctx);
+        await gitPlugin.handlers["info"]({ path: projectPath }, ctx);
       }
     },
 
     "fix-dll": async (params, ctx) => {
       const { renameSync, mkdirSync } = require("fs");
-      const uePath = ctx.cfg.project.engine_root;
-      const projectPath = ctx.cfg.project.project_root;
-      const trashDir = path.join(projectPath, ".bolt", "trash-dlls");
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const projectPath = ctx.cfg.project.project_repo.path;
+      const projectDir = getProjectDir(ctx.cfg.project.uproject);
+      const trashDir = path.join(projectDir, ".bolt", "trash-dlls");
       const dirsToScan = [
         path.join(uePath, "Engine", "Binaries"),
-        path.join(projectPath, "Binaries"),
-        path.join(projectPath, "Plugins"),
+        path.join(projectDir, "Binaries"),
+        path.join(projectDir, "Plugins"),
       ];
       const zeroDlls: string[] = [];
       for (const dir of dirsToScan) zeroDlls.push(...findZeroByteDlls(dir));
