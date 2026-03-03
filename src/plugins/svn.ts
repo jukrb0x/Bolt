@@ -32,7 +32,7 @@ const plugin: BoltPlugin = {
   handlers: {
     update: async (params, ctx) => {
       const p = resolvePath(params, ctx);
-      ctx.logger.info(`svn update "${p}" --non-interactive --trust-server-cert`);
+      ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);
       if (!ctx.dryRun) {
         const result = await $`svn update ${p} --non-interactive --trust-server-cert`.nothrow();
         if (result.exitCode !== 0) throw new Error(`svn update failed (exit ${result.exitCode})`);
@@ -43,7 +43,7 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        ctx.logger.info(`TortoiseProc /command:cleanup /path:"${p}"`);
+        ctx.logger.cmd(`TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`);
         if (!ctx.dryRun) {
           const result = Bun.spawnSync(
             [tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/externals", "/fixtimestamps", "/vacuum", "/breaklocks", "/refreshshell"],
@@ -52,7 +52,7 @@ const plugin: BoltPlugin = {
           if (result.exitCode !== 0) throw new Error(`TortoiseProc cleanup failed (exit ${result.exitCode})`);
         }
       } else {
-        ctx.logger.info(`svn cleanup "${p}"`);
+        ctx.logger.cmd(`svn cleanup "${p}"`);
         if (!ctx.dryRun) {
           const result = await $`svn cleanup ${p}`.nothrow();
           if (result.exitCode !== 0) throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
@@ -65,7 +65,7 @@ const plugin: BoltPlugin = {
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
         // TortoiseSVN exposes revert through /command:cleanup with the /revert flag — there is no standalone /command:revert
-        ctx.logger.info(`TortoiseProc /command:cleanup /revert /path:"${p}"`);
+        ctx.logger.cmd(`TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /revert /breaklocks /vacuum /fixtimestamps`);
         if (!ctx.dryRun) {
           const result = Bun.spawnSync(
             [tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/revert", "/breaklocks", "/vacuum", "/fixtimestamps"],
@@ -74,7 +74,7 @@ const plugin: BoltPlugin = {
           if (result.exitCode !== 0) throw new Error(`TortoiseProc revert failed (exit ${result.exitCode})`);
         }
       } else {
-        ctx.logger.info(`svn revert -R "${p}"`);
+        ctx.logger.cmd(`svn revert -R "${p}"`);
         if (!ctx.dryRun) {
           const result = await $`svn revert -R ${p}`.nothrow();
           if (result.exitCode !== 0) throw new Error(`svn revert failed (exit ${result.exitCode})`);
@@ -106,7 +106,7 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        ctx.logger.info(`TortoiseProc /command:commit /path:"${p}"`);
+        ctx.logger.cmd(`TortoiseProc /command:commit /path:"${p}"`);
         if (!ctx.dryRun) {
           const result = Bun.spawnSync(
             [tortoiseProc, "/command:commit", `/path:${p}`],
@@ -116,7 +116,7 @@ const plugin: BoltPlugin = {
         }
       } else {
         if (!params.message) throw new Error("svn/commit requires with: message: when not using TortoiseSVN");
-        ctx.logger.info(`svn commit "${p}" -m "${params.message}"`);
+        ctx.logger.cmd(`svn commit "${p}" -m "${params.message}"`);
         if (!ctx.dryRun) {
           const result = await $`svn commit ${p} -m ${params.message}`.nothrow();
           if (result.exitCode !== 0) throw new Error(`svn commit failed (exit ${result.exitCode})`);
@@ -126,7 +126,7 @@ const plugin: BoltPlugin = {
 
     add: async (params, ctx) => {
       if (!params.path) throw new Error("svn/add requires with: path:");
-      ctx.logger.info(`svn add "${params.path}"`);
+      ctx.logger.cmd(`svn add "${params.path}"`);
       if (!ctx.dryRun) {
         const result = await $`svn add ${params.path}`.nothrow();
         if (result.exitCode !== 0) throw new Error(`svn add failed (exit ${result.exitCode})`);
@@ -135,7 +135,7 @@ const plugin: BoltPlugin = {
 
     status: async (params, ctx) => {
       const p = resolvePath(params, ctx);
-      ctx.logger.info(`svn status "${p}"`);
+      ctx.logger.cmd(`svn status "${p}"`);
       if (!ctx.dryRun) {
         const result = await $`svn status ${p}`.nothrow();
         if (result.exitCode !== 0) throw new Error(`svn status failed (exit ${result.exitCode})`);
