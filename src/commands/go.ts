@@ -26,7 +26,7 @@ export default defineCommand({
     const goIdx = process.argv.indexOf("go");
     const rawTokens = process.argv
       .slice(goIdx + 1)
-      .filter((t) => (t.startsWith("--") && t !== "--dry-run") || !t.startsWith("-"));
+      .filter((t) => t !== "--dry-run");
 
     if (rawTokens.length === 0) {
       console.error("[ERROR] No ops specified. Example: bolt go update:svn build start");

@@ -120,38 +120,8 @@ export function parseGoArgs(tokens: string[]): ParsedOp[] {
       continue;
     }
 
-    // --flag style token (e.g. --update, --build=client)
-    const stripped = token.slice(2);
-    const eqIdx = stripped.indexOf("=");
-    let name: string, value: string, isExact: boolean;
-    if (eqIdx !== -1) {
-      name = stripped.slice(0, eqIdx);
-      value = stripped.slice(eqIdx + 1);
-      isExact = true;
-    } else {
-      name = stripped;
-      value = "default";
-      isExact = false;
-    }
+    // Unknown --flag token — skip silently
     i++;
-
-    // Consume following --key=val tokens (must contain "=") as inline params for this op
-    const params: Record<string, string> = {};
-    while (
-      i < tokens.length &&
-      tokens[i].startsWith("--") &&
-      !GLOBAL_FLAGS.has(tokens[i]) &&
-      tokens[i].includes("=")
-    ) {
-      const param = tokens[i].slice(2);
-      const paramEqIdx = param.indexOf("=");
-      const k = param.slice(0, paramEqIdx);
-      const v = param.slice(paramEqIdx + 1);
-      params[k] = k === "config" ? expandConfig(v) : v;
-      i++;
-    }
-
-    ops.push({ name, value, isExact, params });
   }
 
   return applySharedParams(ops);
