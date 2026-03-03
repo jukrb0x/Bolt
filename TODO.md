@@ -3,17 +3,16 @@
 - [x] [DX] oxc
 - [ ] [FEAT] chatbot webhook, wecom support
 - [ ] [FEAT] common tools
-  - [ ] ue ini tool
-  - [ ]
+  - [x] ue ini tool
+  - [ ] ?
 - [x] [ecosystem] universal VCS - currently engine (git), project (svn), make this configurable
 - [x] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
 - [x] [ecosystem] shell command runs (with:run)
 - [x] [config] `bolt check` - check bolt.yaml validation
 - [ ] [config] `bolt apply` - apply templated profile bolt.yaml from built-in OR gh repo (or any git repo.. specify domain)
 - [x] [config] `bolt config` - open $editor for current bolt yaml
-- [ ] `bolt help` - details
-- [ ] [FEAT] bugfixes on the beta modules now, make them work as UBS
-- [ ] [FEAT] VCS providers
+- [x] `bolt help` - TUI quick help docs
+- [x] [FEAT] VCS providers
 - [ ] [FEAT] parallel setups
 - [ ] add a dimmed logger type for commands, commands should be logged explicity for the execution
 
@@ -48,4 +47,4 @@ Let people start and setup their working environment easily.
 
 ## Fixes
 
-- [ ] remove this variant: bolt go --build=program, becuase hypen parameters are consumned by ops in bolt go, like: bolt go build:program --config=debug
+- [x] remove this variant: bolt go --build=program, becuase hypen parameters are consumned by ops in bolt go, like: bolt go build:program --config=debug
