@@ -1,6 +1,9 @@
 import { Box, Text } from "ink";
-import { useState, useCallback } from "react";
-import { questions, type Question, type InitAnswers } from "./questions";
+import { useState, useCallback, useMemo } from "react";
+import { parseTemplate } from "./template-parser";
+import { evaluateCondition } from "./condition-eval";
+import type { InitSection, InitQuestion } from "./template-types";
+import { QuestionHistory } from "./components/QuestionHistory";
 import { Input } from "./components/Input";
 import { Confirm } from "./components/Confirm";
 import { Select } from "./components/Select";
@@ -12,30 +15,62 @@ export interface InitOptions {
   nonInteractive?: boolean;
 }
 
+// Generic answers type - no longer tied to specific fields
+export type InitAnswers = Record<string, string | boolean | string[]>;
+
+interface AnsweredQuestion {
+  prompt: string;
+  answer: string | boolean | string[];
+}
+
 interface InitAppProps {
   options: InitOptions;
+  templateContent: string;
   onComplete: (answers: InitAnswers & { location: string }) => void;
 }
 
-export function InitApp({ options, onComplete }: InitAppProps) {
+export function InitApp({ options, templateContent, onComplete }: InitAppProps) {
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Partial<InitAnswers>>({});
+  const [answers, setAnswers] = useState<InitAnswers>({});
+  const [history, setHistory] = useState<AnsweredQuestion[]>([]);
   const [resolvedLocation, setResolvedLocation] = useState<string | null>(
     options.location === "." ? process.cwd() : options.location ?? null
   );
 
-  // Determine which questions to show based on conditions
-  const visibleQuestions = questions.filter((q) => {
-    if (!q.condition) return true;
-    return q.condition(answers);
-  });
+  // Parse template once
+  const parsedTemplate = useMemo(() => parseTemplate(templateContent), [templateContent]);
+  const initSection = parsedTemplate.initSection;
 
-  const currentQuestion = visibleQuestions[step];
-  const isComplete = step >= visibleQuestions.length && resolvedLocation !== null;
+  // Get ordered question keys
+  const getOrderedQuestions = (section: InitSection): string[] => {
+    return Object.keys(section);
+  };
+
+  // Filter questions by condition
+  const filterByCondition = (
+    key: string,
+    section: InitSection,
+    currentAnswers: InitAnswers
+  ): boolean => {
+    const question = section[key];
+    if (!question?.condition) return true;
+    return evaluateCondition(question.condition, currentAnswers);
+  };
+
+  // Determine which questions to show based on conditions
+  const visibleQuestionKeys = useMemo(() => {
+    const allKeys = getOrderedQuestions(initSection);
+    return allKeys.filter((key) => filterByCondition(key, initSection, answers));
+  }, [initSection, answers]);
+
+  const currentKey = visibleQuestionKeys[step];
+  const currentQuestion = currentKey ? initSection[currentKey] : undefined;
+  const isComplete = step >= visibleQuestionKeys.length && resolvedLocation !== null;
 
   const handleAnswer = useCallback(
-    (key: string, value: string | boolean | string[]) => {
+    (key: string, value: string | boolean | string[], prompt: string) => {
       setAnswers((prev) => ({ ...prev, [key]: value }));
+      setHistory((prev) => [...prev, { prompt, answer: value }]);
       setStep((s) => s + 1);
     },
     []
@@ -51,6 +86,7 @@ export function InitApp({ options, onComplete }: InitAppProps) {
           onSubmit={(value) => {
             setResolvedLocation(value);
             setAnswers((prev) => ({ ...prev, bolt_project_name: value }));
+            setHistory((prev) => [...prev, { prompt: "Project name", answer: value }]);
           }}
         />
       </Box>
@@ -59,23 +95,8 @@ export function InitApp({ options, onComplete }: InitAppProps) {
 
   // All questions answered
   if (isComplete || !currentQuestion) {
-    const finalAnswers: InitAnswers = {
-      bolt_project_name: answers.bolt_project_name || "",
-      engine_repo_path: answers.engine_repo_path || "./engine",
-      engine_repo_vcs: answers.engine_repo_vcs || "git",
-      engine_repo_url: answers.engine_repo_url || "",
-      engine_repo_branch: answers.engine_repo_branch || "main",
-      project_repo_path: answers.project_repo_path || "./project",
-      project_repo_vcs: answers.project_repo_vcs || "svn",
-      project_repo_url: answers.project_repo_url || "",
-      uproject: answers.uproject || "",
-      targets: answers.targets || ["editor"],
-      notifications: answers.notifications || false,
-      webhook_url: answers.webhook_url || "",
-    };
-
     setTimeout(() => {
-      onComplete({ ...finalAnswers, location: resolvedLocation! });
+      onComplete({ ...answers, location: resolvedLocation! });
     }, 0);
 
     return (
@@ -86,39 +107,39 @@ export function InitApp({ options, onComplete }: InitAppProps) {
     );
   }
 
-  const renderQuestion = (q: Question) => {
-    const defaultProps = {
-      label: q.label,
-      defaultValue: typeof q.default === "string" ? q.default : undefined,
-    };
+  const renderQuestion = (key: string, q: InitQuestion) => {
+    const prompt = q.prompt;
+    const defaultValue = q.default;
+    const type = q.type || "text";
 
-    switch (q.type) {
+    switch (type) {
       case "text":
         return (
           <Input
-            {...defaultProps}
-            placeholder={q.placeholder}
-            onSubmit={(value) => handleAnswer(q.key, value)}
+            label={prompt}
+            placeholder={typeof defaultValue === "string" ? defaultValue : undefined}
+            defaultValue={typeof defaultValue === "string" ? defaultValue : undefined}
+            onSubmit={(value) => handleAnswer(key, value, prompt)}
           />
         );
 
       case "confirm":
         return (
           <Confirm
-            label={q.label}
-            defaultValue={typeof q.default === "boolean" ? q.default : false}
-            onSubmit={(value) => handleAnswer(q.key, value)}
+            label={prompt}
+            defaultValue={typeof defaultValue === "boolean" ? defaultValue : false}
+            onSubmit={(value) => handleAnswer(key, value, prompt)}
           />
         );
 
       case "select":
         return (
           <Select
-            label={q.label}
+            label={prompt}
             options={q.options || []}
-            multi={q.multi}
-            defaultValue={Array.isArray(q.default) ? q.default : []}
-            onSubmit={(value) => handleAnswer(q.key, value)}
+            multi={Array.isArray(defaultValue)}
+            defaultValue={Array.isArray(defaultValue) ? defaultValue : typeof defaultValue === "string" ? [defaultValue] : []}
+            onSubmit={(value) => handleAnswer(key, value, prompt)}
           />
         );
     }
@@ -126,7 +147,8 @@ export function InitApp({ options, onComplete }: InitAppProps) {
 
   return (
     <Box flexDirection="column">
-      {renderQuestion(currentQuestion)}
+      <QuestionHistory history={history} />
+      {currentQuestion && renderQuestion(currentKey, currentQuestion)}
     </Box>
   );
 }

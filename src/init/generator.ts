@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { YAML } from "bun";
-import type { InitAnswers } from "./questions";
+import type { InitAnswers } from "./InitApp";
 
 export interface GenerateOptions extends InitAnswers {
   location: string;
