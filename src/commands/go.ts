@@ -4,6 +4,7 @@ import { loadConfig } from "../config";
 import { Runner } from "../runner";
 import { Logger } from "../logger";
 import { parseGoArgs, resolveOps } from "../go";
+import { makeCtx, walkSteps } from "../inspect-utils";
 import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
@@ -58,6 +59,16 @@ export default defineCommand({
     logger.info(`bolt ${pkg.version}`);
     logger.info(`Config: ${configPath}`);
     logger.info(`Ops: ${resolved.map((o) => o.name).join(" → ")}${dryRun ? " (dry-run)" : ""}`);
+
+    const ctx = makeCtx(cfg);
+    logger.info("Plan:");
+    for (const op of resolved) {
+      logger.info(`  ${op.name}`);
+      const counter = { n: 1 };
+      for (const line of walkSteps(op.steps, cfg, ctx, op.params, counter)) {
+        logger.info(line);
+      }
+    }
 
     const runner = new Runner(cfg, {
       dryRun,
