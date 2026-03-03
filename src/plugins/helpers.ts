@@ -9,6 +9,6 @@ export async function execRaw(cmd: string): Promise<void> {
 
 /** Log and conditionally run a pre-built raw command string. Only use for trusted commands. */
 export async function run(cmd: string, ctx: BoltPluginContext): Promise<void> {
-  ctx.logger.info(cmd);
+  ctx.logger.cmd(cmd);
   if (!ctx.dryRun) await execRaw(cmd);
 }
