@@ -8,8 +8,6 @@
  * - Comment lines starting with ;
  */
 
-import { existsSync } from "fs";
-
 /** Represents a parsed INI file structure */
 export interface UEIniData {
   [section: string]: {
@@ -68,11 +66,12 @@ function coerceValue(value: string, type: "string" | "number" | "boolean"): stri
  * Read an INI file and return all data as a structured object
  */
 export async function readIniAll(filePath: string, options?: IniReadOptions): Promise<UEIniData> {
-  if (!existsSync(filePath)) {
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) {
     return {};
   }
 
-  const content = await Bun.file(filePath).text();
+  const content = await file.text();
   const lines = content.split(/\r?\n/);
   const result: UEIniData = {};
   const valueType = options?.valueType ?? "string";
@@ -267,11 +266,12 @@ export async function removeSectionKey(
   section: string,
   key: string,
 ): Promise<boolean> {
-  if (!existsSync(filePath)) {
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) {
     return false;
   }
 
-  const content = await Bun.file(filePath).text();
+  const content = await file.text();
   const lines = parseIniLines(content);
   const { start: sectionStart, end: sectionEnd } = findSectionRange(lines, section);
 
@@ -305,10 +305,11 @@ export async function setSectionKeyValue(
   value: string | number | boolean | (string | number | boolean)[] | null,
   options?: IniWriteOptions,
 ): Promise<void> {
+  const file = Bun.file(filePath);
   let content = "";
 
-  if (existsSync(filePath)) {
-    content = await Bun.file(filePath).text();
+  if (await file.exists()) {
+    content = await file.text();
   }
 
   const lines = parseIniLines(content);
@@ -449,11 +450,12 @@ export async function overrideIniData(targetPath: string, overridePath: string):
  * Get all section names from an INI file
  */
 export async function getSections(filePath: string): Promise<string[]> {
-  if (!existsSync(filePath)) {
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) {
     return [];
   }
 
-  const content = await Bun.file(filePath).text();
+  const content = await file.text();
   const sections: string[] = [];
   const lines = content.split(/\r?\n/);
 
