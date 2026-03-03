@@ -58,6 +58,7 @@ export interface NotificationsConfig {
 
 export interface BoltConfig {
   project: Project;
+  vars: Record<string, string>;
   targets: Record<string, Target>;
   actions: Record<string, { depends?: string[]; steps: Step[] }>;
   ops: OpsMap;

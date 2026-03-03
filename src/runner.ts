@@ -94,6 +94,7 @@ export class Runner {
   private async execStep(step: Step, opParams: Record<string, string> = {}): Promise<void> {
     const ctx = {
       project: this.cfg.project as Record<string, string>,
+      vars: this.cfg.vars,
       env: process.env as Record<string, string>,
     };
 

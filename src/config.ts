@@ -94,6 +94,7 @@ const NotificationsSchema = z.object({
 
 const BoltConfigSchema = z.object({
   project: ProjectSchema,
+  vars: z.record(z.string()).default({}),
   targets: z.record(TargetSchema).default({}),
   actions: z.record(ActionSchema).default({}),
   ops: z.record(z.string(), OpSchema).default({}),
