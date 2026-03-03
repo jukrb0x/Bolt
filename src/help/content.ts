@@ -425,6 +425,38 @@ Examples:
   - fs: mkdir
     path: ./Builds/{{params.branch}}`,
       },
+      {
+        id: "init-section",
+        title: "_init Section (Templates)",
+        content: `Templates can include an _init section to define interactive questions:
+
+_init:
+  project_name:
+    prompt: "Project name"
+    default: "my-project"
+
+  engine_vcs:
+    prompt: "Engine VCS"
+    type: select
+    options: [git, svn]
+    default: git
+
+  engine_branch:
+    prompt: "Engine branch"
+    default: main
+    condition: "engine_vcs == 'git'"
+
+Question properties:
+  prompt: Question text shown to user
+  type: text | select | confirm
+  default: Default value
+  options: Array of options (for select type)
+  required: Whether answer is required
+  condition: Expression to show conditionally
+
+Use \${{ _init.var_name }} in template to reference answers.
+After Q&A, the _init section is removed from output.`,
+      },
     ],
   },
 ];

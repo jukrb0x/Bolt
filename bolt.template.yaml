@@ -1,5 +1,25 @@
 # bolt.yaml — project automation config
 
+# Optional: _init section for interactive template questions
+# _init:
+#   project_name:
+#     prompt: "Project name"
+#     default: "my-project"
+#
+#   engine_vcs:
+#     prompt: "Engine VCS"
+#     type: select
+#     options: [git, svn]
+#     default: git
+#
+#   engine_branch:
+#     prompt: "Engine branch"
+#     default: main
+#     condition: "engine_vcs == 'git'"
+#
+# Use ${{ _init.var_name }} to reference answers in template.
+# After Q&A, the _init section is removed from output.
+
 # Optional: stop the entire run if it exceeds this duration
 # timeout_hours: 6
 
