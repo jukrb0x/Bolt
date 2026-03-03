@@ -30,8 +30,13 @@ Example bolt.yaml:
 
   project:
     name: MyGame
-    engine_root: C:/UE_5.3
-    project_root: .
+    engine_repo:
+      path: ./engine
+      vcs: git
+    project_repo:
+      path: ./project
+      vcs: svn
+    uproject: ./project/MyGame.uproject
 
   targets:
     editor: { kind: editor, config: Development }
@@ -312,12 +317,17 @@ Examples:
         content: `The project section defines basic project info:
 
   project:
-    name: MyGame              # Project name
-    engine_root: C:/UE_5.3    # Path to UE
-    project_root: .           # Project directory
-    engine_vcs: git           # VCS for engine (git/svn)
-    project_vcs: svn          # VCS for project (git/svn)
-    git_branch: main          # Default git branch`,
+    name: MyGame                    # Project name
+    engine_repo:                    # Engine configuration
+      path: ./engine                # Path to UE
+      vcs: git                      # VCS for engine (git/svn)
+      url: https://...              # Optional: repo URL
+      branch: main                  # Optional: git branch
+    project_repo:                   # Project configuration
+      path: ./project               # Project directory
+      vcs: svn                      # VCS for project (git/svn)
+      url: svn://...                # Optional: repo URL
+    uproject: ./project/MyGame.uproject  # Path to .uproject file`,
       },
       {
         id: "targets-section",

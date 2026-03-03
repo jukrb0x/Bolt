@@ -9,8 +9,9 @@ const fixture = path.join(import.meta.dir, "../../tests/fixtures/bolt.yaml");
 test("loads project fields", async () => {
   const cfg = await loadConfig(fixture);
   expect(cfg.project.name).toBe("MyProject");
-  expect(cfg.project.engine_root).toBe("C:/UnrealEngine");
-  expect(cfg.project.project_root).toBe("C:/Projects/MyProject");
+  expect(cfg.project.engine_repo.path).toBe("C:/UnrealEngine");
+  expect(cfg.project.project_repo.path).toBe("C:/Projects/MyProject");
+  expect(cfg.project.uproject).toBe("C:/Projects/MyProject/MyProject.uproject");
 });
 
 test("loads targets", async () => {
@@ -28,7 +29,7 @@ test("loads actions", async () => {
   expect(cfg.actions.build_editor.steps[0].with?.target).toBe("editor");
 });
 
-test("throws on missing project.engine_root", async () => {
+test("throws on missing required fields", async () => {
   expect(
     loadConfig(path.join(import.meta.dir, "../../tests/fixtures/invalid.yaml")),
   ).rejects.toThrow();
@@ -51,9 +52,11 @@ test("notifications config parses wecom and telegram providers", async () => {
     [
       "project:",
       "  name: Test",
-      "  engine_root: C:/UE",
-      "  project_root: C:/proj",
-      "  project_name: Test",
+      "  engine_repo:",
+      "    path: C:/UE",
+      "  project_repo:",
+      "    path: C:/proj",
+      "  uproject: C:/proj/Test.uproject",
       "notifications:",
       "  on_start: true",
       "  on_complete: true",
@@ -91,9 +94,11 @@ test("checkConfig returns ok:false with errors for invalid yaml", async () => {
     [
       "project:",
       "  name: Test",
-      "  engine_root: C:/UE",
-      "  project_root: C:/proj",
-      "  project_name: Test",
+      "  engine_repo:",
+      "    path: C:/UE",
+      "  project_repo:",
+      "    path: C:/proj",
+      "  uproject: C:/proj/Test.uproject",
       "targets:",
       "  editor:",
       "    kind: invalid_kind", // not a valid kind value
@@ -112,38 +117,23 @@ test("checkConfig returns ok:false when file does not exist", async () => {
   expect(result.errors[0].path).toBe("<file>");
 });
 
-test("accepts legacy ue_path and project_path", async () => {
-  const tmpFile = `${os.tmpdir()}/bolt-legacy-fields.yaml`;
+test("engine_repo.vcs defaults to git when omitted", async () => {
+  const tmpFile = `${os.tmpdir()}/bolt-vcs-defaults.yaml`;
   writeFileSync(
     tmpFile,
     [
       "project:",
-      "  name: Legacy",
-      "  ue_path: C:/LegacyEngine",
-      "  project_path: C:/LegacyProject",
-      "  project_name: Legacy",
+      "  name: Defaults",
+      "  engine_repo:",
+      "    path: C:/Engine",
+      "  project_repo:",
+      "    path: C:/Project",
+      "  uproject: C:/Project/Defaults.uproject",
     ].join("\n"),
   );
   const cfg = await loadConfig(tmpFile);
-  expect(cfg.project.engine_root).toBe("C:/LegacyEngine");
-  expect(cfg.project.project_root).toBe("C:/LegacyProject");
-  rmSync(tmpFile);
-});
-
-test("accepts legacy svn_root as project_root fallback", async () => {
-  const tmpFile = `${os.tmpdir()}/bolt-svn-root.yaml`;
-  writeFileSync(
-    tmpFile,
-    [
-      "project:",
-      "  name: SvnOnly",
-      "  ue_path: C:/Engine",
-      "  svn_root: C:/SvnProject",
-      "  project_name: SvnOnly",
-    ].join("\n"),
-  );
-  const cfg = await loadConfig(tmpFile);
-  expect(cfg.project.project_root).toBe("C:/SvnProject");
+  expect(cfg.project.engine_repo.vcs).toBe("git");
+  expect(cfg.project.project_repo.vcs).toBe("git");
   rmSync(tmpFile);
 });
 
@@ -154,33 +144,41 @@ test("preserves extra string fields for interpolation", async () => {
     [
       "project:",
       "  name: Extra",
-      "  engine_root: C:/Engine",
-      "  project_root: C:/Project",
-      "  project_name: Extra",
-      "  svn: C:/Depot/MyProject",
-      "  tools_path: C:/Tools",
+      "  engine_repo:",
+      "    path: C:/Engine",
+      "  project_repo:",
+      "    path: C:/Project",
+      "  uproject: C:/Project/Extra.uproject",
+      "  custom_field: custom_value",
     ].join("\n"),
   );
   const cfg = await loadConfig(tmpFile);
-  expect((cfg.project as Record<string, unknown>)["svn"]).toBe("C:/Depot/MyProject");
-  expect((cfg.project as Record<string, unknown>)["tools_path"]).toBe("C:/Tools");
+  expect((cfg.project as Record<string, unknown>)["custom_field"]).toBe("custom_value");
   rmSync(tmpFile);
 });
 
-test("engine_vcs defaults to git and project_vcs defaults to svn when omitted", async () => {
-  const tmpFile = `${os.tmpdir()}/bolt-vcs-defaults.yaml`;
+test("loads engine_repo with url and branch", async () => {
+  const tmpFile = `${os.tmpdir()}/bolt-repo-url.yaml`;
   writeFileSync(
     tmpFile,
     [
       "project:",
-      "  name: Defaults",
-      "  engine_root: C:/Engine",
-      "  project_root: C:/Project",
-      "  project_name: Defaults",
+      "  name: UrlTest",
+      "  engine_repo:",
+      "    path: ./engine",
+      "    vcs: git",
+      "    url: https://github.com/example/engine.git",
+      "    branch: '5.3'",
+      "  project_repo:",
+      "    path: ./project",
+      "    vcs: svn",
+      "    url: svn://svn.example.com/project",
+      "  uproject: ./project/UrlTest.uproject",
     ].join("\n"),
   );
   const cfg = await loadConfig(tmpFile);
-  expect(cfg.project.engine_vcs).toBe("git");
-  expect(cfg.project.project_vcs).toBe("svn");
+  expect(cfg.project.engine_repo.url).toBe("https://github.com/example/engine.git");
+  expect(cfg.project.engine_repo.branch).toBe("5.3");
+  expect(cfg.project.project_repo.url).toBe("svn://svn.example.com/project");
   rmSync(tmpFile);
 });

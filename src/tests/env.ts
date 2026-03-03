@@ -6,18 +6,27 @@ const required = (key: string): string => {
   return val;
 };
 
-export const ENGINE_ROOT = required("ENGINE_ROOT");
-export const PROJECT_ROOT = required("PROJECT_ROOT");
-export const PROJECT_NAME = required("PROJECT_NAME");
+const optional = (key: string, defaultVal: string): string => {
+  return Bun.env[key] || defaultVal;
+};
+
+export const ENGINE_ROOT = optional("ENGINE_ROOT", "C:/UnrealEngine");
+export const PROJECT_ROOT = optional("PROJECT_ROOT", "C:/Projects/MyProject");
+export const PROJECT_NAME = optional("PROJECT_NAME", "MyProject");
+export const UPROJECT = optional("UPROJECT", "C:/Projects/MyProject/MyProject.uproject");
 
 export const testCfg: BoltConfig = {
   project: {
     name: PROJECT_NAME,
-    engine_root: ENGINE_ROOT,
-    project_root: PROJECT_ROOT,
-    project_name: PROJECT_NAME,
-    engine_vcs: "git",
-    project_vcs: "svn",
+    engine_repo: {
+      path: ENGINE_ROOT,
+      vcs: "git",
+    },
+    project_repo: {
+      path: PROJECT_ROOT,
+      vcs: "svn",
+    },
+    uproject: UPROJECT,
   },
   targets: {
     editor: { kind: "editor", config: "development" },
