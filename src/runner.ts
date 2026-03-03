@@ -57,10 +57,35 @@ export class Runner {
     const sorted = pipeline.order.length > 0 ? sortByPipeline(ops, pipeline.order) : ops;
     const startTime = Date.now();
 
+    // ── Build context for notifications ───────────────────────────────────────
+    const now = new Date(startTime);
+    const buildId = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+      "_",
+      String(now.getHours()).padStart(2, "0"),
+      String(now.getMinutes()).padStart(2, "0"),
+      String(now.getSeconds()).padStart(2, "0"),
+    ].join("");
+
+    let gitBranch: string | undefined;
+    try {
+      const proc = Bun.spawnSync(["git", "branch", "--show-current"], { stdout: "pipe", stderr: "pipe" });
+      if (proc.exitCode === 0) gitBranch = proc.stdout.toString().trim() || undefined;
+    } catch { /* not a git repo or git not available */ }
+
+    const ctx: import("./notify").BuildContext = {
+      buildId,
+      projectName: this.cfg.project.name,
+      gitBranch,
+      startTime,
+    };
+
     const notifier = this.opts.notifier ?? new Notifier([]);
     const opNames = sorted.map((o) => o.name);
-    const results: { op: string; ok: boolean }[] = [];
-    await notifier.fire({ kind: "start", ops: opNames });
+    const results: { op: string; ok: boolean; duration: number }[] = [];
+    await notifier.fire({ kind: "start", ctx, ops: opNames });
 
     for (const op of sorted) {
       if (this.cfg.timeout_hours) {
@@ -74,21 +99,24 @@ export class Runner {
       this.opts.logger?.step(op.name);
       try {
         for (const step of op.steps) await this.execStep(step, op.params ?? {});
-        this.opts.logger?.success(op.name, (Date.now() - t0) / 1000);
-        results.push({ op: op.name, ok: true });
+        const opDuration = Date.now() - t0;
+        this.opts.logger?.success(op.name, opDuration / 1000);
+        results.push({ op: op.name, ok: true, duration: opDuration });
+        await notifier.fire({ kind: "op_complete", ctx, opName: op.name, opDuration });
       } catch (e: any) {
-        this.opts.logger?.fail(op.name, (Date.now() - t0) / 1000);
-        results.push({ op: op.name, ok: false });
-        await notifier.fire({ kind: "failure", opName: op.name, error: e?.message });
+        const opDuration = Date.now() - t0;
+        this.opts.logger?.fail(op.name, opDuration / 1000);
+        results.push({ op: op.name, ok: false, duration: opDuration });
+        await notifier.fire({ kind: "op_failure", ctx, opName: op.name, opDuration, error: e?.message });
         if (pipeline.fail_stops.includes(op.name)) {
-          await notifier.fire({ kind: "complete", duration: Date.now() - startTime, results });
+          await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
           throw e;
         }
         this.opts.logger?.warn(`"${op.name}" failed but is not in fail_stops — continuing`);
       }
     }
 
-    await notifier.fire({ kind: "complete", duration: Date.now() - startTime, results });
+    await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
   }
 
   private async execStep(step: Step, opParams: Record<string, string> = {}): Promise<void> {
