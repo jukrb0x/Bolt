@@ -147,7 +147,7 @@ const plugin: BoltPlugin = {
         if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
       }
 
-      ctx.logger.info(`start "" "${exePath}" "${projFile}"`);
+      ctx.logger.cmd(`start "" "${exePath}" "${projFile}"`);
       if (!ctx.dryRun) {
         Bun.spawnSync(["cmd", "/c", "start", "", exePath, projFile], {
           stdout: "ignore",
@@ -167,7 +167,7 @@ const plugin: BoltPlugin = {
         "CrashReportClient.exe",
       ];
       for (const p of procs) {
-        ctx.logger.info(`taskkill /f /im ${p}`);
+        ctx.logger.cmd(`taskkill /f /im ${p}`);
         if (!ctx.dryRun) await $`taskkill /f /im ${p}`.nothrow().quiet();
       }
     },
@@ -275,12 +275,12 @@ const plugin: BoltPlugin = {
       const setupCmd = `"${w(uePath)}/Setup.bat" --force`;
       const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
       const buildCmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
-      ctx.logger.info(setupCmd);
+      ctx.logger.cmd(setupCmd);
       if (!ctx.dryRun) {
         const { existsSync } = require("fs");
         if (existsSync(`${w(uePath)}/Setup.bat`)) exec(setupCmd);
       }
-      ctx.logger.info(genCmd);
+      ctx.logger.cmd(genCmd);
       if (!ctx.dryRun) {
         const { existsSync } = require("fs");
         if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) exec(genCmd);
