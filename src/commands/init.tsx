@@ -3,10 +3,9 @@ import { render } from "ink";
 import pc from "picocolors";
 import React from "react";
 import path from "path";
-import { InitApp, type InitOptions } from "../init/InitApp";
+import { InitApp, type InitOptions, type InitAnswers } from "../init/InitApp";
 import { loadTemplate } from "../init/template";
 import { generateConfig } from "../init/generator";
-import type { InitAnswers } from "../init/questions";
 
 export default defineCommand({
   meta: {
@@ -51,16 +50,13 @@ export default defineCommand({
       resolvedLocation = null;
     }
 
-    // Load template only if explicitly provided
-    let templateContent: string | undefined;
-    if (template || remote) {
-      const templateResult = await loadTemplate({ remote, template });
-      if (!templateResult.ok) {
-        console.error(pc.red(`Error: ${templateResult.error}`));
-        process.exit(1);
-      }
-      templateContent = templateResult.content;
+    // Always load template (bundled fallback is used if no explicit template)
+    const templateResult = await loadTemplate({ remote, template });
+    if (!templateResult.ok) {
+      console.error(pc.red(`Error: ${templateResult.error}`));
+      process.exit(1);
     }
+    const templateContent = templateResult.content;
 
     // Non-interactive mode: use defaults
     if (nonInteractive) {
@@ -115,6 +111,7 @@ export default defineCommand({
     const { waitUntilExit } = render(
       React.createElement(InitApp, {
         options,
+        templateContent,
         onComplete: (answers) => {
           const result = generateConfig(answers, templateContent);
           if (!result.ok) {
