@@ -116,6 +116,7 @@ export type {
   PluginEntry,
   NotificationsConfig,
   NotifyProviderCfg,
+  BuildContext,
 } from "./config-types";
 
 export async function loadConfig(filepath: string) {
