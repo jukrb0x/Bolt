@@ -16,11 +16,25 @@ test("interpolates multiple variables", () => {
   expect(result).toBe("name: Name\npath: ./path");
 });
 
-test("leaves unresolved variables as-is", () => {
+test("removes lines with unresolved variables", () => {
   const template = "name: ${{ _init.unknown }}";
   const answers = {};
   const result = interpolateTemplate(template, answers);
-  expect(result).toBe("name: ${{ _init.unknown }}");
+  expect(result).toBe("");
+});
+
+test("removes only unresolved lines, keeps resolved ones", () => {
+  const template = "name: ${{ _init.known }}\nbranch: ${{ _init.unknown }}";
+  const answers = { known: "MyGame" };
+  const result = interpolateTemplate(template, answers);
+  expect(result).toBe("name: MyGame");
+});
+
+test("preserves comments with unresolved variables", () => {
+  const template = "# This is a comment with ${{ _init.unknown }}\nname: ${{ _init.known }}";
+  const answers = { known: "MyGame" };
+  const result = interpolateTemplate(template, answers);
+  expect(result).toBe("# This is a comment with ${{ _init.unknown }}\nname: MyGame");
 });
 
 test("handles boolean and array values", () => {
