@@ -24,17 +24,124 @@ targets:
     kind: editor
     config: development
 
-vars: {}
 
-actions: {}
+# Op definitions for \`bolt go\`
+# Each op has named variants; "default" is used when no value is given.
+ops:
+  kill:
+    default:
+      - uses: ue/kill
 
-ops: {}
+  update:
+    default:
+      - uses: ue/update-git
+      - uses: ue/update-svn
+    git:
+      - uses: ue/update-git
+    svn:
+      - uses: ue/update-svn
 
+  svn-cleanup:
+    default:
+      - uses: ue/svn-cleanup
+
+  genproj:
+    default:
+      - uses: ue/generate-project
+
+  build:
+    default:
+      - uses: ue/build
+        with:
+          target: editor
+    # Use --build=<target-key> to override the target at runtime
+    engine:
+      - uses: ue/build-engine
+        with:
+          config: development
+    editor:
+      - uses: ue/build
+        with:
+          target: editor
+    program:
+      - uses: ue/build
+        with:
+          target: program
+          # Supply target at runtime:
+          #   bolt go build:program --target=UnrealInsights
+
+  start:
+    default:
+      - uses: ue/start
+
+  info:
+    default:
+      - uses: ue/info
+
+  fix-dll:
+    default:
+      - uses: ue/fix-dll
+
+# go-pipeline controls bolt go execution order and failure behaviour
 go-pipeline:
-  order: []
-  fail_stops: []
+  order:
+    - kill
+    - info
+    - update
+    - svn-cleanup
+    - genproj
+    - build
+    - fillddc
+    - fix-dll
+    - start
+  fail_stops:
+    - build # if build fails, stop; other ops continue on failure
 
-plugins: []
+# Named action profiles (reusable, runnable with \`bolt run <name>\`)
+actions:
+  build_editor:
+    steps:
+      - uses: ue/build
+        with:
+          target: editor
+          config: development
+
+  build_editor_with_ops:
+    steps:
+      - uses: ops/build
+        with:
+          config: debug
+
+  build_editor_steps:
+    steps:
+      - uses: ue/build-engine
+        with:
+          config: development
+      - uses: ue/build-editor
+        with:
+          config: debug
+
+  build_and_start_editor:
+    steps:
+      - uses: ue/build
+        with:
+          target: editor
+      - uses: ue/start
+
+  daily_check:
+    steps:
+      - uses: ops/update:svn
+      - uses: ops/build
+      - uses: ops/start
+        continue-on-error: true
+
+  full_reset:
+    steps:
+      - uses: ops/kill
+        continue-on-error: true
+      - uses: ops/update
+      - uses: ops/genproj
+      - uses: ops/build
 
 _init:
   bolt_project_name:
@@ -48,8 +155,10 @@ _init:
   engine_repo_vcs:
     prompt: "Engine VCS"
     type: select
-    options: [git, svn]
-    default: git
+    options:
+      - "git"
+      - "svn"
+    default: "git"
 
   engine_repo_url:
     prompt: "Engine repo URL"
@@ -57,7 +166,7 @@ _init:
 
   engine_repo_branch:
     prompt: "Engine branch"
-    default: main
+    default: "main"
     condition: "engine_repo_vcs == 'git'"
 
   project_repo_path:
@@ -67,8 +176,10 @@ _init:
   project_repo_vcs:
     prompt: "Project VCS"
     type: select
-    options: [git, svn]
-    default: svn
+    options:
+      - "git"
+      - "svn"
+    default: "svn"
 
   project_repo_url:
     prompt: "Project repo URL"
