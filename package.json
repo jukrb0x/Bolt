@@ -5,8 +5,24 @@
   "author": "Jabriel <jabrielah@outlook.com>",
   "license": "MIT",
   "type": "module",
-  "types": "bolt.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./plugins": {
+      "import": "./src/plugins/index.ts",
+      "types": "./src/plugins/index.ts"
+    },
+    "./core": {
+      "import": "./src/core/index.ts",
+      "types": "./src/core/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "files": [
+    "src",
     "bolt.d.ts"
   ],
   "scripts": {
