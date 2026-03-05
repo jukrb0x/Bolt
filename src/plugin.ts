@@ -1,4 +1,5 @@
 import type { BoltConfig } from "./config";
+import type { Runtime } from "./runtime/types";
 
 /** Subset of Logger exposed to plugin handlers. */
 export interface BoltLogger {
@@ -13,6 +14,7 @@ export interface BoltPluginContext {
   cfg: BoltConfig;
   dryRun: boolean;
   logger: BoltLogger;
+  runtime: Runtime;
 }
 
 export type BoltPluginHandler = (
