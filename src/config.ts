@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { YAML } from "bun";
 import { readFileSync } from "fs";
+import { createRuntime, type Runtime } from "./runtime";
 
 // ============================================================================
 // Schemas (single source of truth) + Derived Types
@@ -159,9 +159,10 @@ export interface BuildContext {
 // Runtime Functions
 // ============================================================================
 
-export async function loadConfig(filepath: string) {
+export async function loadConfig(filepath: string, runtime?: Runtime): Promise<BoltConfig> {
+  const rt = runtime ?? createRuntime();
   const raw = readFileSync(filepath, "utf8");
-  const parsed = YAML.parse(raw);
+  const parsed = rt.parseYaml(raw);
   return BoltConfigSchema.parse(parsed);
 }
 
@@ -170,7 +171,8 @@ export interface ConfigCheckResult {
   errors: Array<{ path: string; message: string }>;
 }
 
-export async function checkConfig(filepath: string): Promise<ConfigCheckResult> {
+export async function checkConfig(filepath: string, runtime?: Runtime): Promise<ConfigCheckResult> {
+  const rt = runtime ?? createRuntime();
   let raw: string;
   try {
     raw = readFileSync(filepath, "utf8");
@@ -179,7 +181,7 @@ export async function checkConfig(filepath: string): Promise<ConfigCheckResult> 
   }
   let parsed: unknown;
   try {
-    parsed = YAML.parse(raw);
+    parsed = rt.parseYaml(raw);
   } catch (e: any) {
     return { ok: false, errors: [{ path: "<yaml>", message: `YAML parse error: ${e.message}` }] };
   }
