@@ -1,5 +1,4 @@
 import type { BoltPlugin, BoltPluginContext } from "../plugin";
-import { $ } from "bun";
 import path from "path";
 import { run, execRaw as exec } from "./helpers";
 import gitPlugin from "./git";
@@ -156,7 +155,7 @@ const plugin: BoltPlugin = {
 
       ctx.logger.cmd(`start "" "${exePath}" "${projFile}"`);
       if (!ctx.dryRun) {
-        Bun.spawnSync(["cmd", "/c", "start", "", exePath, projFile], {
+        ctx.runtime.spawnSync(["cmd", "/c", "start", "", exePath, projFile], {
           stdout: "ignore",
           stderr: "ignore",
           stdin: "ignore",
@@ -175,7 +174,7 @@ const plugin: BoltPlugin = {
       ];
       for (const p of procs) {
         ctx.logger.cmd(`taskkill /f /im ${p}`);
-        if (!ctx.dryRun) await $`taskkill /f /im ${p}`.nothrow().quiet();
+        if (!ctx.dryRun) await ctx.runtime.shell(`taskkill /f /im ${p}`, { nothrow: true });
       }
     },
 
