@@ -164,7 +164,7 @@ console.log(pc.dim(`  Push the tag to trigger CI for the other platform binary.`
 // 11. Publish bolt-ue to npm
 step("Publishing bolt-ue to npm");
 const npmTag = PRE_RELEASE ? " --tag next" : "";
-run(`npm publish --access public${npmTag}`);
+run(`bun publish --access public${npmTag}`);
 
 // 12. Internal share (optional)
 const internalShare = process.env.BOLT_INTERNAL_SHARE;
