@@ -55,10 +55,14 @@ Define your project once:
 # bolt.yaml
 project:
   name: MyGame
-  ue_path: C:/UnrealEngine
-  project_path: C:/Projects/MyGame
-  project_name: MyGame
-  svn_root: C:/Projects/svn
+  engine_repo:
+    path: C:/UnrealEngine
+    vcs: git
+    branch: main
+  project_repo:
+    path: C:/Projects/MyGame
+    vcs: svn
+  uproject: C:/Projects/MyGame/MyGame.uproject
 ```
 
 Then run any combination of ops in one command:
@@ -93,11 +97,17 @@ Bolt runs them in the right order, stops on critical failures, and keeps going t
 ```yaml
 project:
   name: MyGame
-  ue_path: C:/UnrealEngine
-  project_path: C:/Projects/MyGame
-  project_name: MyGame
-  svn_root: C:/Projects/svn    # optional
-  git_branch: main             # optional
+  engine_repo:
+    path: C:/UnrealEngine
+    vcs: git                   # git | svn
+    url: ""                    # optional: remote URL
+    branch: main               # optional: for git repos
+  project_repo:
+    path: C:/Projects/MyGame
+    vcs: svn                   # git | svn
+    url: ""                    # optional: remote URL
+    branch: main               # optional: for git repos
+  uproject: C:/Projects/MyGame/MyGame.uproject
   use_tortoise: true           # optional: true | false | auto-detect
 ```
 
@@ -326,9 +336,9 @@ await go(["update", "build", "start"], {
 const ctx = createContext({
   project: {
     name: "MyGame",
-    engine_repo: { path: "/ue", vcs: "git" },
-    project_repo: { path: "/project", vcs: "svn" },
-    uproject: "/project/MyGame.uproject",
+    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
+    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
+    uproject: "C:/Projects/MyGame/MyGame.uproject",
   },
   dryRun: false,
 });
@@ -340,13 +350,20 @@ const ctx = createContext({
 import { git, fs, ue } from "bolt-ue/plugins";
 import { createContext } from "bolt-ue";
 
-const ctx = createContext({ project: {...} });
+const ctx = createContext({
+  project: {
+    name: "MyGame",
+    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
+    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
+    uproject: "C:/Projects/MyGame/MyGame.uproject",
+  },
+});
 
 // Call plugin handlers directly
-await git.handlers.pull({ path: "/repo" }, ctx);
+await git.handlers.pull({ path: "C:/UnrealEngine" }, ctx);
 await fs.handlers.copy({
-  from: "/src/file.txt",
-  to: "/dest/file.txt"
+  src: "C:/src/file.txt",
+  dst: "C:/dest/file.txt"
 }, ctx);
 ```
 
