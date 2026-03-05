@@ -1,45 +1,67 @@
 import { z } from "zod";
 import { YAML } from "bun";
 import { readFileSync } from "fs";
-import type { BoltConfig } from "./config-types";
 
+// ============================================================================
+// Schemas (single source of truth) + Derived Types
+// ============================================================================
+
+// --- Enums ---
+const TargetKindSchema = z.enum(["editor", "program", "game", "client", "server"]);
+const BuildConfigSchema = z.enum(["development", "debug", "shipping", "test"]);
+const VcsTypeSchema = z.enum(["git", "svn"]);
+
+export type TargetKind = z.infer<typeof TargetKindSchema>;
+export type BuildConfig = z.infer<typeof BuildConfigSchema>;
+export type VcsType = z.infer<typeof VcsTypeSchema>;
+
+// --- Core Schemas ---
 const StepSchema = z.object({
   uses: z.string().optional(),
   run: z.string().optional(),
   with: z.record(z.string()).optional(),
   "continue-on-error": z.boolean().optional(),
 });
+export type Step = z.infer<typeof StepSchema>;
 
 const OpVariantSchema = z.array(StepSchema);
+export type OpVariant = z.infer<typeof OpVariantSchema>;
+
 const OpSchema = z.record(z.string(), OpVariantSchema);
+export type OpsMap = Record<string, z.infer<typeof OpSchema>>;
 
 const GoPipelineSchema = z.object({
   order: z.array(z.string()).default([]),
   fail_stops: z.array(z.string()).default([]),
 });
+export type GoPipeline = z.infer<typeof GoPipelineSchema>;
 
 const PluginEntrySchema = z.object({
   namespace: z.string(),
   path: z.string(),
 });
+export type PluginEntry = z.infer<typeof PluginEntrySchema>;
 
 const ActionSchema = z.object({
   depends: z.array(z.string()).optional(),
   steps: z.array(StepSchema),
 });
+export type Action = z.infer<typeof ActionSchema>;
 
 const TargetSchema = z.object({
-  kind: z.enum(["editor", "program", "game", "client", "server"]),
+  kind: TargetKindSchema,
   name: z.string().optional(),
-  config: z.enum(["development", "debug", "shipping", "test"]).default("development"),
+  config: BuildConfigSchema.default("development"),
 });
+export type Target = z.infer<typeof TargetSchema>;
 
 const RepoConfigSchema = z.object({
   path: z.string(),
-  vcs: z.enum(["git", "svn"]).optional().default("git"),
+  vcs: VcsTypeSchema.optional().default("git"),
   url: z.string().optional(),
   branch: z.string().optional(),
 });
+export type RepoConfig = z.infer<typeof RepoConfigSchema>;
 
 const ProjectSchema = z
   .object({
@@ -64,6 +86,17 @@ const ProjectSchema = z
     };
   });
 
+// Manual type with index signature (Zod can't infer this from catchall+transform)
+export interface Project {
+  name: string;
+  engine_repo: RepoConfig;
+  project_repo: RepoConfig;
+  uproject: string;
+  use_tortoise?: boolean;
+  /** Any extra string fields defined in bolt.yaml are preserved and available as ${{ project.<key> }} in interpolation. */
+  [key: string]: string | boolean | undefined | RepoConfig;
+}
+
 const NotifyProviderSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("wecom"),
@@ -76,6 +109,7 @@ const NotifyProviderSchema = z.discriminatedUnion("type", [
     chat_id: z.string(),
   }),
 ]);
+export type NotifyProviderCfg = z.infer<typeof NotifyProviderSchema>;
 
 const NotificationsSchema = z.object({
   on_start: z.boolean().default(true),
@@ -84,6 +118,7 @@ const NotificationsSchema = z.object({
   on_complete: z.boolean().default(true),
   providers: z.array(NotifyProviderSchema).default([]),
 });
+export type NotificationsConfig = z.infer<typeof NotificationsSchema>;
 
 const BoltConfigSchema = z.object({
   project: ProjectSchema,
@@ -97,21 +132,32 @@ const BoltConfigSchema = z.object({
   notifications: NotificationsSchema.optional(),
 });
 
-export type {
-  BoltConfig,
-  Target,
-  TargetKind,
-  Step,
-  GoPipeline,
-  OpVariant,
-  OpsMap,
-  PluginEntry,
-  NotificationsConfig,
-  NotifyProviderCfg,
-  BuildContext,
-  RepoConfig,
-  VcsType,
-} from "./config-types";
+// Manual BoltConfig to use Project interface with index signature
+export interface BoltConfig {
+  project: Project;
+  vars: Record<string, string>;
+  targets: Record<string, Target>;
+  actions: Record<string, Action>;
+  ops: OpsMap;
+  "go-pipeline": GoPipeline;
+  plugins: PluginEntry[];
+  timeout_hours?: number;
+  notifications?: NotificationsConfig;
+}
+
+// Runtime-only type (not from Zod validation)
+export interface BuildContext {
+  buildId: string; // e.g. "20260303_142035"
+  projectName: string; // from cfg.project.name
+  mode: "go" | "run"; // bolt go (pipeline) vs bolt run (action)
+  gitBranch?: string; // auto-detected, omitted if not a git repo
+  logPath?: string; // optional, passed in from runner opts
+  startTime: number; // Date.now()
+}
+
+// ============================================================================
+// Runtime Functions
+// ============================================================================
 
 export async function loadConfig(filepath: string) {
   const raw = readFileSync(filepath, "utf8");
