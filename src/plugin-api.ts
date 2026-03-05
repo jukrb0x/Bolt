@@ -1,9 +1,23 @@
+// src/plugin-api.ts
 /**
- * Public API types for Bolt plugins.
- * These are minimal, Zod-free types for plugin developers.
+ * Public API types for Bolt plugins and library users.
  */
 
-/** Repository configuration */
+// Runtime types
+export interface SpawnResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface Runtime {
+  spawn(cmd: string[], opts?: { cwd?: string }): Promise<SpawnResult>;
+  spawnSync(cmd: string[]): SpawnResult;
+  shell(command: string, opts?: { cwd?: string }): Promise<SpawnResult>;
+  parseYaml(text: string): unknown;
+}
+
+// Config types
 export interface RepoConfig {
   path: string;
   vcs: "git" | "svn";
@@ -11,24 +25,21 @@ export interface RepoConfig {
   branch?: string;
 }
 
-/** Project configuration accessible to plugins via ctx.cfg.project */
 export interface Project {
   name: string;
   engine_repo: RepoConfig;
   project_repo: RepoConfig;
   uproject: string;
   use_tortoise?: boolean;
-  /** Extra fields defined in bolt.yaml are accessible as ctx.cfg.project[key] */
   [key: string]: string | boolean | undefined | RepoConfig;
 }
 
-/** Minimal config exposed to plugin handlers */
 export interface BoltPluginConfig {
   project: Project;
   vars: Record<string, string>;
 }
 
-/** Logger interface for plugin handlers */
+// Logger
 export interface BoltLogger {
   info(msg: string): void;
   warn(msg: string): void;
@@ -37,21 +48,29 @@ export interface BoltLogger {
   cmd(msg: string): void;
 }
 
-/** Context passed to plugin handlers */
+// Plugin context
 export interface BoltPluginContext {
   cfg: BoltPluginConfig;
   dryRun: boolean;
   logger: BoltLogger;
+  runtime: Runtime;
 }
 
-/** Handler function signature */
+// Plugin types
 export type BoltPluginHandler = (
   params: Record<string, string>,
   ctx: BoltPluginContext,
 ) => Promise<void>;
 
-/** Plugin definition */
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
+}
+
+// High-level API types
+export interface RunOptions {
+  config?: BoltPluginConfig;
+  configPath?: string;
+  cwd?: string;
+  dryRun?: boolean;
 }
