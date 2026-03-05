@@ -4,6 +4,7 @@ import { interpolate } from "./interpolate";
 import { sortByPipeline, type ResolvedOp } from "./go";
 import { buildRegistry, type PluginRegistry } from "./plugin-registry";
 import type { BoltPluginContext } from "./plugin";
+import { createRuntime, type Runtime } from "./runtime";
 import uePlugin from "./plugins/ue";
 import fsPlugin from "./plugins/fs";
 import jsonPlugin from "./plugins/json";
@@ -18,15 +19,19 @@ interface RunnerOptions {
   logger?: Logger;
   configDir?: string;
   notifier?: Notifier;
+  runtime?: Runtime;
 }
 
 export class Runner {
   private registry?: PluginRegistry;
+  private runtime: Runtime;
 
   constructor(
     private cfg: BoltConfig,
     private opts: RunnerOptions = {},
-  ) {}
+  ) {
+    this.runtime = opts.runtime ?? createRuntime();
+  }
 
   private async ensureRegistry(): Promise<PluginRegistry> {
     if (this.registry) return this.registry;
@@ -76,8 +81,8 @@ export class Runner {
 
       let gitBranch: string | undefined;
       try {
-        const proc = Bun.spawnSync(["git", "branch", "--show-current"], { stdout: "pipe", stderr: "pipe" });
-        if (proc.exitCode === 0) gitBranch = proc.stdout.toString().trim() || undefined;
+        const proc = this.runtime.spawnSync(["git", "branch", "--show-current"]);
+        if (proc.exitCode === 0) gitBranch = proc.stdout.trim() || undefined;
       } catch { /* not a git repo */ }
 
       ctx = { buildId, projectName: this.cfg.project.name, mode: "run" as const, gitBranch, startTime };
@@ -132,8 +137,8 @@ export class Runner {
 
     let gitBranch: string | undefined;
     try {
-      const proc = Bun.spawnSync(["git", "branch", "--show-current"], { stdout: "pipe", stderr: "pipe" });
-      if (proc.exitCode === 0) gitBranch = proc.stdout.toString().trim() || undefined;
+      const proc = this.runtime.spawnSync(["git", "branch", "--show-current"]);
+      if (proc.exitCode === 0) gitBranch = proc.stdout.trim() || undefined;
     } catch { /* not a git repo or git not available */ }
 
     const ctx: import("./notify").BuildContext = {
@@ -204,9 +209,10 @@ export class Runner {
   }
 
   private async shell(cmd: string, continueOnError = false): Promise<void> {
-    const proc = Bun.spawn(["cmd", "/c", cmd], { stdout: "inherit", stderr: "inherit" });
-    const code = await proc.exited;
-    if (code !== 0 && !continueOnError) throw new Error(`Command failed (exit ${code}): ${cmd}`);
+    const result = await this.runtime.shell(cmd);
+    if (result.exitCode !== 0 && !continueOnError) {
+      throw new Error(`Command failed (exit ${result.exitCode}): ${cmd}`);
+    }
   }
 
   private async dispatch(
@@ -267,6 +273,7 @@ export class Runner {
       cfg: this.cfg,
       dryRun: this.opts.dryRun ?? false,
       logger: this.opts.logger ?? new Logger(),
+      runtime: this.runtime,
     };
     await handler(mergedParams, pluginCtx);
   }
@@ -284,9 +291,10 @@ export class Runner {
     for (const runner of ["run.ts", "run.js", "run.py", "run.sh", "run.bat"]) {
       const runFile = pathMod.join(actionDir, runner);
       if (!fs.existsSync(runFile)) continue;
-      const proc = Bun.spawn([runFile], { env, stdout: "inherit", stderr: "inherit" });
-      const code = await proc.exited;
-      if (code !== 0) throw new Error(`Local action failed (exit ${code}): ${actionPath}`);
+      const result = await this.runtime.spawn([runFile], { env });
+      if (result.exitCode !== 0) {
+        throw new Error(`Local action failed (exit ${result.exitCode}): ${actionPath}`);
+      }
       return;
     }
     throw new Error(`No run script found in ${actionDir}`);
