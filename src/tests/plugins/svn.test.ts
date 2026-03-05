@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 import svnPlugin from "../../plugins/svn";
-import { testCfg } from "../env";
+import { testCfg, mockRuntime, PROJECT_ROOT } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
 
 function makeCtx(dryRun = true, overrides: Partial<typeof testCfg.project> = {}): BoltPluginContext & { logged: string[] } {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
-  const cfg = { ...testCfg, project: { ...testCfg.project, ...overrides } };
-  return { cfg, dryRun, logger, logged };
+  const cfg = { ...testCfg, project: { ...testCfg.project, project_root: PROJECT_ROOT, ...overrides } };
+  return { cfg, dryRun, logger, logged, runtime: mockRuntime };
 }
 
 test("update produces svn update command", async () => {
