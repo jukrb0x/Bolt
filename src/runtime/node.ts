@@ -1,18 +1,9 @@
 // src/runtime/node.ts
 import type { Runtime, SpawnResult, SpawnOptions } from "./types";
 import { spawn as nodeSpawn, spawnSync as nodeSpawnSync } from "child_process";
+import * as yaml from "yaml";
 
 export function createNodeRuntime(): Runtime {
-  // Lazy load yaml to avoid bundling issues
-  let yamlParser: { parse: (text: string) => unknown } | null = null;
-
-  function getYamlParser() {
-    if (!yamlParser) {
-      yamlParser = require("yaml");
-    }
-    return yamlParser;
-  }
-
   return {
     async spawn(cmd: string[], opts?: SpawnOptions): Promise<SpawnResult> {
       return new Promise((resolve) => {
@@ -81,7 +72,7 @@ export function createNodeRuntime(): Runtime {
     },
 
     parseYaml(text: string): unknown {
-      return getYamlParser().parse(text);
+      return yaml.parse(text);
     },
   };
 }
