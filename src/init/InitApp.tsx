@@ -61,9 +61,15 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
   };
 
   // Determine which questions to show based on conditions
+  // Also filter out questions that are already answered (e.g., bolt_project_name from location prompt)
   const visibleQuestionKeys = useMemo(() => {
     const allKeys = getOrderedQuestions(initSection);
-    return allKeys.filter((key) => filterByCondition(key, initSection, answers));
+    return allKeys.filter((key) => {
+      // Skip if already answered
+      if (key in answers) return false;
+      // Check condition
+      return filterByCondition(key, initSection, answers);
+    });
   }, [initSection, answers]);
 
   const currentKey = visibleQuestionKeys[step];
@@ -137,6 +143,7 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
       case "text":
         return (
           <Input
+            key={key}
             label={prompt}
             placeholder={typeof defaultValue === "string" ? defaultValue : undefined}
             defaultValue={typeof defaultValue === "string" ? defaultValue : undefined}
@@ -147,6 +154,7 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
       case "confirm":
         return (
           <Confirm
+            key={key}
             label={prompt}
             defaultValue={typeof defaultValue === "boolean" ? defaultValue : false}
             onSubmit={(value) => handleAnswer(key, value, prompt)}
@@ -156,6 +164,7 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
       case "select":
         return (
           <Select
+            key={key}
             label={prompt}
             options={q.options || []}
             multi={Array.isArray(defaultValue)}
