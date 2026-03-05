@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "bun run src/main.ts",
     "test": "bun test --env-file .env.local",
-    "build:types": "bunx tsc --project tsconfig.types.json && bun run scripts/gen-types.ts",
+    "build:types": "bunx dts-bundle-generator --no-banner --project tsconfig.json -o bolt.d.ts src/plugin-api.ts && bun run scripts/wrap-dts.ts bolt.d.ts",
     "build:win": "bun run build:types && bun run scripts/build-binary.ts bun-windows-x64 build/bolt-win-x64.exe && cp bolt.d.ts build/bolt.d.ts",
     "build:mac": "bun run build:types && bun run scripts/build-binary.ts bun-darwin-arm64 build/bolt-mac-arm64 && cp bolt.d.ts build/bolt.d.ts",
     "build:all": "bun run build:win && bun run build:mac",
@@ -36,6 +36,7 @@
     "@types/bun": "latest",
     "@types/react": "^19.0.0",
     "bun-types": "^1.3.10",
+    "dts-bundle-generator": "^9.5.1",
     "oxfmt": "^0.35.0",
     "oxlint": "^1.50.0"
   },
