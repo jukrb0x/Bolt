@@ -1,4 +1,4 @@
-import type { BoltConfig } from "./config-types";
+import type { BoltConfig } from "./config";
 
 /** Subset of Logger exposed to plugin handlers. */
 export interface BoltLogger {
@@ -6,6 +6,7 @@ export interface BoltLogger {
   warn(msg: string): void;
   error(msg: string): void;
   debug(msg: string): void;
+  cmd(msg: string): void;
 }
 
 export interface BoltPluginContext {

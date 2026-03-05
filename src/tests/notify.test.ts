@@ -5,6 +5,7 @@ import type { BuildContext } from "../notify";
 const ctx: BuildContext = {
   buildId: "20260303_142035",
   projectName: "MyGame",
+  mode: "go",
   gitBranch: "main",
   startTime: new Date("2026-03-03T14:20:35").getTime(),
 };

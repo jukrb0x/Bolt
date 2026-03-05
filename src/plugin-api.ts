@@ -1,22 +1,57 @@
 /**
- * Public API surface for Bolt plugins.
- * This file is the entry point for `tsconfig.types.json` — tsc emits bolt.d.ts from here.
- * Keep this file free of any runtime imports (bun, zod, fs, etc.).
+ * Public API types for Bolt plugins.
+ * These are minimal, Zod-free types for plugin developers.
  */
 
-// Plugin interfaces
-export type { BoltPlugin, BoltPluginHandler, BoltPluginContext, BoltLogger } from "./plugin";
+/** Repository configuration */
+export interface RepoConfig {
+  path: string;
+  vcs: "git" | "svn";
+  url?: string;
+  branch?: string;
+}
 
-// Config types available on ctx.cfg
-export type {
-  BoltConfig,
-  Target,
-  TargetKind,
-  Step,
-  GoPipeline,
-  OpVariant,
-  OpsMap,
-  PluginEntry,
-  NotificationsConfig,
-  NotifyProviderCfg,
-} from "./config-types";
+/** Project configuration accessible to plugins via ctx.cfg.project */
+export interface Project {
+  name: string;
+  engine_repo: RepoConfig;
+  project_repo: RepoConfig;
+  uproject: string;
+  use_tortoise?: boolean;
+  /** Extra fields defined in bolt.yaml are accessible as ctx.cfg.project[key] */
+  [key: string]: string | boolean | undefined | RepoConfig;
+}
+
+/** Minimal config exposed to plugin handlers */
+export interface BoltPluginConfig {
+  project: Project;
+  vars: Record<string, string>;
+}
+
+/** Logger interface for plugin handlers */
+export interface BoltLogger {
+  info(msg: string): void;
+  warn(msg: string): void;
+  error(msg: string): void;
+  debug(msg: string): void;
+  cmd(msg: string): void;
+}
+
+/** Context passed to plugin handlers */
+export interface BoltPluginContext {
+  cfg: BoltPluginConfig;
+  dryRun: boolean;
+  logger: BoltLogger;
+}
+
+/** Handler function signature */
+export type BoltPluginHandler = (
+  params: Record<string, string>,
+  ctx: BoltPluginContext,
+) => Promise<void>;
+
+/** Plugin definition */
+export interface BoltPlugin {
+  namespace: string;
+  handlers: Record<string, BoltPluginHandler>;
+}

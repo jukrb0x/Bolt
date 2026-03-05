@@ -6,8 +6,7 @@
 src/
 ├── main.ts               # CLI entry point, command registration
 ├── version.ts            # VERSION constant (stamped at release time)
-├── config.ts             # Zod schema, loadConfig, checkConfig
-├── config-types.ts       # Pure TS types (no runtime imports — used for bolt.d.ts)
+├── config.ts             # Zod schema, types, loadConfig, checkConfig
 ├── discover.ts           # Upward bolt.yaml search
 ├── runner.ts             # Core execution engine
 ├── go.ts                 # parseGoArgs, resolveOps, sortByPipeline
@@ -78,6 +77,6 @@ CLI args
 
 **Registry is per-Runner:** Each `Runner` lazily initializes its own registry on first `uses:` dispatch. Commands that only need it for display (e.g. `plugin list`) call `buildRegistry()` directly.
 
-**`bolt.d.ts` generation:** `tsc --project tsconfig.types.json` compiles `plugin-api.ts` (which re-exports from `plugin.ts` and `config-types.ts`) into `dist-types/`, then `scripts/gen-types.ts` concatenates the output into a single `declare module "bolt" { ... }` block. `config-types.ts` is intentionally kept free of all runtime imports so `tsc` can emit clean declarations.
+**`bolt.d.ts` generation:** `dts-bundle-generator` compiles `plugin-api.ts` into a clean, self-contained `bolt.d.ts`. The public API is minimal (BoltPlugin, BoltPluginContext, BoltLogger, Project, RepoConfig) — internal plugins use full types from `plugin.ts`.
 
 **Notification flags `on_start`/`on_complete`/`on_failure`** are parsed by the schema but currently unused — all events fire unconditionally. Reserved for future filtering.
