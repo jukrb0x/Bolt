@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface SelectProps {
   label: string;
@@ -18,8 +18,17 @@ export function Select({
 }: SelectProps) {
   const [cursor, setCursor] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set(defaultValue));
+  const [ready, setReady] = useState(false);
+
+  // Delay input handling to avoid processing buffered Enter key
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   useInput((input, key) => {
+    if (!ready) return;
+
     if (key.return) {
       const result = multi ? Array.from(selected) : options[cursor];
       onSubmit(result);

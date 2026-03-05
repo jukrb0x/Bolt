@@ -1,49 +1,24 @@
 # bolt.yaml — project automation config
 
-# _init section for interactive template questions (used by bolt init)
+# Optional: _init section for interactive template questions
+# _init:
+#   project_name:
+#     prompt: "Project name"
+#     default: "my-project"
+#
+#   engine_vcs:
+#     prompt: "Engine VCS"
+#     type: select
+#     options: [git, svn]
+#     default: git
+#
+#   engine_branch:
+#     prompt: "Engine branch"
+#     default: main
+#     condition: "engine_vcs == 'git'"
+#
 # Use ${{ _init.var_name }} to reference answers in template.
 # After Q&A, the _init section is removed from output.
-_init:
-  bolt_project_name:
-    prompt: "Bolt project name"
-    default: "my-project"
-
-  engine_repo_path:
-    prompt: "Engine root path"
-    default: "./engine"
-
-  engine_repo_vcs:
-    prompt: "Engine VCS"
-    type: select
-    options: [git, svn]
-    default: git
-
-  engine_repo_url:
-    prompt: "Engine repo URL"
-    required: false
-
-  engine_repo_branch:
-    prompt: "Engine branch"
-    default: main
-    condition: "engine_repo_vcs == 'git'"
-
-  project_repo_path:
-    prompt: "Project root path"
-    default: "./project"
-
-  project_repo_vcs:
-    prompt: "Project VCS"
-    type: select
-    options: [git, svn]
-    default: svn
-
-  project_repo_url:
-    prompt: "Project repo URL"
-    required: false
-
-  uproject:
-    prompt: ".uproject file path"
-    required: true
 
 # Optional: stop the entire run if it exceeds this duration
 # timeout_hours: 6
@@ -69,17 +44,17 @@ _init:
 # Project-scope plugins are also auto-discovered from .bolt/plugins/<namespace>/index.ts
 
 project:
-  name: ${{ _init.bolt_project_name }}
+  name: MyProject
   engine_repo:
-    path: ${{ _init.engine_repo_path }}
-    vcs: ${{ _init.engine_repo_vcs }}
-    url: ${{ _init.engine_repo_url }}
-    branch: ${{ _init.engine_repo_branch }}
+    path: ./engine
+    vcs: git
+    # url: https://github.com/EpicGames/UnrealEngine.git
+    branch: main
   project_repo:
-    path: ${{ _init.project_repo_path }}
-    vcs: ${{ _init.project_repo_vcs }}
-    url: ${{ _init.project_repo_url }}
-  uproject: ${{ _init.uproject }}
+    path: ./project
+    vcs: svn
+    # url: svn://svn.example.com/project/trunk
+  uproject: ./project/MyProject.uproject
 
 targets:
   editor:
