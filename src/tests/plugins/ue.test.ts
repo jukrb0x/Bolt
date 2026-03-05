@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import uePlugin from "../../plugins/ue";
-import { testCfg, PROJECT_NAME } from "../env";
+import { testCfg, PROJECT_NAME, mockRuntime } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
 import { mkdirSync, writeFileSync, existsSync, rmSync } from "fs";
@@ -9,7 +9,7 @@ import os from "os";
 function makeCtx(dryRun = true): BoltPluginContext & { logged: string[] } {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
-  return { cfg: testCfg, dryRun, logger, logged };
+  return { cfg: testCfg, dryRun, logger, logged, runtime: mockRuntime };
 }
 
 test("build editor target produces correct command", async () => {
@@ -144,6 +144,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
     cfg: fakeCfg,
     dryRun: false,
     logger: new Logger({ sink: () => {} }),
+    runtime: mockRuntime,
   };
   await uePlugin.handlers["fix-dll"]({}, ctx2);
   expect(existsSync(`${binariesDir}/zero.dll`)).toBe(false);
@@ -159,6 +160,7 @@ test("fix-dll does not fail when no DLLs found", async () => {
     cfg: fakeCfg,
     dryRun: false,
     logger: new Logger({ sink: () => {} }),
+    runtime: mockRuntime,
   };
   await uePlugin.handlers["fix-dll"]({}, ctx2);
   rmSync(fakeProject, { recursive: true, force: true });
@@ -172,6 +174,7 @@ test("svn-cleanup with use_tortoise=false uses plain svn", async () => {
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
+    runtime: mockRuntime,
   };
   await uePlugin.handlers["svn-cleanup"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
@@ -186,6 +189,7 @@ test("svn-revert with use_tortoise=false uses plain svn", async () => {
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
+    runtime: mockRuntime,
   };
   await uePlugin.handlers["svn-revert"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn revert"))).toBe(true);
@@ -201,6 +205,7 @@ test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async
     dryRun: true,
     logger: new Logger({ sink: () => {} }),
     logged: [] as string[],
+    runtime: mockRuntime,
   };
   await expect(uePlugin.handlers["svn-cleanup"]({}, ctx2)).rejects.toThrow(
     "TortoiseProc.exe not found",
@@ -216,6 +221,7 @@ test("svn-cleanup without use_tortoise uses svn when TortoiseProc absent", async
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
+    runtime: mockRuntime,
   };
   await uePlugin.handlers["svn-cleanup"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);

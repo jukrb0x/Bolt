@@ -1,4 +1,16 @@
 import type { BoltConfig } from "../config";
+import type { Runtime } from "../runtime/types";
+
+/** Mock runtime for tests - returns success with empty output by default */
+export const mockRuntime: Runtime = {
+  spawn: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+  spawnSync: () => ({ exitCode: 0, stdout: "", stderr: "" }),
+  shell: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+  parseYaml: (text: string) => {
+    const yaml = require("yaml");
+    return yaml.parse(text);
+  },
+};
 
 const required = (key: string): string => {
   const val = Bun.env[key];
