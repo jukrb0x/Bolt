@@ -1,5 +1,7 @@
 # Bolt
 
+English | [简体中文](README_zh.md)
+
 Your daily Unreal Engine workflow, automated.
 
 Bolt is a CLI tool that turns repetitive UE tasks — updating source control, rebuilding the editor, launching the game, filling DDC — into single commands you can chain, script, and share with your team.
