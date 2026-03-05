@@ -75,30 +75,15 @@ if (!DRY_RUN) {
   console.log(`  [dry-run] would write: export const VERSION = "${VERSION}";`);
 }
 
-// 5. Generate bolt.d.ts
-step("Generating bolt.d.ts");
-run("bun run build:types");
-
-// 6. Build native binary only (bun cannot cross-compile)
-mkdirSync(BUILD_DIR, { recursive: true });
-
+// 5. Build native binary (includes types + binary + bolt.d.ts copy)
 const isWindows = process.platform === "win32";
 const nativeBinary = isWindows ? "bolt-win-x64.exe" : "bolt-mac-arm64";
-const nativeTarget = isWindows ? "bun-windows-x64" : "bun-darwin-arm64";
-const nativeOutfile = `build/${nativeBinary}`;
+const buildScript = isWindows ? "build:win" : "build:mac";
 
 step(`Building ${nativeBinary}`);
-run(`bun run scripts/build-binary.ts ${nativeTarget} ${nativeOutfile}`);
+run(`bun run ${buildScript}`);
 
-// 7. Copy bolt.d.ts to build/
-step("Copying bolt.d.ts to build/");
-if (!DRY_RUN) {
-  copyFileSync(path.join(ROOT, "bolt.d.ts"), path.join(BUILD_DIR, "bolt.d.ts"));
-} else {
-  console.log("  [dry-run] cp bolt.d.ts build/bolt.d.ts");
-}
-
-// 8. Generate release notes from git log since last tag
+// 6. Generate release notes from git log since last tag
 step("Generating release notes");
 let prevTag = "";
 try {
@@ -143,12 +128,12 @@ if (!DRY_RUN) {
 }
 console.log(releaseNotes);
 
-// 9. Git tag and push
+// 7. Git tag and push
 step(`Tagging ${TAG}`);
 run(`git tag ${TAG}`);
 run(`git push origin ${TAG}`);
 
-// 10. Create GitHub release with native binary + bolt.d.ts
+// 8. Create GitHub release with native binary + bolt.d.ts
 // The CI workflow (release.yml) will upload the other platform's binary
 // to this same release via `gh release upload` when the tag is pushed.
 step("Creating GitHub release");
@@ -160,12 +145,12 @@ run(
 console.log(`  Released ${TAG} (${nativeBinary} + bolt.d.ts)${PRE_RELEASE ? pc.yellow(" [pre-release]") : ""}`);
 console.log(pc.dim(`  Push the tag to trigger CI for the other platform binary.`));
 
-// 11. Publish bolt-ue to npm
+// 9. Publish bolt-ue to npm
 step("Publishing bolt-ue to npm");
 const npmTag = PRE_RELEASE ? " --tag next" : "";
 run(`bun publish --access public${npmTag}`);
 
-// 12. Internal share (optional)
+// 10. Internal share (optional)
 const internalShare = process.env.BOLT_INTERNAL_SHARE;
 if (internalShare) {
   step(`Copying to internal share: ${internalShare}`);
@@ -183,7 +168,7 @@ if (internalShare) {
   console.log("  Done");
 }
 
-// 13. Restore src/version.ts to dev marker
+// 11. Restore src/version.ts to dev marker
 step("Restoring src/version.ts to dev marker");
 const devVersionTs = `// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "${VERSION}-dev";\n`;
 if (!DRY_RUN) {
