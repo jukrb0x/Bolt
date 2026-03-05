@@ -85,6 +85,23 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
     []
   );
 
+  // Compute dynamic defaults based on previous answers
+  const getComputedDefault = useCallback(
+    (key: string, q: InitQuestion): string | boolean | string[] | undefined => {
+      // For uproject, compute from project_repo_path and bolt_project_name
+      if (key === "uproject") {
+        const projectPath = answers.project_repo_path as string | undefined;
+        const projectName = answers.bolt_project_name as string | undefined;
+        if (projectPath && projectName) {
+          return `${projectPath}/${projectName}.uproject`;
+        }
+      }
+      // Fall back to template default
+      return q.default;
+    },
+    [answers]
+  );
+
   // Handle location question first if not provided
   if (resolvedLocation === null) {
     // Show error if exists
@@ -136,7 +153,7 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
 
   const renderQuestion = (key: string, q: InitQuestion) => {
     const prompt = q.prompt;
-    const defaultValue = q.default;
+    const defaultValue = getComputedDefault(key, q);
     const type = q.type || "text";
 
     switch (type) {
