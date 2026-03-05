@@ -57,10 +57,14 @@ bolt init
 # bolt.yaml
 project:
   name: MyGame
-  ue_path: C:/UnrealEngine
-  project_path: C:/Projects/MyGame
-  project_name: MyGame
-  svn_root: C:/Projects/svn
+  engine_repo:
+    path: C:/UnrealEngine
+    vcs: git
+    branch: main
+  project_repo:
+    path: C:/Projects/MyGame
+    vcs: svn
+  uproject: C:/Projects/MyGame/MyGame.uproject
 ```
 
 然后在一条命令中运行任意操作组合：
@@ -95,12 +99,18 @@ Bolt 会正确按顺序执行它们，在关键失败时停止，在非关键失
 ```yaml
 project:
   name: MyGame
-  ue_path: C:/UnrealEngine
-  project_path: C:/Projects/MyGame
-  project_name: MyGame
-  svn_root: C:/Projects/svn    # 可选
-  git_branch: main             # 可选
-  use_tortoise: true           # 可选: true | false | auto-detect
+  engine_repo:
+    path: C:/UnrealEngine
+    vcs: git                   # git | svn
+    url: ""                    # 可选：远程 URL
+    branch: main               # 可选：用于 git 仓库
+  project_repo:
+    path: C:/Projects/MyGame
+    vcs: svn                   # git | svn
+    url: ""                    # 可选：远程 URL
+    branch: main               # 可选：用于 git 仓库
+  uproject: C:/Projects/MyGame/MyGame.uproject
+  use_tortoise: true           # 可选：true | false | auto-detect
 ```
 
 ### 目标
@@ -328,9 +338,9 @@ await go(["update", "build", "start"], {
 const ctx = createContext({
   project: {
     name: "MyGame",
-    engine_repo: { path: "/ue", vcs: "git" },
-    project_repo: { path: "/project", vcs: "svn" },
-    uproject: "/project/MyGame.uproject",
+    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
+    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
+    uproject: "C:/Projects/MyGame/MyGame.uproject",
   },
   dryRun: false,
 });
@@ -342,13 +352,20 @@ const ctx = createContext({
 import { git, fs, ue } from "bolt-ue/plugins";
 import { createContext } from "bolt-ue";
 
-const ctx = createContext({ project: {...} });
+const ctx = createContext({
+  project: {
+    name: "MyGame",
+    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
+    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
+    uproject: "C:/Projects/MyGame/MyGame.uproject",
+  },
+});
 
 // 直接调用插件处理器
-await git.handlers.pull({ path: "/repo" }, ctx);
+await git.handlers.pull({ path: "C:/UnrealEngine" }, ctx);
 await fs.handlers.copy({
-  from: "/src/file.txt",
-  to: "/dest/file.txt"
+  src: "C:/src/file.txt",
+  dst: "C:/dest/file.txt"
 }, ctx);
 ```
 
