@@ -12,12 +12,12 @@ project:
   engine_repo:
     path: \${{ _init.engine_repo_path }}
     vcs: \${{ _init.engine_repo_vcs }}
-    # url: \${{ _init.engine_repo_url }}
+    url: \${{ _init.engine_repo_url }}
     branch: \${{ _init.engine_repo_branch }}
   project_repo:
     path: \${{ _init.project_repo_path }}
     vcs: \${{ _init.project_repo_vcs }}
-    # url: \${{ _init.project_repo_url }}
+    url: \${{ _init.project_repo_url }}
     branch: \${{ _init.project_repo_branch }}
   uproject: \${{ _init.uproject }}
 
