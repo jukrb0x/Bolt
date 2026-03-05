@@ -32,7 +32,6 @@ interface InitAppProps {
 }
 
 export function InitApp({ options, templateContent, onComplete }: InitAppProps) {
-  const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<InitAnswers>({});
   const [history, setHistory] = useState<AnsweredQuestion[]>([]);
   const [resolvedLocation, setResolvedLocation] = useState<string | null>(
@@ -62,6 +61,8 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
 
   // Determine which questions to show based on conditions
   // Also filter out questions that are already answered (e.g., bolt_project_name from location prompt)
+  // Always use index 0 as current question - when answer is added, question is filtered out
+  // and next question naturally becomes index 0
   const visibleQuestionKeys = useMemo(() => {
     const allKeys = getOrderedQuestions(initSection);
     return allKeys.filter((key) => {
@@ -72,15 +73,15 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
     });
   }, [initSection, answers]);
 
-  const currentKey = visibleQuestionKeys[step];
+  // Always use first unanswered question (index 0)
+  const currentKey = visibleQuestionKeys[0];
   const currentQuestion = currentKey ? initSection[currentKey] : undefined;
-  const isComplete = step >= visibleQuestionKeys.length && resolvedLocation !== null;
+  const isComplete = visibleQuestionKeys.length === 0 && resolvedLocation !== null;
 
   const handleAnswer = useCallback(
     (key: string, value: string | boolean | string[], prompt: string) => {
       setAnswers((prev) => ({ ...prev, [key]: value }));
       setHistory((prev) => [...prev, { prompt, answer: value }]);
-      setStep((s) => s + 1);
     },
     []
   );
@@ -118,6 +119,7 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
         <Input
           label="Project name"
           placeholder="my-project"
+          defaultValue="my-project"
           onSubmit={(value) => {
             const targetPath = path.isAbsolute(value) ? value : path.join(process.cwd(), value);
             const configPath = path.join(targetPath, "bolt.yaml");

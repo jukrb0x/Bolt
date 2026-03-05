@@ -131,7 +131,8 @@ export default defineCommand({
           console.log(pc.green(`✓ Created bolt.yaml at ${result.path}`));
           process.exit(0);
         },
-      })
+      }),
+      { exitOnCtrlC: false }
     );
 
     await waitUntilExit();

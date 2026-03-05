@@ -13,44 +13,47 @@ export function Confirm({ label, defaultValue = false, onSubmit }: ConfirmProps)
 
   // Delay input handling to avoid processing buffered keys from previous component
   useEffect(() => {
-    const timer = setTimeout(() => setReady(true), 50);
+    const timer = setTimeout(() => setReady(true), 100);
     return () => clearTimeout(timer);
   }, []);
 
-  useInput((input, key) => {
-    if (!ready) return;
+  useInput(
+    (input, key) => {
+      if (!ready) return;
 
-    if (key.return) {
-      onSubmit(selected);
-      return;
-    }
+      if (key.return) {
+        onSubmit(selected);
+        return;
+      }
 
-    // Navigate/select Yes: left arrow, up arrow, h, or y
-    if (key.leftArrow || key.upArrow || input === "h") {
-      setSelected(true);
-      return;
-    }
+      // Navigate/select Yes: left arrow, up arrow, h
+      if (key.leftArrow || key.upArrow || input === "h") {
+        setSelected(true);
+        return;
+      }
 
-    // Navigate/select No: right arrow, down arrow, l, or n
-    if (key.rightArrow || key.downArrow || input === "l") {
-      setSelected(false);
-      return;
-    }
+      // Navigate/select No: right arrow, down arrow, l
+      if (key.rightArrow || key.downArrow || input === "l") {
+        setSelected(false);
+        return;
+      }
 
-    // Quick confirm with 'y'
-    if (input.toLowerCase() === "y") {
-      setSelected(true);
-      onSubmit(true);
-      return;
-    }
+      // Quick confirm with 'y'
+      if (input.toLowerCase() === "y") {
+        setSelected(true);
+        onSubmit(true);
+        return;
+      }
 
-    // Quick reject with 'n'
-    if (input.toLowerCase() === "n") {
-      setSelected(false);
-      onSubmit(false);
-      return;
-    }
-  });
+      // Quick reject with 'n'
+      if (input.toLowerCase() === "n") {
+        setSelected(false);
+        onSubmit(false);
+        return;
+      }
+    },
+    { isActive: ready }
+  );
 
   return (
     <Box flexDirection="column">
