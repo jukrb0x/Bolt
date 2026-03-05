@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Unreal Engine workflow automation - CLI tool and library for Node.js and Bun",
   "author": "Jabriel <jabrielah@outlook.com>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "unreal-engine",
     "ue5",
