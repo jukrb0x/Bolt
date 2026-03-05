@@ -27,7 +27,7 @@ jobs:
           VERSION="${TAG#v}"
           printf '// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "%s";\n' "$VERSION" > src/version.ts
       - name: Build Windows binary
-        run: bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe
+        run: bun run build:win
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,7 +51,7 @@ jobs:
           VERSION="${TAG#v}"
           printf '// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "%s";\n' "$VERSION" > src/version.ts
       - name: Build macOS binary
-        run: bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64
+        run: bun run build:mac
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
