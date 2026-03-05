@@ -20,7 +20,7 @@ export function Select({
   const [selected, setSelected] = useState<Set<string>>(new Set(defaultValue));
   const [ready, setReady] = useState(false);
 
-  // Delay input handling to avoid processing buffered Enter key
+  // Delay input handling to avoid processing buffered keys from previous component
   useEffect(() => {
     const timer = setTimeout(() => setReady(true), 50);
     return () => clearTimeout(timer);
@@ -29,23 +29,19 @@ export function Select({
   useInput((input, key) => {
     if (!ready) return;
 
-    if (key.return) {
-      const result = multi ? Array.from(selected) : options[cursor];
-      onSubmit(result);
-      return;
-    }
-
-    if (key.upArrow) {
+    // Navigate up: up arrow or 'k'
+    if (key.upArrow || input === "k") {
       setCursor((c) => (c - 1 + options.length) % options.length);
       return;
     }
 
-    if (key.downArrow) {
+    // Navigate down: down arrow or 'j'
+    if (key.downArrow || input === "j") {
       setCursor((c) => (c + 1) % options.length);
       return;
     }
 
-    // Toggle with space (key.space or literal space input)
+    // Toggle selection with space (multi-select only)
     if (multi && (key.space || input === " ")) {
       const option = options[cursor];
       setSelected((s) => {
@@ -60,18 +56,27 @@ export function Select({
       return;
     }
 
-    // Single select: immediately select on navigation
-    if (!multi && (key.upArrow || key.downArrow)) {
-      setSelected(new Set([options[cursor]]));
+    // Submit with Enter
+    if (key.return) {
+      if (multi) {
+        onSubmit(Array.from(selected));
+      } else {
+        // For single-select, return the option under cursor
+        onSubmit(options[cursor]);
+      }
+      return;
     }
   });
+
+  // Keyboard hint based on mode
+  const hint = multi
+    ? "j/k to navigate, space to toggle, enter to confirm"
+    : "j/k to navigate, enter to confirm";
 
   return (
     <Box flexDirection="column">
       <Box gap={1}>
-        <Text bold color="cyan">
-          ?
-        </Text>
+        <Text bold color="cyan">?</Text>
         <Text bold>{label}</Text>
       </Box>
       <Box flexDirection="column" marginLeft={2}>
@@ -79,24 +84,24 @@ export function Select({
           const isCursor = idx === cursor;
           const isSelected = selected.has(option);
 
+          // Cursor indicator and selection indicator
+          const cursorIndicator = isCursor ? "❯" : " ";
+          const selectionIndicator = isSelected ? "◉" : "○";
+
           return (
             <Box key={option}>
               <Text
                 bold={isCursor}
                 color={isCursor ? "cyan" : undefined}
               >
-                {isCursor ? "❯ " : "  "}
-                {multi ? (isSelected ? "◉ " : "○ ") : isSelected ? "◉ " : "○ "}
-                {option}
+                {cursorIndicator} {selectionIndicator} {option}
               </Text>
             </Box>
           );
         })}
       </Box>
       <Box marginLeft={2}>
-        <Text dimColor>
-          {multi ? "space to toggle, enter to confirm" : "enter to confirm"}
-        </Text>
+        <Text dimColor>{hint}</Text>
       </Box>
     </Box>
   );
