@@ -3,6 +3,7 @@ import { render } from "ink";
 import pc from "picocolors";
 import React from "react";
 import path from "path";
+import { existsSync } from "fs";
 import { InitApp, type InitOptions, type InitAnswers } from "../init/InitApp";
 import { loadTemplate } from "../init/template";
 import { generateConfig } from "../init/generator";
@@ -40,14 +41,21 @@ export default defineCommand({
     const remote = args.remote as string | undefined;
     const nonInteractive = args.yes as boolean;
 
-    // Resolve location
-    let resolvedLocation: "." | string | null;
+    // Resolve location early
+    let targetLocation: string | null = null;
     if (location === ".") {
-      resolvedLocation = ".";
+      targetLocation = process.cwd();
     } else if (location) {
-      resolvedLocation = location;
-    } else {
-      resolvedLocation = null;
+      targetLocation = path.isAbsolute(location) ? location : path.join(process.cwd(), location);
+    }
+
+    // Check for existing bolt.yaml BEFORE asking questions (if location is known)
+    if (targetLocation) {
+      const configPath = path.join(targetLocation, "bolt.yaml");
+      if (existsSync(configPath)) {
+        console.error(pc.red(`Error: bolt.yaml already exists at ${configPath}`));
+        process.exit(1);
+      }
     }
 
     // Always load template (bundled fallback is used if no explicit template)
@@ -61,17 +69,17 @@ export default defineCommand({
     // Non-interactive mode: use defaults
     if (nonInteractive) {
       let folderName: string;
-      let targetLocation: string;
+      let finalLocation: string;
 
       if (location === ".") {
         folderName = path.basename(process.cwd());
-        targetLocation = process.cwd();
+        finalLocation = process.cwd();
       } else if (location) {
         folderName = path.basename(location);
-        targetLocation = location;
+        finalLocation = targetLocation!;
       } else {
         folderName = "new-project";
-        targetLocation = folderName;
+        finalLocation = folderName;
       }
 
       const defaultAnswers: InitAnswers & { location: string } = {
@@ -87,7 +95,7 @@ export default defineCommand({
         targets: ["editor"],
         notifications: false,
         webhook_url: "",
-        location: targetLocation,
+        location: finalLocation,
       };
 
       const result = generateConfig(defaultAnswers, templateContent);
@@ -100,7 +108,9 @@ export default defineCommand({
       process.exit(0);
     }
 
-    // Interactive mode
+    // Interactive mode - resolve location for InitApp
+    const resolvedLocation: "." | string | null = location === "." ? "." : location || null;
+
     const options: InitOptions = {
       location: resolvedLocation,
       template,
