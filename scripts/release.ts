@@ -84,12 +84,11 @@ mkdirSync(BUILD_DIR, { recursive: true });
 
 const isWindows = process.platform === "win32";
 const nativeBinary = isWindows ? "bolt-win-x64.exe" : "bolt-mac-arm64";
-const nativeBuildCmd = isWindows
-  ? "bun build src/main.ts --compile --target=bun-windows-x64 --outfile=build/bolt-win-x64.exe"
-  : "bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile=build/bolt-mac-arm64";
+const nativeTarget = isWindows ? "bun-windows-x64" : "bun-darwin-arm64";
+const nativeOutfile = `build/${nativeBinary}`;
 
 step(`Building ${nativeBinary}`);
-run(nativeBuildCmd);
+run(`bun run scripts/build-binary.ts ${nativeTarget} ${nativeOutfile}`);
 
 // 7. Copy bolt.d.ts to build/
 step("Copying bolt.d.ts to build/");
