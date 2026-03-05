@@ -1,10 +1,13 @@
+## Docs
+- current docs are worse, written in AI, no taste and ugly, overwheamling
+
 ## Basic
 
 - [x] [DX] oxc
-- [ ] [FEAT] chatbot webhook, wecom support
+- [x] [FEAT] chatbot webhook
 - [ ] [FEAT] common tools
   - [x] ue ini tool
-  - [ ] ?
+  - [ ] ? setup tools
 - [x] [ecosystem] universal VCS - currently engine (git), project (svn), make this configurable
 - [x] [ecosystem] plugins - write plugins (modules) to use like "ue/build" in project scope (or user scope)
 - [x] [ecosystem] shell command runs (with:run)
@@ -18,18 +21,19 @@
 
 ## Dist
 
-- [ ] distribution and version management, bolt.yaml should be compatibility versioned
+- [ ] config version management, bolt.yaml should be compatibility versioned
 
 ## Setup && Pull
 Let people start and setup their working environment easily.
 - [x] `bolt init` will initialize a bolt.yaml to the current folder with Q&A and the provided template yaml OR the remote repo.
-- [ ] `bolt setup` a workflow to set up the working environment (like install VS, Python, JVM set env vars, etc.) from bolt.yaml -- with Q&A
-- [ ] `bolt pull` pull engine and project from bolt.yaml, and set up for it with the desired directory structure, and start to build the editor -- opt in with Q&A --- make this to be go-ops and actions to be clear.
+- write a universal plugin for these two, programatically
+    - [ ] `bolt setup` a workflow to set up the working environment (like install VS, Python, JVM set env vars, etc.) from bolt.yaml -- with Q&A
+    - [ ] `bolt pull` pull engine and project from bolt.yaml, and set up for it with the desired directory structure, and start to build the editor -- opt in with Q&A --- make this to be go-ops and actions to be clear.
 
 ## Ecosystem
 
 - [ ] project shared bolt.yaml -- merge bolt.yaml with prject defiend settings - no personal info like local project paths
-- [ ] npm package - make the library useful, let other code can call
+- [x] npm package - make the library useful, let other code can call
 
 ## Advanced
 
@@ -50,6 +54,9 @@ Let people start and setup their working environment easily.
 - [ ] support community svn - project scope todo
 - [ ] move fillddc to project plugin
 
-## Fixes
+## Security
+- [ ] security checks, high level and unsafe rm
 
-- [x] remove this variant: bolt go --build=program, becuase hypen parameters are consumned by ops in bolt go, like: bolt go build:program --config=debug
+## Misc
+- [ ] broken yaml check, check before runs when command depends on yaml
+
