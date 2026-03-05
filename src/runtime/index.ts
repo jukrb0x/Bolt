@@ -3,12 +3,17 @@ export type { Runtime, SpawnResult, SpawnOptions } from "./types";
 export { createBunRuntime } from "./bun";
 export { createNodeRuntime } from "./node";
 
+import type { Runtime } from "./types";
+import { createBunRuntime } from "./bun";
+import { createNodeRuntime } from "./node";
+
 /**
  * Create a runtime, auto-detecting Bun vs Node.js environment.
  */
-export function createRuntime(): import("./types").Runtime {
+export function createRuntime(): Runtime {
+  // @ts-ignore - Bun global exists in Bun runtime
   if (typeof Bun !== "undefined") {
-    return require("./bun").createBunRuntime();
+    return createBunRuntime();
   }
-  return require("./node").createNodeRuntime();
+  return createNodeRuntime();
 }
