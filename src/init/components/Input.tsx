@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface InputProps {
   label: string;
@@ -9,10 +9,20 @@ interface InputProps {
 }
 
 export function Input({ label, placeholder, defaultValue = "", onSubmit }: InputProps) {
-  const [value, setValue] = useState(defaultValue);
+  const [value, setValue] = useState("");
+  const [ready, setReady] = useState(false);
+
+  // Delay input handling to avoid processing buffered keys from previous component
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   useInput((input, key) => {
+    if (!ready) return;
+
     if (key.return) {
+      // Use defaultValue if user didn't type anything
       onSubmit(value || defaultValue);
       return;
     }
@@ -22,21 +32,21 @@ export function Input({ label, placeholder, defaultValue = "", onSubmit }: Input
       return;
     }
 
+    // Only accept printable characters
     if (input.length === 1 && input.charCodeAt(0) >= 32) {
       setValue((v) => v + input);
     }
   });
 
   const showPlaceholder = !value && placeholder;
+  const showDefaultHint = defaultValue && !value;
 
   return (
     <Box flexDirection="column">
       <Box gap={1}>
-        <Text bold color="cyan">
-          ?
-        </Text>
+        <Text bold color="cyan">?</Text>
         <Text bold>{label}</Text>
-        {defaultValue && !value && (
+        {showDefaultHint && (
           <Text dimColor>(default: {defaultValue})</Text>
         )}
       </Box>
@@ -45,6 +55,9 @@ export function Input({ label, placeholder, defaultValue = "", onSubmit }: Input
           {showPlaceholder ? placeholder : value}
         </Text>
         <Text color="cyan" bold>▌</Text>
+      </Box>
+      <Box marginLeft={2}>
+        <Text dimColor>enter to confirm</Text>
       </Box>
     </Box>
   );
