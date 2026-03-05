@@ -1,5 +1,7 @@
 import { Box, Text } from "ink";
 import { useState, useCallback, useMemo } from "react";
+import { existsSync } from "fs";
+import path from "path";
 import { parseTemplate } from "./template-parser";
 import { evaluateCondition } from "./condition-eval";
 import type { InitSection, InitQuestion } from "./template-types";
@@ -36,6 +38,7 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
   const [resolvedLocation, setResolvedLocation] = useState<string | null>(
     options.location === "." ? process.cwd() : options.location ?? null
   );
+  const [error, setError] = useState<string | null>(null);
 
   // Parse template once
   const parsedTemplate = useMemo(() => parseTemplate(templateContent), [templateContent]);
@@ -78,12 +81,30 @@ export function InitApp({ options, templateContent, onComplete }: InitAppProps) 
 
   // Handle location question first if not provided
   if (resolvedLocation === null) {
+    // Show error if exists
+    if (error) {
+      return (
+        <Box flexDirection="column">
+          <Text color="red">Error: {error}</Text>
+        </Box>
+      );
+    }
+
     return (
       <Box flexDirection="column">
         <Input
           label="Project name"
           placeholder="my-project"
           onSubmit={(value) => {
+            const targetPath = path.isAbsolute(value) ? value : path.join(process.cwd(), value);
+            const configPath = path.join(targetPath, "bolt.yaml");
+
+            // Check if bolt.yaml already exists
+            if (existsSync(configPath)) {
+              setError(`bolt.yaml already exists at ${configPath}`);
+              return;
+            }
+
             setResolvedLocation(value);
             setAnswers((prev) => ({ ...prev, bolt_project_name: value }));
             setHistory((prev) => [...prev, { prompt: "Project name", answer: value }]);
