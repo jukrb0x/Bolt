@@ -28,6 +28,23 @@ Installs `bolt` to `~/.bolt/bin/` and adds it to your PATH. To update:
 bolt self-update
 ```
 
+## Quick Start
+
+After installing, initialize your project with the interactive setup:
+
+```bash
+cd /path/to/your/ue/project
+bolt init
+```
+
+This will:
+1. Ask about your project structure (UE path, project path, version control)
+2. Generate a `bolt.yaml` config file with sensible defaults
+3. Set up common ops (update, build, start, kill)
+4. Configure your go pipeline
+
+The generated config is fully customizable - edit `bolt.yaml` to add custom ops, actions, or plugins.
+
 ## How It Works
 
 Define your project once:
@@ -152,7 +169,7 @@ Named profiles for `bolt run` — composable, with dependency support:
 actions:
   full_reset:
     steps:
-      - uses: ops/kill
+      - uses: ue/kill
         continue-on-error: true
       - uses: ops/update
       - uses: ops/build
@@ -383,4 +400,4 @@ bun run release:dry  # preview the release process
 
 ## License
 
-MIT
+Apache-2.0
