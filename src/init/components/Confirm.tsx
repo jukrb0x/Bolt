@@ -1,4 +1,4 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useApp } from "ink";
 import { useState, useEffect } from "react";
 
 interface ConfirmProps {
@@ -8,6 +8,7 @@ interface ConfirmProps {
 }
 
 export function Confirm({ label, defaultValue = false, onSubmit }: ConfirmProps) {
+  const { exit } = useApp();
   const [selected, setSelected] = useState(defaultValue);
   const [ready, setReady] = useState(false);
 
@@ -20,6 +21,12 @@ export function Confirm({ label, defaultValue = false, onSubmit }: ConfirmProps)
   useInput(
     (input, key) => {
       if (!ready) return;
+
+      // Ctrl-C: exit
+      if (key.ctrl && input === "c") {
+        exit();
+        return;
+      }
 
       if (key.return) {
         onSubmit(selected);
