@@ -1,28 +1,28 @@
+// src/plugins/svn.ts
 import type { BoltPlugin, BoltPluginContext } from "../plugin";
-import { $ } from "bun";
 import { existsSync } from "fs";
 
-function findTortoiseProc(): string | null {
+function findTortoiseProc(ctx: BoltPluginContext): string | null {
   const candidates = [
-    "C:\Program Files\TortoiseSVN\bin\TortoiseProc.exe",
-    "C:\Program Files (x86)\TortoiseSVN\bin\TortoiseProc.exe",
+    "C:\\Program Files\\TortoiseSVN\\bin\\TortoiseProc.exe",
+    "C:\\Program Files (x86)\\TortoiseSVN\\bin\\TortoiseProc.exe",
   ];
   for (const c of candidates) if (existsSync(c)) return c;
-  const result = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
-  if (result.exitCode === 0) return result.stdout.toString().trim().split("\n")[0].trim();
+  const result = ctx.runtime.spawnSync(["where", "TortoiseProc.exe"]);
+  if (result.exitCode === 0) return result.stdout.trim().split("\n")[0].trim();
   return null;
 }
 
 export function resolveTortoiseProc(ctx: BoltPluginContext): string | null {
   const pref = ctx.cfg.project.use_tortoise;
   if (pref === false) return null;
-  const found = findTortoiseProc();
+  const found = findTortoiseProc(ctx);
   if (pref === true && !found) throw new Error("TortoiseProc.exe not found but use_tortoise: true");
   return found;
 }
 
 function resolvePath(params: Record<string, string>, ctx: BoltPluginContext): string {
-  const p = params.path ?? ctx.cfg.project.project_root;
+  const p = params.path ?? (ctx.cfg.project as any).project_root;
   if (!p) throw new Error("svn handler requires with: path: or project.project_root in config");
   return p;
 }
@@ -34,7 +34,7 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);
       if (!ctx.dryRun) {
-        const result = await $`svn update ${p} --non-interactive --trust-server-cert`.nothrow();
+        const result = await ctx.runtime.shell(`svn update "${p}" --non-interactive --trust-server-cert`);
         if (result.exitCode !== 0) throw new Error(`svn update failed (exit ${result.exitCode})`);
       }
     },
@@ -45,16 +45,15 @@ const plugin: BoltPlugin = {
       if (tortoiseProc) {
         ctx.logger.cmd(`TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`);
         if (!ctx.dryRun) {
-          const result = Bun.spawnSync(
-            [tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/externals", "/fixtimestamps", "/vacuum", "/breaklocks", "/refreshshell"],
-            { stdout: "inherit", stderr: "inherit" },
-          );
+          const result = ctx.runtime.spawnSync([
+            tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/externals", "/fixtimestamps", "/vacuum", "/breaklocks", "/refreshshell"
+          ]);
           if (result.exitCode !== 0) throw new Error(`TortoiseProc cleanup failed (exit ${result.exitCode})`);
         }
       } else {
         ctx.logger.cmd(`svn cleanup "${p}"`);
         if (!ctx.dryRun) {
-          const result = await $`svn cleanup ${p}`.nothrow();
+          const result = await ctx.runtime.shell(`svn cleanup "${p}"`);
           if (result.exitCode !== 0) throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
         }
       }
@@ -64,19 +63,17 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        // TortoiseSVN exposes revert through /command:cleanup with the /revert flag — there is no standalone /command:revert
         ctx.logger.cmd(`TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /revert /breaklocks /vacuum /fixtimestamps`);
         if (!ctx.dryRun) {
-          const result = Bun.spawnSync(
-            [tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/revert", "/breaklocks", "/vacuum", "/fixtimestamps"],
-            { stdout: "inherit", stderr: "inherit" },
-          );
+          const result = ctx.runtime.spawnSync([
+            tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/revert", "/breaklocks", "/vacuum", "/fixtimestamps"
+          ]);
           if (result.exitCode !== 0) throw new Error(`TortoiseProc revert failed (exit ${result.exitCode})`);
         }
       } else {
         ctx.logger.cmd(`svn revert -R "${p}"`);
         if (!ctx.dryRun) {
-          const result = await $`svn revert -R ${p}`.nothrow();
+          const result = await ctx.runtime.shell(`svn revert -R "${p}"`);
           if (result.exitCode !== 0) throw new Error(`svn revert failed (exit ${result.exitCode})`);
         }
       }
@@ -85,15 +82,10 @@ const plugin: BoltPlugin = {
     info: async (params, ctx) => {
       const p = resolvePath(params, ctx);
       ctx.logger.info(`=== SVN Info: ${p} ===`);
-      // Read-only query — intentionally runs in dry-run mode
-      const result = Bun.spawnSync(["svn", "info", p], { stdout: "pipe", stderr: "pipe" });
+      const result = ctx.runtime.spawnSync(["svn", "info", p]);
       if (result.exitCode === 0) {
-        for (const line of result.stdout.toString().split("\n")) {
-          if (
-            line.startsWith("URL:") ||
-            line.startsWith("Revision:") ||
-            line.startsWith("Last Changed Rev:")
-          ) {
+        for (const line of result.stdout.split("\n")) {
+          if (line.startsWith("URL:") || line.startsWith("Revision:") || line.startsWith("Last Changed Rev:")) {
             ctx.logger.info(`SVN: ${line.trim()}`);
           }
         }
@@ -108,17 +100,14 @@ const plugin: BoltPlugin = {
       if (tortoiseProc) {
         ctx.logger.cmd(`TortoiseProc /command:commit /path:"${p}"`);
         if (!ctx.dryRun) {
-          const result = Bun.spawnSync(
-            [tortoiseProc, "/command:commit", `/path:${p}`],
-            { stdout: "inherit", stderr: "inherit" },
-          );
+          const result = ctx.runtime.spawnSync([tortoiseProc, "/command:commit", `/path:${p}`]);
           if (result.exitCode !== 0) throw new Error(`TortoiseProc commit failed (exit ${result.exitCode})`);
         }
       } else {
         if (!params.message) throw new Error("svn/commit requires with: message: when not using TortoiseSVN");
         ctx.logger.cmd(`svn commit "${p}" -m "${params.message}"`);
         if (!ctx.dryRun) {
-          const result = await $`svn commit ${p} -m ${params.message}`.nothrow();
+          const result = await ctx.runtime.shell(`svn commit "${p}" -m "${params.message}"`);
           if (result.exitCode !== 0) throw new Error(`svn commit failed (exit ${result.exitCode})`);
         }
       }
@@ -128,7 +117,7 @@ const plugin: BoltPlugin = {
       if (!params.path) throw new Error("svn/add requires with: path:");
       ctx.logger.cmd(`svn add "${params.path}"`);
       if (!ctx.dryRun) {
-        const result = await $`svn add ${params.path}`.nothrow();
+        const result = await ctx.runtime.shell(`svn add "${params.path}"`);
         if (result.exitCode !== 0) throw new Error(`svn add failed (exit ${result.exitCode})`);
       }
     },
@@ -137,7 +126,7 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       ctx.logger.cmd(`svn status "${p}"`);
       if (!ctx.dryRun) {
-        const result = await $`svn status ${p}`.nothrow();
+        const result = await ctx.runtime.shell(`svn status "${p}"`);
         if (result.exitCode !== 0) throw new Error(`svn status failed (exit ${result.exitCode})`);
       }
     },
