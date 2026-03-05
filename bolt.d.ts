@@ -9,14 +9,12 @@ declare module "bolt" {
   export type TargetKind = "editor" | "program" | "game" | "client" | "server";
   export type BuildConfig = "development" | "debug" | "shipping" | "test";
   export type VcsType = "git" | "svn";
-
   export interface RepoConfig {
-    path: string;
-    vcs?: VcsType;
-    url?: string;
-    branch?: string;
+      path: string;
+      vcs?: VcsType;
+      url?: string;
+      branch?: string;
   }
-
   export interface Target {
       kind: TargetKind;
       name?: string;
@@ -47,6 +45,14 @@ declare module "bolt" {
       /** Any extra string fields defined in bolt.yaml are preserved and available as ${{ project.<key> }} in interpolation. */
       [key: string]: string | boolean | undefined | RepoConfig;
   }
+  export interface BuildContext {
+      buildId: string;
+      projectName: string;
+      mode: "go" | "run";
+      gitBranch?: string;
+      logPath?: string;
+      startTime: number;
+  }
   export type NotifyProviderCfg = {
       type: "wecom";
       webhook_url: string;
@@ -58,8 +64,9 @@ declare module "bolt" {
   };
   export interface NotificationsConfig {
       on_start: boolean;
-      on_complete: boolean;
+      on_op_complete: boolean;
       on_failure: boolean;
+      on_complete: boolean;
       providers: NotifyProviderCfg[];
   }
   export interface BoltConfig {

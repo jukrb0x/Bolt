@@ -22,51 +22,54 @@ export function Select({
 
   // Delay input handling to avoid processing buffered keys from previous component
   useEffect(() => {
-    const timer = setTimeout(() => setReady(true), 50);
+    const timer = setTimeout(() => setReady(true), 100);
     return () => clearTimeout(timer);
   }, []);
 
-  useInput((input, key) => {
-    if (!ready) return;
+  useInput(
+    (input, key) => {
+      if (!ready) return;
 
-    // Navigate up: up arrow or 'k'
-    if (key.upArrow || input === "k") {
-      setCursor((c) => (c - 1 + options.length) % options.length);
-      return;
-    }
-
-    // Navigate down: down arrow or 'j'
-    if (key.downArrow || input === "j") {
-      setCursor((c) => (c + 1) % options.length);
-      return;
-    }
-
-    // Toggle selection with space (multi-select only)
-    if (multi && (key.space || input === " ")) {
-      const option = options[cursor];
-      setSelected((s) => {
-        const next = new Set(s);
-        if (next.has(option)) {
-          next.delete(option);
-        } else {
-          next.add(option);
-        }
-        return next;
-      });
-      return;
-    }
-
-    // Submit with Enter
-    if (key.return) {
-      if (multi) {
-        onSubmit(Array.from(selected));
-      } else {
-        // For single-select, return the option under cursor
-        onSubmit(options[cursor]);
+      // Navigate up: up arrow or 'k'
+      if (key.upArrow || input === "k") {
+        setCursor((c) => (c - 1 + options.length) % options.length);
+        return;
       }
-      return;
-    }
-  });
+
+      // Navigate down: down arrow or 'j'
+      if (key.downArrow || input === "j") {
+        setCursor((c) => (c + 1) % options.length);
+        return;
+      }
+
+      // Toggle selection with space (multi-select only)
+      if (multi && input === " ") {
+        const option = options[cursor];
+        setSelected((s) => {
+          const next = new Set(s);
+          if (next.has(option)) {
+            next.delete(option);
+          } else {
+            next.add(option);
+          }
+          return next;
+        });
+        return;
+      }
+
+      // Submit with Enter
+      if (key.return) {
+        if (multi) {
+          onSubmit(Array.from(selected));
+        } else {
+          // For single-select, return the option under cursor
+          onSubmit(options[cursor]);
+        }
+        return;
+      }
+    },
+    { isActive: ready }
+  );
 
   // Keyboard hint based on mode
   const hint = multi
