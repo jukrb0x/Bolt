@@ -81,13 +81,16 @@ test("runOps does not timeout when timeout_hours is undefined", async () => {
 
 test("runOps fires start and complete notifications", async () => {
   const events: NotifyEvent[] = [];
-  const fakeNotifier = new Notifier([
-    {
-      send: async (e: NotifyEvent) => {
-        events.push(e);
+  const fakeNotifier = new Notifier(
+    [
+      {
+        send: async (e: NotifyEvent) => {
+          events.push(e);
+        },
       },
-    },
-  ]);
+    ],
+    { on_start: true, on_op_complete: true, on_failure: true, on_complete: true },
+  );
   const runner = new Runner(testCfg, { dryRun: true, notifier: fakeNotifier });
   await runner.runOps([{ name: "kill", steps: [{ uses: "ue/kill" }] }], {
     order: [],
@@ -99,13 +102,16 @@ test("runOps fires start and complete notifications", async () => {
 
 test("runOps fires failure notification on step error", async () => {
   const events: NotifyEvent[] = [];
-  const fakeNotifier = new Notifier([
-    {
-      send: async (e: NotifyEvent) => {
-        events.push(e);
+  const fakeNotifier = new Notifier(
+    [
+      {
+        send: async (e: NotifyEvent) => {
+          events.push(e);
+        },
       },
-    },
-  ]);
+    ],
+    { on_start: true, on_op_complete: true, on_failure: true, on_complete: true },
+  );
   const runner = new Runner(testCfg, { dryRun: false, notifier: fakeNotifier });
   await runner
     .runOps([{ name: "bad", steps: [{ run: "exit 1" }] }], { order: [], fail_stops: ["bad"] })
