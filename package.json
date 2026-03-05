@@ -1,9 +1,23 @@
 {
   "name": "bolt-ue",
-  "version": "0.1.2",
-  "description": "Type definitions for bolt UE plugin authoring",
+  "version": "1.0.0",
+  "description": "Unreal Engine workflow automation - CLI tool and library for Node.js and Bun",
   "author": "Jabriel <jabrielah@outlook.com>",
   "license": "MIT",
+  "keywords": [
+    "unreal-engine",
+    "ue5",
+    "workflow",
+    "automation",
+    "build-tool",
+    "cli",
+    "svn",
+    "git"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jukrb0x/Bolt.git"
+  },
   "type": "module",
   "exports": {
     ".": {
