@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { VERSION } from "../version";
-import { writeFileSync, renameSync, chmodSync } from "fs";
+import { writeFileSync, renameSync, chmodSync, existsSync, unlinkSync } from "fs";
 import path from "path";
 import pc from "picocolors";
 
@@ -102,7 +102,22 @@ export default defineCommand({
     }
 
     try {
-      renameSync(tmpPath, process.execPath);
+      if (process.platform === "win32") {
+        // Windows: can't replace running exe directly
+        // Rename old first (allowed), then place new
+        const oldPath = process.execPath + ".old";
+        if (existsSync(oldPath)) {
+          try {
+            unlinkSync(oldPath);
+          } catch {
+            // Ignore if we can't delete old backup
+          }
+        }
+        renameSync(process.execPath, oldPath);
+        renameSync(tmpPath, process.execPath);
+      } else {
+        renameSync(tmpPath, process.execPath);
+      }
       console.log(pc.green(`Updated to v${latestVersion}`));
     } catch (e: any) {
       console.error(pc.red(`Could not replace binary: ${e.message}`));
