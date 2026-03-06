@@ -17,7 +17,8 @@
 - [x] `bolt help` - TUI quick help docs
 - [x] [FEAT] VCS providers
 - [ ] [FEAT] parallel steps
-- [x] add a dimmed logger type for commands, commands should be logged explicity for the execution
+- [ ] [FEAT] action step hooks
+- [x] add a dimmed logger type for commands, commands should be logged explicitly for the execution
 
 ## Dist
 
@@ -59,4 +60,5 @@ Let people start and setup their working environment easily.
 
 ## Misc
 - [ ] broken yaml check, check before runs when command depends on yaml
+- [ ] better installer script
 
