@@ -18,11 +18,9 @@ RELEASE=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest")
 if command -v jq &>/dev/null; then
     VERSION=$(echo "$RELEASE" | jq -r '.tag_name')
     BINARY_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "bolt-mac-arm64") | .browser_download_url')
-    DTS_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "bolt.d.ts") | .browser_download_url // empty')
 else
     VERSION=$(echo "$RELEASE" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
     BINARY_URL=$(echo "$RELEASE" | grep '"browser_download_url"' | grep 'bolt-mac-arm64"' | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/' | head -1)
-    DTS_URL=$(echo "$RELEASE" | grep '"browser_download_url"' | grep 'bolt\.d\.ts"' | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/' | head -1)
 fi
 
 if [ -z "$VERSION" ] || [ -z "$BINARY_URL" ]; then
@@ -38,13 +36,6 @@ echo "Downloading bolt $VERSION..."
 curl -fsSL "$BINARY_URL" -o "$BIN_DIR/bolt"
 chmod +x "$BIN_DIR/bolt"
 
-# Download bolt.d.ts to ~/.bolt/ (for plugin IDE support)
-if [ -n "$DTS_URL" ]; then
-    curl -fsSL "$DTS_URL" -o "$BOLT_HOME/bolt.d.ts"
-    echo "bolt.d.ts placed at $BOLT_HOME/bolt.d.ts"
-else
-    echo "Note: bolt.d.ts not found in release, skipping."
-fi
 
 # Add ~/.bolt/bin to PATH in shell rc
 # Prefer the rc file matching the running shell, fall back to file existence
