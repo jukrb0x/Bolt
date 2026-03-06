@@ -29,6 +29,7 @@
 Let people start and setup their working environment easily.
 - [x] `bolt init` will initialize a bolt.yaml to the current folder with Q&A and the provided template yaml OR the remote repo.
 - [ ] `bolt init` input box cannot paste..
+- [ ] `bolt init` template options are not unversal, make the code platform-agnostic
 - write a universal plugin for these two, programatically
     - [-] `bolt setup` a workflow to set up the working environment (like install VS, Python, JVM set env vars, etc.) from bolt.yaml -- with Q&A
     - [-] `bolt pull` pull engine and project from bolt.yaml, and set up for it with the desired directory structure, and start to build the editor -- opt in with Q&A --- make this to be go-ops and actions to be clear.
