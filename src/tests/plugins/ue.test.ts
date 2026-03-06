@@ -48,15 +48,15 @@ test("build throws on unknown target", async () => {
   );
 });
 
-test("update-git produces git pull command", async () => {
+test("update-engine produces git pull command (default vcs=git)", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["update-git"]({}, ctx);
+  await uePlugin.handlers["update-engine"]({}, ctx);
   expect(ctx.logged.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
 });
 
-test("update-svn produces svn update command", async () => {
+test("update-project produces svn update command (default vcs=svn)", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["update-svn"]({}, ctx);
+  await uePlugin.handlers["update-project"]({}, ctx);
   expect(ctx.logged.some((l) => l.includes("svn update"))).toBe(true);
 });
 
@@ -248,27 +248,36 @@ test("start with target throws when binary not found", async () => {
   ).rejects.toThrow("No binary found");
 });
 
-test("update with engine_vcs=git and project_vcs=svn calls git pull and svn update", async () => {
-  const ctx = makeCtx();
-  await uePlugin.handlers["update"]({}, ctx);
-  expect(ctx.logged.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
-  expect(ctx.logged.some((l) => l.includes("svn update"))).toBe(true);
-});
-
-test("update with engine_vcs=svn and project_vcs=git calls svn update twice", async () => {
+test("update-engine with engine_repo.vcs=svn calls svn update", async () => {
   const logged2: string[] = [];
   const fakeCfg = {
     ...testCfg,
-    project: { ...testCfg.project, engine_vcs: "svn" as const, project_vcs: "git" as const },
+    project: { ...testCfg.project, engine_repo: { ...testCfg.project.engine_repo, vcs: "svn" as const } },
   };
   const ctx2 = {
     cfg: fakeCfg,
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
+    runtime: mockRuntime,
   };
-  await uePlugin.handlers["update"]({}, ctx2);
-  // engine_vcs=svn → svn update engine_root; project_vcs=git → git pull project_root
+  await uePlugin.handlers["update-engine"]({}, ctx2);
   expect(logged2.some((l) => l.includes("svn update"))).toBe(true);
+});
+
+test("update-project with project_repo.vcs=git calls git pull", async () => {
+  const logged2: string[] = [];
+  const fakeCfg = {
+    ...testCfg,
+    project: { ...testCfg.project, project_repo: { ...testCfg.project.project_repo, vcs: "git" as const } },
+  };
+  const ctx2 = {
+    cfg: fakeCfg,
+    dryRun: true,
+    logger: new Logger({ sink: (l: string) => logged2.push(l) }),
+    logged: logged2,
+    runtime: mockRuntime,
+  };
+  await uePlugin.handlers["update-project"]({}, ctx2);
   expect(logged2.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
 });

@@ -29,21 +29,21 @@ describe("parseGoArgs", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveOps", () => {
-  test("update 2 steps (update-git + update-svn)", () => {
+  test("update 2 steps (update-engine + update-project)", () => {
     const parsed = parseGoArgs(["update"]);
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("update");
     expect(op.steps).toHaveLength(2);
-    expect(op.steps[0].uses).toBe("ue/update-git");
-    expect(op.steps[1].uses).toBe("ue/update-svn");
+    expect(op.steps[0].uses).toBe("ue/update-engine");
+    expect(op.steps[1].uses).toBe("ue/update-project");
   });
 
-  test("update:svn 1 step using svn variant", () => {
-    const parsed = parseGoArgs(["update:svn"]);
+  test("update:project 1 step using project variant", () => {
+    const parsed = parseGoArgs(["update:project"]);
     const [op] = resolveOps(parsed, testCfg);
-    expect(op.name).toBe("update[svn]");
+    expect(op.name).toBe("update[project]");
     expect(op.steps).toHaveLength(1);
-    expect(op.steps[0].uses).toBe("ue/update-svn");
+    expect(op.steps[0].uses).toBe("ue/update-project");
   });
 
   test("build steps from ops.build.default", () => {

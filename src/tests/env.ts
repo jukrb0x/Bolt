@@ -48,9 +48,9 @@ export const testCfg: BoltConfig = {
   ops: {
     kill: { default: [{ uses: "ue/kill" }] },
     update: {
-      default: [{ uses: "ue/update-git" }, { uses: "ue/update-svn" }],
-      git: [{ uses: "ue/update-git" }],
-      svn: [{ uses: "ue/update-svn" }],
+      default: [{ uses: "ue/update-engine" }, { uses: "ue/update-project" }],
+      engine: [{ uses: "ue/update-engine" }],
+      project: [{ uses: "ue/update-project" }],
     },
     build: { default: [{ uses: "ue/build", with: { target: "editor" } }] },
     start: { default: [{ uses: "ue/start" }] },
