@@ -173,6 +173,7 @@ export class Runner {
       } catch (e: any) {
         const opDuration = Date.now() - t0;
         this.opts.logger?.fail(op.name, opDuration / 1000);
+        if (e?.message) this.opts.logger?.error(e.message);
         results.push({ op: op.name, ok: false, duration: opDuration });
         await notifier.fire({ kind: "op_failure", ctx, opName: op.name, opDuration, error: e?.message });
         if (pipeline.fail_stops.includes(op.name)) {
