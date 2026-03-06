@@ -45,21 +45,22 @@ export function createNodeRuntime(): Runtime {
     },
 
     async shell(command: string, opts?: SpawnOptions): Promise<SpawnResult> {
-      const isWindows = process.platform === "win32";
-      const shell = isWindows ? "cmd" : "sh";
-      const shellArg = isWindows ? "/c" : "-c";
-
       return new Promise((resolve) => {
-        const proc = nodeSpawn(shell, [shellArg, command], {
+        // Use shell: true so Node.js correctly invokes the platform shell
+        // (cmd.exe on Windows, sh on Unix) without manual quoting issues.
+        // Manually spawning ["cmd", "/c", command] without shell:true causes
+        // Node to re-escape embedded quotes, breaking paths with spaces.
+        const proc = nodeSpawn(command, [], {
           cwd: opts?.cwd,
           env: opts?.env ? { ...process.env, ...opts.env } : process.env,
+          shell: true,
         });
 
         let stdout = "";
         let stderr = "";
 
-        proc.stdout?.on("data", (data) => { stdout += data.toString(); });
-        proc.stderr?.on("data", (data) => { stderr += data.toString(); });
+        proc.stdout?.on("data", (data) => { process.stdout.write(data); stdout += data.toString(); });
+        proc.stderr?.on("data", (data) => { process.stderr.write(data); stderr += data.toString(); });
 
         proc.on("close", (exitCode) => {
           resolve({ exitCode: exitCode ?? 1, stdout, stderr });
