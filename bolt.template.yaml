@@ -74,12 +74,12 @@ ops:
 
   update:
     default:
-      - uses: ue/update-git
-      - uses: ue/update-svn
-    git:
-      - uses: ue/update-git
-    svn:
-      - uses: ue/update-svn
+      - uses: ue/update-engine
+      - uses: ue/update-project
+    engine:
+      - uses: ue/update-engine
+    project:
+      - uses: ue/update-project
 
   svn-cleanup:
     default:
@@ -185,7 +185,7 @@ actions:
 
   daily_check:
     steps:
-      - uses: ops/update:svn
+      - uses: ops/update:project
       - uses: ops/build
       - uses: ops/start
         continue-on-error: true
