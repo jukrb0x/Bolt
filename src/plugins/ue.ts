@@ -66,30 +66,24 @@ const plugin: BoltPlugin = {
       await run(cmd, ctx);
     },
 
-    update: async (params, ctx) => {
-      const engineVcs = ctx.cfg.project.engine_repo.vcs ?? "git";
-      const projectVcs = ctx.cfg.project.project_repo.vcs ?? "svn";
-      const enginePath = ctx.cfg.project.engine_repo.path;
-      const projectPath = ctx.cfg.project.project_repo.path;
-
-      if (engineVcs === "git") {
-        await gitPlugin.handlers["pull"]({ path: enginePath }, ctx);
+    "update-engine": async (params, ctx) => {
+      const repo = ctx.cfg.project.engine_repo;
+      const vcs = repo.vcs ?? "git";
+      if (vcs === "git") {
+        await gitPlugin.handlers["pull"]({ path: repo.path, branch: repo.branch }, ctx);
       } else {
-        await svnPlugin.handlers["update"]({ path: enginePath }, ctx);
-      }
-      if (projectVcs === "svn") {
-        await svnPlugin.handlers["update"]({ path: projectPath }, ctx);
-      } else {
-        await gitPlugin.handlers["pull"]({ path: projectPath }, ctx);
+        await svnPlugin.handlers["update"]({ path: repo.path }, ctx);
       }
     },
 
-    "update-git": async (params, ctx) => {
-      await gitPlugin.handlers["pull"]({ path: params.path ?? ctx.cfg.project.engine_repo.path }, ctx);
-    },
-
-    "update-svn": async (params, ctx) => {
-      await svnPlugin.handlers["update"]({ path: params.path ?? ctx.cfg.project.project_repo.path }, ctx);
+    "update-project": async (params, ctx) => {
+      const repo = ctx.cfg.project.project_repo;
+      const vcs = repo.vcs ?? "svn";
+      if (vcs === "git") {
+        await gitPlugin.handlers["pull"]({ path: repo.path, branch: repo.branch }, ctx);
+      } else {
+        await svnPlugin.handlers["update"]({ path: repo.path }, ctx);
+      }
     },
 
     "svn-cleanup": async (params, ctx) => {
