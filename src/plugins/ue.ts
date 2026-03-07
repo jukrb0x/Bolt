@@ -48,22 +48,49 @@ const plugin: BoltPlugin = {
   handlers: {
     build: async (params, ctx) => {
       const targetName = params.target;
-      const target = ctx.cfg.targets[targetName];
-      if (!target) throw new Error(`Unknown target: "${targetName}"`);
-      const buildType = capitalize((params.config as string | undefined) ?? target.config);
+      if (!targetName || targetName.trim() === "") {
+        throw new Error(`No target specified for ue/build`);
+      }
+
       const uePath = ctx.cfg.project.engine_repo.path;
-      const projFile = ctx.cfg.project.uproject;
-      const projectName = getProjectName(projFile);
-      const targetBin =
-        target.kind === "editor"
-          ? `${projectName}Editor`
-          : (target.name ?? targetName);
+      const buildType = capitalize(params.config ?? "development");
+      const platform = params.platform ?? "Win64";
       const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
-      const cmd =
-        target.kind === "editor"
-          ? `${buildBat} -Target="${targetBin} Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -Project="${projFile}" -WaitMutex`
-          : `${buildBat} ${targetBin} Win64 ${buildType} -Project="${projFile}" -WaitMutex`;
-      await run(cmd, ctx);
+
+      // "engine" is a reserved target that builds the engine from source
+      if (targetName === "engine") {
+        await plugin.handlers["setup"]({ force: "true" }, ctx);
+        const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
+        ctx.logger.cmd(genCmd);
+        if (!ctx.dryRun) {
+          if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) await exec(genCmd, ctx);
+        }
+        const cmd = `${buildBat} -Target="UE4Editor ${platform} ${buildType}" -Target="ShaderCompileWorker ${platform} Development -Quiet" -WaitMutex -FromMsBuild`;
+        await run(cmd, ctx);
+        return;
+      }
+
+      const projFile = ctx.cfg.project.uproject;
+      const target = ctx.cfg.targets[targetName];
+
+      if (target) {
+        // Known target from cfg.targets
+        const effectiveConfig = capitalize((params.config as string | undefined) ?? target.config);
+        const projectName = getProjectName(projFile);
+        const targetBin =
+          target.kind === "editor"
+            ? `${projectName}Editor`
+            : (target.name ?? targetName);
+        const cmd =
+          target.kind === "editor"
+            ? `${buildBat} -Target="${targetBin} ${platform} ${effectiveConfig}" -Target="ShaderCompileWorker ${platform} Development -Quiet" -Project="${projFile}" -WaitMutex`
+            : `${buildBat} ${targetBin} ${platform} ${effectiveConfig} -Project="${projFile}" -WaitMutex`;
+        await run(cmd, ctx);
+      } else {
+        // Raw program target name (not in cfg.targets)
+        const cmd = `${buildBat} ${targetName} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
+        await run(cmd, ctx);
+      }
     },
 
     "update-engine": async (params, ctx) => {
@@ -283,30 +310,14 @@ const plugin: BoltPlugin = {
     },
 
     "build-engine": async (params, ctx) => {
-      const uePath = ctx.cfg.project.engine_repo.path;
-      const buildType = capitalize(params.config ?? "development");
-      await plugin.handlers["setup"]({ force: "true" }, ctx);
-      const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
-      ctx.logger.cmd(genCmd);
-      if (!ctx.dryRun) {
-        if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) await exec(genCmd, ctx);
-      }
-      const buildCmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
-      await run(buildCmd, ctx);
+      await plugin.handlers["build"]({ ...params, target: "engine" }, ctx);
     },
 
     "build-program": async (params, ctx) => {
-      const target = params.target;
-      if (!target || target.trim() === "") {
+      if (!params.target || params.target.trim() === "") {
         throw new Error(`No target specified. Use: bolt go build-program --target=<Name>`);
       }
-      const buildType = capitalize(params.config ?? "development");
-      const platform = params.platform ?? "Win64";
-      const uePath = ctx.cfg.project.engine_repo.path;
-      const projFile = ctx.cfg.project.uproject;
-      const buildBat = `${w(uePath)}/Engine/Build/BatchFiles/Build.bat`;
-      const cmd = `"${buildBat}" ${target} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
-      await run(cmd, ctx);
+      await plugin.handlers["build"](params, ctx);
     },
 
     info: async (params, ctx) => {

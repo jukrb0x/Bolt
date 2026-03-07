@@ -98,11 +98,10 @@ ops:
       - uses: ue/build
         with:
           target: editor
-    # Use --build=<target-key> to override the target at runtime
     engine:
-      - uses: ue/build-engine
+      - uses: ue/build
         with:
-          config: development
+          target: engine
     editor:
       - uses: ue/build
         with:
@@ -111,6 +110,8 @@ ops:
       - uses: ue/build
         with:
           target: program
+          # Supply target at runtime:
+          #   bolt go build:program --target=UnrealInsights
 
   fillddc:
     default:
@@ -128,15 +129,6 @@ ops:
     default:
       - uses: ue/fix-dll
 
-  build-program:
-    default:
-      - uses: ue/build-program
-        with:
-          config: development
-          platform: Win64
-      # Supply target at runtime:
-      #   bolt go build-program --target=UnrealInsights
-
 # go-pipeline controls bolt go execution order and failure behaviour
 go-pipeline:
   order:
@@ -147,7 +139,6 @@ go-pipeline:
     - setup
     - genproj
     - build
-    - build-program
     - fillddc
     - fix-dll
     - start
@@ -171,8 +162,9 @@ actions:
 
   build_editor_steps:
     steps:
-      - uses: ue/build-engine
+      - uses: ue/build
         with:
+          target: engine
           config: development
       - uses: ue/build
         with:

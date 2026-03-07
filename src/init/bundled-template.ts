@@ -61,11 +61,10 @@ ops:
       - uses: ue/build
         with:
           target: editor
-    # Use --build=<target-key> to override the target at runtime
     engine:
-      - uses: ue/build-engine
+      - uses: ue/build
         with:
-          config: development
+          target: engine
     editor:
       - uses: ue/build
         with:
@@ -128,8 +127,9 @@ actions:
 
   build_editor_steps:
     steps:
-      - uses: ue/build-engine
+      - uses: ue/build
         with:
+          target: engine
           config: development
       - uses: ue/build
         with:

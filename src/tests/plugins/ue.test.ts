@@ -41,11 +41,24 @@ test("build: params.config overrides target config", async () => {
   expect(cmd).toContain(`-Target="ShaderCompileWorker Win64 Development -Quiet"`);
 });
 
-test("build throws on unknown target", async () => {
+test("build with unknown target falls back to raw program build", async () => {
   const ctx = makeCtx();
-  await expect(uePlugin.handlers["build"]({ target: "nope" }, ctx)).rejects.toThrow(
-    "Unknown target",
-  );
+  await uePlugin.handlers["build"]({ target: "CustomProgram" }, ctx);
+  const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("CustomProgram");
+});
+
+test("build throws when no target specified", async () => {
+  const ctx = makeCtx();
+  await expect(uePlugin.handlers["build"]({}, ctx)).rejects.toThrow("No target specified");
+});
+
+test("build with target=engine runs setup and engine build", async () => {
+  const ctx = makeCtx();
+  await uePlugin.handlers["build"]({ target: "engine" }, ctx);
+  const cmds = ctx.logged.join("\n");
+  expect(cmds).toContain("Build.bat");
+  expect(cmds).toContain("UE4Editor");
 });
 
 test("update-engine produces git pull command (default vcs=git)", async () => {
