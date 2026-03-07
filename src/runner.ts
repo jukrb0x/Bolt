@@ -5,6 +5,7 @@ import { sortByPipeline, type ResolvedOp } from "./go";
 import { buildRegistry, type PluginRegistry } from "./plugin-registry";
 import type { BoltPluginContext } from "./plugin";
 import { createRuntime, type Runtime } from "./runtime";
+import type { SpawnOptions } from "./runtime/types";
 import uePlugin from "./plugins/ue";
 import fsPlugin from "./plugins/fs";
 import jsonPlugin from "./plugins/json";
@@ -30,7 +31,22 @@ export class Runner {
     private cfg: BoltConfig,
     private opts: RunnerOptions = {},
   ) {
-    this.runtime = opts.runtime ?? createRuntime();
+    const base = opts.runtime ?? createRuntime();
+    // Wrap the runtime so all spawn/shell calls tee output to the log file
+    const logger = opts.logger;
+    if (logger) {
+      const onOutput = (text: string) => logger.writeRaw(text);
+      const injectOpts = (o?: SpawnOptions) =>
+        o ? (o.onOutput ??= onOutput, o) : { onOutput };
+      this.runtime = {
+        spawn: (cmd, o) => base.spawn(cmd, injectOpts(o)),
+        spawnSync: (cmd, o) => base.spawnSync(cmd, injectOpts(o)),
+        shell: (cmd, o) => base.shell(cmd, injectOpts(o)),
+        parseYaml: (text) => base.parseYaml(text),
+      };
+    } else {
+      this.runtime = base;
+    }
   }
 
   private async ensureRegistry(): Promise<PluginRegistry> {

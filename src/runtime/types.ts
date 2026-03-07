@@ -9,6 +9,8 @@ export interface SpawnResult {
 export interface SpawnOptions {
   cwd?: string;
   env?: Record<string, string>;
+  /** Called with each chunk of stdout/stderr output, for logging to file. */
+  onOutput?: (text: string) => void;
 }
 
 export interface Runtime {
