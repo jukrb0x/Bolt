@@ -1,4 +1,6 @@
-# Plugin System
+---
+title: "Plugin System"
+---
 
 ## Overview
 

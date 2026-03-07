@@ -397,13 +397,15 @@ CLI remains Bun-only for optimal performance, but the library works everywhere.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Configuration Reference](docs/config.md)
-- [Commands](docs/commands.md)
-- [Built-in Handlers](docs/handlers.md)
-- [Plugin System](docs/plugins.md)
-- [Runner Internals](docs/runner.md)
-- [Release Process](docs/release.md)
+📚 Full documentation at [PLACEHOLDER]
+
+- **Guide**: Getting started, installation, first project
+- **How It Works**: Architecture, plugin system, runtime
+- **CLI Reference**: All 13 commands documented
+- **API Reference**: Plugin API, config schema, built-in handlers, library usage
+- **Tutorials**: Daily workflow, plugin development
+- **Best Practices**: Project structure, error handling
+- **Reference**: bolt.yaml schema, interpolation, troubleshooting
 
 ## Development
 

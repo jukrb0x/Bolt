@@ -1,4 +1,7 @@
-# Runner Internals
+---
+title: "Runner Internals"
+description: "The `Runner` class in `src/runner.ts` is the execution engine for both `bolt run` and `bolt go`."
+---
 
 The `Runner` class in `src/runner.ts` is the execution engine for both `bolt run` and `bolt go`.
 

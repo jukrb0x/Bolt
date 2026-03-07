@@ -1,4 +1,7 @@
-# Configuration Reference
+---
+title: "Configuration Reference"
+description: "Bolt reads `bolt.yaml` by walking up the directory tree from `cwd`. The first file found is used."
+---
 
 Bolt reads `bolt.yaml` by walking up the directory tree from `cwd`. The first file found is used.
 

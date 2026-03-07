@@ -1,4 +1,6 @@
-# Architecture
+---
+title: "Architecture"
+---
 
 ## Repository Layout
 
