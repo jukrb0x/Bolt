@@ -39,6 +39,7 @@ Let people start and setup their working environment easily.
 
 - [ ] project shared bolt.yaml -- merge bolt.yaml with prject defiend settings - no personal info like local project paths
 - [x] npm package - make the library useful, let other code can call
+- [ ] Python SDK for Bolt plugin
 
 ## Advanced
 
