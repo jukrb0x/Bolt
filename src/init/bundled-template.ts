@@ -52,6 +52,10 @@ ops:
     default:
       - uses: ue/generate-project
 
+  setup:
+    default:
+      - uses: ue/setup
+
   build:
     default:
       - uses: ue/build
@@ -97,6 +101,7 @@ go-pipeline:
     - info
     - update
     - svn-cleanup
+    - setup
     - genproj
     - build
     - fillddc
@@ -126,8 +131,9 @@ actions:
       - uses: ue/build-engine
         with:
           config: development
-      - uses: ue/build-editor
+      - uses: ue/build
         with:
+          target: editor
           config: debug
 
   build_and_start_editor:
