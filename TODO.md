@@ -20,6 +20,7 @@
 - [ ] [FEAT] parallel steps
 - [ ] [FEAT] action step hooks
 - [x] add a dimmed logger type for commands, commands should be logged explicitly for the execution
+- [x] parse relative path to absolute path in yaml
 
 ## Dist
 

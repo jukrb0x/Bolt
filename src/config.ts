@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { readFileSync } from "fs";
+import path from "path";
 import { createRuntime, type Runtime } from "./runtime";
 
 // ============================================================================
@@ -163,7 +164,17 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
   const rt = runtime ?? createRuntime();
   const raw = readFileSync(filepath, "utf8");
   const parsed = rt.parseYaml(raw);
-  return BoltConfigSchema.parse(parsed);
+  const cfg = BoltConfigSchema.parse(parsed);
+
+  // Resolve relative paths against the directory containing bolt.yaml
+  const configDir = path.dirname(path.resolve(filepath));
+  const resolve = (p: string) => path.isAbsolute(p) ? p : path.resolve(configDir, p);
+
+  cfg.project.engine_repo.path = resolve(cfg.project.engine_repo.path);
+  cfg.project.project_repo.path = resolve(cfg.project.project_repo.path);
+  cfg.project.uproject = resolve(cfg.project.uproject);
+
+  return cfg;
 }
 
 export interface ConfigCheckResult {
