@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 32" fill="none">
+  <defs>
+    <linearGradient id="bolt-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700"/>
+      <stop offset="100%" style="stop-color:#FFA500"/>
+    </linearGradient>
+  </defs>
+  <path d="M18 2L6 18h7l-2 12 12-16h-7l2-12z" fill="url(#bolt-gradient)" stroke="#E6A800" stroke-width="1" stroke-linejoin="round"/>
+  <text x="30" y="22.5" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#1a1a2e">Bolt</text>
+</svg>

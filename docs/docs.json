@@ -9,10 +9,10 @@
     "dark": "#4f46e5"
   },
   "logo": {
-    "light": "/logo.svg",
-    "dark": "/logo.svg"
+    "light": "/public/logo-light.svg",
+    "dark": "/public/logo-dark.svg"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/public/favicon.svg",
   "navigation": {
     "tabs": [
       {
