@@ -18,6 +18,7 @@ export function createBunRuntime(): Runtime {
           for await (const chunk of proc.stdout) {
             const text = new TextDecoder().decode(chunk);
             process.stdout.write(text);
+            opts?.onOutput?.(text);
             buf += text;
           }
           return buf;
@@ -27,6 +28,7 @@ export function createBunRuntime(): Runtime {
           for await (const chunk of proc.stderr) {
             const text = new TextDecoder().decode(chunk);
             process.stderr.write(text);
+            opts?.onOutput?.(text);
             buf += text;
           }
           return buf;
@@ -44,10 +46,16 @@ export function createBunRuntime(): Runtime {
         stdout: "pipe",
         stderr: "pipe",
       });
+      const out = result.stdout.toString();
+      const err = result.stderr.toString();
+      if (opts?.onOutput) {
+        if (out) opts.onOutput(out);
+        if (err) opts.onOutput(err);
+      }
       return {
         exitCode: result.exitCode,
-        stdout: result.stdout.toString(),
-        stderr: result.stderr.toString(),
+        stdout: out,
+        stderr: err,
       };
     },
 
@@ -62,10 +70,16 @@ export function createBunRuntime(): Runtime {
         .nothrow()
         .cwd(cwd)
         .env(env);
+      const out = result.stdout.toString();
+      const err = result.stderr.toString();
+      if (opts?.onOutput) {
+        if (out) opts.onOutput(out);
+        if (err) opts.onOutput(err);
+      }
       return {
         exitCode: result.exitCode,
-        stdout: result.stdout.toString(),
-        stderr: result.stderr.toString(),
+        stdout: out,
+        stderr: err,
       };
     },
 
