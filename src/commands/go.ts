@@ -74,7 +74,7 @@ export default defineCommand({
       dryRun,
       logger,
       configDir,
-      notifier: Notifier.fromConfig(cfg.notifications),
+      notifier: dryRun ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications),
     });
     const start = Date.now();
     try {

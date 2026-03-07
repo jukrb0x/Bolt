@@ -12,6 +12,7 @@ import jsonPlugin from "./plugins/json";
 import gitPlugin from "./plugins/git";
 import svnPlugin from "./plugins/svn";
 import path from "path";
+import { existsSync } from "fs";
 import { Notifier, type BuildContext } from "./notify";
 
 interface RunnerOptions {
@@ -79,7 +80,7 @@ export class Runner {
     visited.add(actionName);
 
     const isTopLevel = visited.size === 1;
-    const notifier = this.opts.dryRun ? Notifier.fromConfig(undefined) : (this.opts.notifier ?? Notifier.fromConfig(undefined));
+    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
     const startTime = Date.now();
 
     let ctx: BuildContext | undefined;
@@ -165,7 +166,7 @@ export class Runner {
       startTime,
     };
 
-    const notifier = this.opts.dryRun ? Notifier.fromConfig(undefined) : (this.opts.notifier ?? Notifier.fromConfig(undefined));
+    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
     const opNames = sorted.map((o) => o.name);
     const results: { op: string; ok: boolean; duration: number }[] = [];
     await notifier.fire({ kind: "start", ctx, ops: opNames });
@@ -297,18 +298,16 @@ export class Runner {
   }
 
   private async runLocalAction(actionPath: string, params: Record<string, string>): Promise<void> {
-    const pathMod = require("path");
-    const fs = require("fs");
     const actionDir = path.resolve(actionPath);
-    const actionYaml = pathMod.join(actionDir, "action.yaml");
-    if (!fs.existsSync(actionYaml)) throw new Error(`No action.yaml in ${actionDir}`);
+    const actionYaml = path.join(actionDir, "action.yaml");
+    if (!existsSync(actionYaml)) throw new Error(`No action.yaml in ${actionDir}`);
     const env: Record<string, string> = { ...(process.env as any) };
     for (const [k, v] of Object.entries(params)) {
       env[`BOLT_INPUT_${k.toUpperCase()}`] = v;
     }
     for (const runner of ["run.ts", "run.js", "run.py", "run.sh", "run.bat"]) {
-      const runFile = pathMod.join(actionDir, runner);
-      if (!fs.existsSync(runFile)) continue;
+      const runFile = path.join(actionDir, runner);
+      if (!existsSync(runFile)) continue;
       const result = await this.runtime.spawn([runFile], { env });
       if (result.exitCode !== 0) {
         throw new Error(`Local action failed (exit ${result.exitCode}): ${actionPath}`);
