@@ -47,7 +47,7 @@ export class Notifier {
     await Promise.all(
       this.providers.map((p) =>
         p.send(event).catch((e) => {
-          console.warn(`[bolt] notify provider failed: ${e?.message ?? e}`);
+          console.warn(`[Bolt] notify provider failed: ${e?.message ?? e}`);
         }),
       ),
     );
@@ -99,7 +99,7 @@ export class WeComProvider implements NotifyProvider {
     if (event.kind === "start") {
       const planLabel = ctx.mode === "run" ? "Action" : "Plan";
       const plan = (event.ops ?? []).map((op, i) => `> ${i + 1}. ${op}`).join("\n");
-      return `## [bolt] ${tag} Started\n${header}\n**Time:** ${now}\n**${planLabel}:**\n${plan}`;
+      return `## [Bolt] ${tag} Started\n${header}\n**Time:** ${now}\n**${planLabel}:**\n${plan}`;
     }
 
     if (event.kind === "op_complete") {
@@ -123,7 +123,7 @@ export class WeComProvider implements NotifyProvider {
         return `> ${icon} ${r.op} (${formatDuration(r.duration)})`;
       })
       .join("\n");
-    return `## [bolt] ${tag} <font color="${statusColor}">${statusIcon} ${allOk ? "Complete" : "Failed"}</font>\n${header}\n**Total:** ${total}\n**Results:**\n${rows}`;
+    return `## [Bolt] ${tag} <font color="${statusColor}">${statusIcon} ${allOk ? "Complete" : "Failed"}</font>\n${header}\n**Total:** ${total}\n**Results:**\n${rows}`;
   }
 
   async send(event: NotifyEvent): Promise<void> {
