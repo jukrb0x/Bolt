@@ -1,5 +1,6 @@
 import type { BoltPlugin, BoltPluginContext } from "../plugin";
 import path from "path";
+import { existsSync, readdirSync, statSync, renameSync, mkdirSync } from "fs";
 import { run, execRaw as exec } from "./helpers";
 import gitPlugin from "./git";
 import svnPlugin from "./svn";
@@ -24,7 +25,6 @@ function getProjectDir(uprojectPath: string): string {
 }
 
 function findZeroByteDlls(dir: string): string[] {
-  const { existsSync, readdirSync, statSync } = require("fs");
   if (!existsSync(dir)) return [];
   const results: string[] = [];
   const stack = [dir];
@@ -95,6 +95,18 @@ const plugin: BoltPlugin = {
       await svnPlugin.handlers["revert"]({ path: p }, ctx);
     },
 
+    setup: async (params, ctx) => {
+      const uePath = ctx.cfg.project.engine_repo.path;
+      const setupBat = `${w(uePath)}\\Setup.bat`;
+      if (!existsSync(setupBat)) {
+        ctx.logger.warn(`Setup.bat not found at ${setupBat}, skipping`);
+        return;
+      }
+      const force = (params.force ?? "true") === "true";
+      const cmd = `"${setupBat}"${force ? " --force" : ""}`;
+      await run(cmd, ctx);
+    },
+
     "generate-project": async (params, ctx) => {
       const uePath = ctx.cfg.project.engine_repo.path;
       const projFile = ctx.cfg.project.uproject;
@@ -105,7 +117,6 @@ const plugin: BoltPlugin = {
     },
 
     start: async (params, ctx) => {
-      const { existsSync } = require("fs");
       const uePath = ctx.cfg.project.engine_repo.path;
       const projFile = ctx.cfg.project.uproject;
       const projectDir = getProjectDir(projFile);
@@ -274,19 +285,13 @@ const plugin: BoltPlugin = {
     "build-engine": async (params, ctx) => {
       const uePath = ctx.cfg.project.engine_repo.path;
       const buildType = capitalize(params.config ?? "development");
-      const setupCmd = `"${w(uePath)}/Setup.bat" --force`;
+      await plugin.handlers["setup"]({ force: "true" }, ctx);
       const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
-      const buildCmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
-      ctx.logger.cmd(setupCmd);
-      if (!ctx.dryRun) {
-        const { existsSync } = require("fs");
-        if (existsSync(`${w(uePath)}/Setup.bat`)) exec(setupCmd);
-      }
       ctx.logger.cmd(genCmd);
       if (!ctx.dryRun) {
-        const { existsSync } = require("fs");
-        if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) exec(genCmd);
+        if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) await exec(genCmd, ctx);
       }
+      const buildCmd = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat" -Target="UE4Editor Win64 ${buildType}" -Target="ShaderCompileWorker Win64 Development -Quiet" -WaitMutex -FromMsBuild`;
       await run(buildCmd, ctx);
     },
 
@@ -324,7 +329,6 @@ const plugin: BoltPlugin = {
     },
 
     "fix-dll": async (params, ctx) => {
-      const { renameSync, mkdirSync } = require("fs");
       const uePath = ctx.cfg.project.engine_repo.path;
       const projectPath = ctx.cfg.project.project_repo.path;
       const projectDir = getProjectDir(ctx.cfg.project.uproject);

@@ -88,7 +88,7 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const runner = new Runner(cfg, { dryRun, logger, configDir, notifier: Notifier.fromConfig(cfg.notifications) });
+    const runner = new Runner(cfg, { dryRun, logger, configDir, notifier: dryRun ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications) });
 
     const start = Date.now();
     try {
