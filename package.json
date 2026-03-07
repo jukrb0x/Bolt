@@ -1,6 +1,6 @@
 {
   "name": "bolt-ue",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Unreal Engine workflow automation - CLI tool and library for Node.js and Bun",
   "author": "Jabriel <jabrielah@outlook.com>",
   "license": "Apache-2.0",
@@ -20,6 +20,7 @@
     "url": "https://github.com/jukrb0x/Bolt.git"
   },
   "type": "module",
+  "workspaces": ["docs"],
   "exports": {
     ".": {
       "import": "./src/index.ts",
