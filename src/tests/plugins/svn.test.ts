@@ -8,7 +8,7 @@ function makeCtx(dryRun = true, overrides: Partial<typeof testCfg.project> = {})
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
   const cfg = { ...testCfg, project: { ...testCfg.project, project_root: PROJECT_ROOT, ...overrides } };
-  return { cfg, dryRun, logger, logged, runtime: mockRuntime };
+  return { cfg, configDir: process.cwd(), dryRun, logger, logged, runtime: mockRuntime };
 }
 
 test("update produces svn update command", async () => {

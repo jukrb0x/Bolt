@@ -168,7 +168,7 @@ const plugin: BoltPlugin = {
       ];
       for (const p of procs) {
         ctx.logger.cmd(`taskkill /f /im ${p}`);
-        if (!ctx.dryRun) await ctx.runtime.shell(`taskkill /f /im ${p}`, { nothrow: true });
+        if (!ctx.dryRun) await ctx.runtime.spawn(["taskkill", "/f", "/im", p]).catch(() => {});
       }
     },
 

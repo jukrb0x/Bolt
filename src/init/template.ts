@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, rmSync } from "fs";
 import path from "path";
 import { tmpdir } from "os";
 import { BUNDLED_TEMPLATE } from "./bundled-template";
@@ -30,38 +30,112 @@ function isGitUrl(url: string): boolean {
 }
 
 /**
- * Load template from git repository by cloning to temp directory
+ * Try to construct a raw file URL for known hosting platforms.
+ * Returns null for unrecognised hosts.
+ */
+function rawBoltYamlUrl(repoUrl: string): string | null {
+  try {
+    const url = new URL(repoUrl);
+    const pathParts = url.pathname.replace(/\.git$/, "").replace(/\/$/, "").split("/").filter(Boolean);
+    if (pathParts.length < 2) return null;
+    const [owner, repo] = pathParts;
+
+    if (url.hostname === "github.com") {
+      return `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/bolt.yaml`;
+    }
+    if (url.hostname === "gitlab.com") {
+      return `https://gitlab.com/${owner}/${repo}/-/raw/HEAD/bolt.yaml`;
+    }
+    if (url.hostname === "bitbucket.org") {
+      return `https://bitbucket.org/${owner}/${repo}/raw/HEAD/bolt.yaml`;
+    }
+  } catch {
+    // Not a valid URL (e.g. git@...) — fall through
+  }
+  return null;
+}
+
+function cleanupTempDir(dir: string): void {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // best-effort cleanup
+  }
+}
+
+/**
+ * Load bolt.yaml from a git repository without cloning the full tree.
+ *
+ * Strategy A: For GitHub/GitLab/Bitbucket, fetch the raw file directly via HTTP.
+ * Strategy B: For generic git URLs, use sparse checkout to fetch only bolt.yaml.
+ *             --no-checkout prevents git hooks from running during clone.
  */
 async function loadFromGitRepo(url: string): Promise<TemplateLoadResult> {
+  // Strategy A — raw URL fetch for known platforms
+  const rawUrl = rawBoltYamlUrl(url);
+  if (rawUrl) {
+    try {
+      const res = await fetch(rawUrl);
+      if (res.ok) {
+        const content = await res.text();
+        return { ok: true, content, source: url };
+      }
+      // Non-200 — fall through to Strategy B
+    } catch {
+      // Network error — fall through to Strategy B
+    }
+  }
+
+  // Strategy B — sparse checkout (generic git URLs, git@..., .git)
   const tempDir = path.join(tmpdir(), `.bolt-template-${Date.now()}`);
 
   try {
-    // 1. Clone to temp directory (shallow clone for speed)
-    const cloneResult = Bun.spawnSync(["git", "clone", "--depth", "1", url, tempDir]);
+    // Clone metadata only — no files checked out, no hooks executed
+    const cloneResult = Bun.spawnSync([
+      "git", "clone", "--depth", "1", "--filter=blob:none", "--no-checkout", url, tempDir,
+    ]);
     if (cloneResult.exitCode !== 0) {
+      cleanupTempDir(tempDir);
       return { ok: false, error: `Git clone failed: ${cloneResult.stderr.toString()}` };
     }
 
-    // 2. Find bolt.yaml in root
+    // Configure sparse checkout to only fetch bolt.yaml
+    const initResult = Bun.spawnSync(
+      ["git", "sparse-checkout", "init", "--no-cone"],
+      { cwd: tempDir },
+    );
+    if (initResult.exitCode !== 0) {
+      cleanupTempDir(tempDir);
+      return { ok: false, error: `Sparse checkout init failed: ${initResult.stderr.toString()}` };
+    }
+
+    const setResult = Bun.spawnSync(
+      ["git", "sparse-checkout", "set", "bolt.yaml"],
+      { cwd: tempDir },
+    );
+    if (setResult.exitCode !== 0) {
+      cleanupTempDir(tempDir);
+      return { ok: false, error: `Sparse checkout set failed: ${setResult.stderr.toString()}` };
+    }
+
+    // Checkout only materialises bolt.yaml
+    const checkoutResult = Bun.spawnSync(["git", "checkout"], { cwd: tempDir });
+    if (checkoutResult.exitCode !== 0) {
+      cleanupTempDir(tempDir);
+      return { ok: false, error: `Git checkout failed: ${checkoutResult.stderr.toString()}` };
+    }
+
     const boltYamlPath = path.join(tempDir, "bolt.yaml");
     if (!existsSync(boltYamlPath)) {
+      cleanupTempDir(tempDir);
       return { ok: false, error: `No bolt.yaml found in repository root` };
     }
 
-    // 3. Read content
     const content = readFileSync(boltYamlPath, "utf8");
-
-    // 4. Cleanup temp dir
-    const cleanupResult = Bun.spawnSync(
-      process.platform === "win32" ? ["cmd", "/c", "rmdir", "/s", "/q", tempDir] : ["rm", "-rf", tempDir]
-    );
-
+    cleanupTempDir(tempDir);
     return { ok: true, content, source: url };
   } catch (err) {
-    // Cleanup on error
-    Bun.spawnSync(
-      process.platform === "win32" ? ["cmd", "/c", "rmdir", "/s", "/q", tempDir] : ["rm", "-rf", tempDir]
-    );
+    cleanupTempDir(tempDir);
     return { ok: false, error: `Failed to load from git repo: ${err}` };
   }
 }

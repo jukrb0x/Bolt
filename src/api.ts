@@ -62,6 +62,7 @@ export interface CreateContextOptions {
   dryRun?: boolean;
   logger?: BoltLogger;
   runtime?: Runtime;
+  configDir?: string;
 }
 
 /**
@@ -78,6 +79,7 @@ export function createContext(opts: CreateContextOptions): BoltPluginContext {
       "go-pipeline": { order: [], fail_stops: [] },
       plugins: [],
     },
+    configDir: opts.configDir ?? process.cwd(),
     dryRun: opts.dryRun ?? false,
     logger: opts.logger ?? new Logger(),
     runtime: opts.runtime ?? createRuntime(),
