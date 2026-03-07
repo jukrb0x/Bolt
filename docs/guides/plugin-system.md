@@ -2,9 +2,9 @@
 title: "Plugin System"
 ---
 
-## Overview
-
 Bolt's handler system is fully extensible. A plugin is a TypeScript module that exports a `BoltPlugin` object — a namespace string and a map of async handler functions.
+
+## Overview
 
 Handlers are invoked by `uses:` steps in ops and actions:
 
@@ -34,14 +34,14 @@ This lets you override any built-in handler by providing a plugin with the same 
 
 ### 1. Scaffold
 
-```
+```bash
 bolt plugin new myplugin           # project-scope
 bolt plugin new myplugin --user    # user-scope
 ```
 
-### 2. Install types
+### 2. Install Types
 
-```
+```bash
 cd .bolt/plugins/myplugin
 bun install
 ```
@@ -74,9 +74,13 @@ const plugin: BoltPlugin = {
 export default plugin;
 ```
 
-### 4. Register (project-scope auto-discovery)
+### 4. Register
+
+**Project-scope auto-discovery**
 
 If the plugin is at `.bolt/plugins/myplugin/index.ts`, it is discovered automatically — no `bolt.yaml` change needed.
+
+**Explicit path**
 
 For an explicit path (e.g. outside `.bolt/plugins/`):
 
@@ -88,7 +92,7 @@ plugins:
 
 ## Plugin API
 
-### `BoltPluginHandler`
+### BoltPluginHandler
 
 ```typescript
 type BoltPluginHandler = (
@@ -101,7 +105,7 @@ type BoltPluginHandler = (
 - Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation)
 - Overridden by any CLI-level params (`--key=val` passed to `bolt go` or `bolt run`)
 
-### `BoltPluginContext`
+### BoltPluginContext
 
 ```typescript
 interface BoltPluginContext {
@@ -111,7 +115,7 @@ interface BoltPluginContext {
 }
 ```
 
-### `BoltLogger`
+### BoltLogger
 
 ```typescript
 interface BoltLogger {
@@ -124,14 +128,43 @@ interface BoltLogger {
 
 ## Built-in Plugins
 
-See [handlers.md](./handlers.md) for the full list of built-in `ue/`, `fs/`, and `json/` handlers.
+See [Built-in Handlers](/api/built-in-handlers.md) for the full list of built-in `ue/`, `fs/`, and `json/` handlers.
 
 ## Type Package
 
 Plugin types are published to npm as `bolt-ue`:
 
-```
+```bash
 bun add -d bolt-ue
 ```
 
 `bolt-ue` ships a single `bolt.d.ts` containing `declare module "bolt"`. The scaffolded `tsconfig.json` includes `"bolt-ue"` in `compilerOptions.types`, which activates the ambient declaration so `import type { BoltPlugin } from "bolt"` resolves correctly in any TS LSP.
+
+## Overriding Built-ins
+
+To override a built-in handler, create a plugin with the same namespace at a higher scope:
+
+```typescript
+// .bolt/plugins/ue/index.ts
+import type { BoltPlugin } from "bolt";
+
+const plugin: BoltPlugin = {
+  namespace: "ue",
+  handlers: {
+    // Override the built-in build handler
+    build: async (params, ctx) => {
+      ctx.logger.info("Custom build logic...");
+      // Your implementation
+    },
+  },
+};
+
+export default plugin;
+```
+
+Since project-scope plugins have higher priority than built-ins, your custom implementation will be used instead.
+
+## See Also
+- [Plugin API](/api/plugin-api.md) - API reference
+- [Plugin Development Tutorial](/guides/plugin-development.md) - Step-by-step guide
+- [Built-in Handlers](/api/built-in-handlers.md) - Existing handlers
