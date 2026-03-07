@@ -75,10 +75,11 @@ export function Input({ label, placeholder, defaultValue = "", onSubmit }: Input
         return;
       }
 
-      // Only accept printable characters
-      if (input.length === 1 && input.charCodeAt(0) >= 32) {
-        setValue((v) => v.slice(0, cursorPos) + input + v.slice(cursorPos));
-        setCursorPos((p) => p + 1);
+      // Accept printable characters (including multi-char paste)
+      const printable = [...input].filter((ch) => ch.charCodeAt(0) >= 32).join("");
+      if (printable.length > 0) {
+        setValue((v) => v.slice(0, cursorPos) + printable + v.slice(cursorPos));
+        setCursorPos((p) => p + printable.length);
       }
     },
     { isActive: ready }
