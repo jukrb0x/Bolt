@@ -79,7 +79,7 @@ export class Runner {
     visited.add(actionName);
 
     const isTopLevel = visited.size === 1;
-    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
+    const notifier = this.opts.dryRun ? Notifier.fromConfig(undefined) : (this.opts.notifier ?? Notifier.fromConfig(undefined));
     const startTime = Date.now();
 
     let ctx: BuildContext | undefined;
@@ -165,7 +165,7 @@ export class Runner {
       startTime,
     };
 
-    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
+    const notifier = this.opts.dryRun ? Notifier.fromConfig(undefined) : (this.opts.notifier ?? Notifier.fromConfig(undefined));
     const opNames = sorted.map((o) => o.name);
     const results: { op: string; ok: boolean; duration: number }[] = [];
     await notifier.fire({ kind: "start", ctx, ops: opNames });
