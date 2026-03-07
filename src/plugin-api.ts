@@ -1,23 +1,23 @@
 // src/plugin-api.ts
 /**
  * Public API types for Bolt plugins and library users.
+ * This file is the entry point for dts-bundle-generator (build:types).
+ * Re-exports canonical types where possible; defines narrowed shims
+ * for types that would otherwise leak internal details (e.g. BoltConfig
+ * pulling in every Zod schema).
  */
 
-// Runtime types
-export interface SpawnResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
+// Re-export canonical types that are safe to expose as-is (no Zod leakage)
+export type { SpawnResult, SpawnOptions, Runtime } from "./runtime/types";
+export type { BoltLogger } from "./plugin";
 
-export interface Runtime {
-  spawn(cmd: string[], opts?: { cwd?: string }): Promise<SpawnResult>;
-  spawnSync(cmd: string[]): SpawnResult;
-  shell(command: string, opts?: { cwd?: string }): Promise<SpawnResult>;
-  parseYaml(text: string): unknown;
-}
+// --- Narrowed public-API types ---
+// Project/RepoConfig are defined locally to avoid pulling in Zod schemas
+// from config.ts. Keep in sync with the canonical definitions there.
 
-// Config types
+import type { Runtime } from "./runtime/types";
+import type { BoltLogger } from "./plugin";
+
 export interface RepoConfig {
   path: string;
   vcs: "git" | "svn";
@@ -34,29 +34,21 @@ export interface Project {
   [key: string]: string | boolean | undefined | RepoConfig;
 }
 
+/** Subset of BoltConfig exposed to external plugin/library consumers. */
 export interface BoltPluginConfig {
   project: Project;
   vars: Record<string, string>;
 }
 
-// Logger
-export interface BoltLogger {
-  info(msg: string): void;
-  warn(msg: string): void;
-  error(msg: string): void;
-  debug(msg: string): void;
-  cmd(msg: string): void;
-}
-
-// Plugin context
+/** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
 export interface BoltPluginContext {
   cfg: BoltPluginConfig;
+  configDir: string;
   dryRun: boolean;
   logger: BoltLogger;
   runtime: Runtime;
 }
 
-// Plugin types
 export type BoltPluginHandler = (
   params: Record<string, string>,
   ctx: BoltPluginContext,
@@ -67,7 +59,6 @@ export interface BoltPlugin {
   handlers: Record<string, BoltPluginHandler>;
 }
 
-// High-level API types
 export interface RunOptions {
   config?: BoltPluginConfig;
   configPath?: string;

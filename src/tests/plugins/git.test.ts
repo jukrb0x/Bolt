@@ -8,7 +8,7 @@ function makeCtx(dryRun = true): BoltPluginContext & { logged: string[] } {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
   const cfg = { ...testCfg, project: { ...testCfg.project, engine_root: ENGINE_ROOT } };
-  return { cfg, dryRun, logger, logged, runtime: mockRuntime };
+  return { cfg, configDir: process.cwd(), dryRun, logger, logged, runtime: mockRuntime };
 }
 
 test("pull produces git pull command with default path and branch", async () => {
@@ -73,7 +73,7 @@ test("pull uses git_branch from config when branch param absent", async () => {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
   const cfg = { ...testCfg, project: { ...testCfg.project, git_branch: "release/2.0", engine_root: ENGINE_ROOT } };
-  const ctx = { cfg, dryRun: true, logger, logged, runtime: mockRuntime };
+  const ctx = { cfg, configDir: process.cwd(), dryRun: true, logger, logged, runtime: mockRuntime };
   await gitPlugin.handlers["pull"]({}, ctx);
   expect(logged.some((l) => l.includes("release/2.0"))).toBe(true);
 });

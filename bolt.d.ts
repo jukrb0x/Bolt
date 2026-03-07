@@ -4,23 +4,32 @@
  */
 
 declare module "bolt" {
-  /**
-   * Public API types for Bolt plugins and library users.
-   */
   export interface SpawnResult {
   	exitCode: number;
   	stdout: string;
   	stderr: string;
   }
+  export interface SpawnOptions {
+  	cwd?: string;
+  	env?: Record<string, string>;
+  }
   export interface Runtime {
-  	spawn(cmd: string[], opts?: {
-  		cwd?: string;
-  	}): Promise<SpawnResult>;
-  	spawnSync(cmd: string[]): SpawnResult;
-  	shell(command: string, opts?: {
-  		cwd?: string;
-  	}): Promise<SpawnResult>;
+  	/** Spawn a process and wait for completion */
+  	spawn(cmd: string[], opts?: SpawnOptions): Promise<SpawnResult>;
+  	/** Spawn a process synchronously */
+  	spawnSync(cmd: string[], opts?: SpawnOptions): SpawnResult;
+  	/** Execute a shell command */
+  	shell(command: string, opts?: SpawnOptions): Promise<SpawnResult>;
+  	/** Parse YAML string */
   	parseYaml(text: string): unknown;
+  }
+  /** Subset of Logger exposed to plugin handlers. */
+  export interface BoltLogger {
+  	info(msg: string): void;
+  	warn(msg: string): void;
+  	error(msg: string): void;
+  	debug(msg: string): void;
+  	cmd(msg: string): void;
   }
   export interface RepoConfig {
   	path: string;
@@ -36,19 +45,15 @@ declare module "bolt" {
   	use_tortoise?: boolean;
   	[key: string]: string | boolean | undefined | RepoConfig;
   }
+  /** Subset of BoltConfig exposed to external plugin/library consumers. */
   export interface BoltPluginConfig {
   	project: Project;
   	vars: Record<string, string>;
   }
-  export interface BoltLogger {
-  	info(msg: string): void;
-  	warn(msg: string): void;
-  	error(msg: string): void;
-  	debug(msg: string): void;
-  	cmd(msg: string): void;
-  }
+  /** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
   export interface BoltPluginContext {
   	cfg: BoltPluginConfig;
+  	configDir: string;
   	dryRun: boolean;
   	logger: BoltLogger;
   	runtime: Runtime;

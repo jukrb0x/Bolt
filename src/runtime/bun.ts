@@ -10,9 +10,30 @@ export function createBunRuntime(): Runtime {
         stdout: "pipe",
         stderr: "pipe",
       });
+
+      // Tee piped output to the console so user-visible commands stream in real time
+      const [stdout, stderr] = await Promise.all([
+        (async () => {
+          let buf = "";
+          for await (const chunk of proc.stdout) {
+            const text = new TextDecoder().decode(chunk);
+            process.stdout.write(text);
+            buf += text;
+          }
+          return buf;
+        })(),
+        (async () => {
+          let buf = "";
+          for await (const chunk of proc.stderr) {
+            const text = new TextDecoder().decode(chunk);
+            process.stderr.write(text);
+            buf += text;
+          }
+          return buf;
+        })(),
+      ]);
+
       const exitCode = await proc.exited;
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
       return { exitCode, stdout, stderr };
     },
 

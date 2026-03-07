@@ -17,8 +17,8 @@ export function createNodeRuntime(): Runtime {
         let stdout = "";
         let stderr = "";
 
-        proc.stdout?.on("data", (data) => { stdout += data.toString(); });
-        proc.stderr?.on("data", (data) => { stderr += data.toString(); });
+        proc.stdout?.on("data", (data) => { process.stdout.write(data); stdout += data.toString(); });
+        proc.stderr?.on("data", (data) => { process.stderr.write(data); stderr += data.toString(); });
 
         proc.on("close", (exitCode) => {
           resolve({ exitCode: exitCode ?? 1, stdout, stderr });

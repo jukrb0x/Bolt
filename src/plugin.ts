@@ -12,6 +12,7 @@ export interface BoltLogger {
 
 export interface BoltPluginContext {
   cfg: BoltConfig;
+  configDir: string;
   dryRun: boolean;
   logger: BoltLogger;
   runtime: Runtime;

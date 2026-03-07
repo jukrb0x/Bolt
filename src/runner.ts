@@ -272,6 +272,7 @@ export class Runner {
 
     const pluginCtx: BoltPluginContext = {
       cfg: this.cfg,
+      configDir: this.opts.configDir ?? process.cwd(),
       dryRun: this.opts.dryRun ?? false,
       logger: this.opts.logger ?? new Logger(),
       runtime: this.runtime,
