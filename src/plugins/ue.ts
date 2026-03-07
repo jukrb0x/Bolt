@@ -168,7 +168,7 @@ const plugin: BoltPlugin = {
           path.join(uePath, "Engine", "Binaries", platform, binName),
         ];
         ctx.logger.info(`Searching for ${binName}`);
-        exePath = candidates.find(existsSync);
+        exePath = ctx.dryRun ? candidates[0] : candidates.find(existsSync);
         if (!exePath)
           throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
       } else {
@@ -181,7 +181,7 @@ const plugin: BoltPlugin = {
               `${binDir}\\UnrealEditor.exe`,
             ]
           : [`${binDir}\\UE4Editor.exe`, `${binDir}\\UnrealEditor.exe`];
-        exePath = candidates.find(existsSync);
+        exePath = ctx.dryRun ? candidates[0] : candidates.find(existsSync);
         if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
       }
 
