@@ -9,7 +9,7 @@ import os from "os";
 function makeCtx(dryRun = true): BoltPluginContext & { logged: string[] } {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
-  return { cfg: testCfg, dryRun, logger, logged, runtime: mockRuntime };
+  return { cfg: testCfg, configDir: process.cwd(), dryRun, logger, logged, runtime: mockRuntime };
 }
 
 test("build editor target produces correct command", async () => {
@@ -142,6 +142,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
   const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_root: fakeProject } };
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: false,
     logger: new Logger({ sink: () => {} }),
     runtime: mockRuntime,
@@ -158,6 +159,7 @@ test("fix-dll does not fail when no DLLs found", async () => {
   const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_root: fakeProject } };
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: false,
     logger: new Logger({ sink: () => {} }),
     runtime: mockRuntime,
@@ -171,6 +173,7 @@ test("svn-cleanup with use_tortoise=false uses plain svn", async () => {
   const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: false } };
   const ctx2 = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
@@ -186,6 +189,7 @@ test("svn-revert with use_tortoise=false uses plain svn", async () => {
   const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: false } };
   const ctx2 = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
@@ -202,6 +206,7 @@ test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async
   const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: true } };
   const ctx2 = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: true,
     logger: new Logger({ sink: () => {} }),
     logged: [] as string[],
@@ -218,6 +223,7 @@ test("svn-cleanup without use_tortoise uses svn when TortoiseProc absent", async
   const logged2: string[] = [];
   const ctx2 = {
     cfg: testCfg,
+    configDir: process.cwd(),
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
@@ -256,6 +262,7 @@ test("update-engine with engine_repo.vcs=svn calls svn update", async () => {
   };
   const ctx2 = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,
@@ -273,6 +280,7 @@ test("update-project with project_repo.vcs=git calls git pull", async () => {
   };
   const ctx2 = {
     cfg: fakeCfg,
+    configDir: process.cwd(),
     dryRun: true,
     logger: new Logger({ sink: (l: string) => logged2.push(l) }),
     logged: logged2,

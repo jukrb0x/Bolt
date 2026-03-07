@@ -34,7 +34,7 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);
       if (!ctx.dryRun) {
-        const result = await ctx.runtime.shell(`svn update "${p}" --non-interactive --trust-server-cert`);
+        const result = await ctx.runtime.spawn(["svn", "update", p, "--non-interactive", "--trust-server-cert"]);
         if (result.exitCode !== 0) throw new Error(`svn update failed (exit ${result.exitCode})`);
       }
     },
@@ -53,7 +53,7 @@ const plugin: BoltPlugin = {
       } else {
         ctx.logger.cmd(`svn cleanup "${p}"`);
         if (!ctx.dryRun) {
-          const result = await ctx.runtime.shell(`svn cleanup "${p}"`);
+          const result = await ctx.runtime.spawn(["svn", "cleanup", p]);
           if (result.exitCode !== 0) throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
         }
       }
@@ -73,7 +73,7 @@ const plugin: BoltPlugin = {
       } else {
         ctx.logger.cmd(`svn revert -R "${p}"`);
         if (!ctx.dryRun) {
-          const result = await ctx.runtime.shell(`svn revert -R "${p}"`);
+          const result = await ctx.runtime.spawn(["svn", "revert", "-R", p]);
           if (result.exitCode !== 0) throw new Error(`svn revert failed (exit ${result.exitCode})`);
         }
       }
@@ -107,7 +107,7 @@ const plugin: BoltPlugin = {
         if (!params.message) throw new Error("svn/commit requires with: message: when not using TortoiseSVN");
         ctx.logger.cmd(`svn commit "${p}" -m "${params.message}"`);
         if (!ctx.dryRun) {
-          const result = await ctx.runtime.shell(`svn commit "${p}" -m "${params.message}"`);
+          const result = await ctx.runtime.spawn(["svn", "commit", p, "-m", params.message]);
           if (result.exitCode !== 0) throw new Error(`svn commit failed (exit ${result.exitCode})`);
         }
       }
@@ -117,7 +117,7 @@ const plugin: BoltPlugin = {
       if (!params.path) throw new Error("svn/add requires with: path:");
       ctx.logger.cmd(`svn add "${params.path}"`);
       if (!ctx.dryRun) {
-        const result = await ctx.runtime.shell(`svn add "${params.path}"`);
+        const result = await ctx.runtime.spawn(["svn", "add", params.path]);
         if (result.exitCode !== 0) throw new Error(`svn add failed (exit ${result.exitCode})`);
       }
     },
@@ -126,7 +126,7 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       ctx.logger.cmd(`svn status "${p}"`);
       if (!ctx.dryRun) {
-        const result = await ctx.runtime.shell(`svn status "${p}"`);
+        const result = await ctx.runtime.spawn(["svn", "status", p]);
         if (result.exitCode !== 0) throw new Error(`svn status failed (exit ${result.exitCode})`);
       }
     },
