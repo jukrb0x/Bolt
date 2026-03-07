@@ -59,6 +59,11 @@ export class Logger {
     this.file?.write(`<< ${name}: FAILED (${dur.toFixed(1)}s)\n`);
   }
 
+  /** Write raw text (e.g. child-process output) to the log file only. */
+  writeRaw(text: string) {
+    this.file?.write(text);
+  }
+
   close() {
     this.file?.end();
   }

@@ -17,8 +17,8 @@ export function createNodeRuntime(): Runtime {
         let stdout = "";
         let stderr = "";
 
-        proc.stdout?.on("data", (data) => { process.stdout.write(data); stdout += data.toString(); });
-        proc.stderr?.on("data", (data) => { process.stderr.write(data); stderr += data.toString(); });
+        proc.stdout?.on("data", (data) => { const t = data.toString(); process.stdout.write(data); stdout += t; opts?.onOutput?.(t); });
+        proc.stderr?.on("data", (data) => { const t = data.toString(); process.stderr.write(data); stderr += t; opts?.onOutput?.(t); });
 
         proc.on("close", (exitCode) => {
           resolve({ exitCode: exitCode ?? 1, stdout, stderr });
@@ -37,10 +37,16 @@ export function createNodeRuntime(): Runtime {
         env: opts?.env ? { ...process.env, ...opts.env } : process.env,
         encoding: "utf-8",
       });
+      const out = result.stdout ?? "";
+      const err = result.stderr ?? "";
+      if (opts?.onOutput) {
+        if (out) opts.onOutput(out);
+        if (err) opts.onOutput(err);
+      }
       return {
         exitCode: result.status ?? 1,
-        stdout: result.stdout ?? "",
-        stderr: result.stderr ?? "",
+        stdout: out,
+        stderr: err,
       };
     },
 
@@ -59,8 +65,8 @@ export function createNodeRuntime(): Runtime {
         let stdout = "";
         let stderr = "";
 
-        proc.stdout?.on("data", (data) => { process.stdout.write(data); stdout += data.toString(); });
-        proc.stderr?.on("data", (data) => { process.stderr.write(data); stderr += data.toString(); });
+        proc.stdout?.on("data", (data) => { const t = data.toString(); process.stdout.write(data); stdout += t; opts?.onOutput?.(t); });
+        proc.stderr?.on("data", (data) => { const t = data.toString(); process.stderr.write(data); stderr += t; opts?.onOutput?.(t); });
 
         proc.on("close", (exitCode) => {
           resolve({ exitCode: exitCode ?? 1, stdout, stderr });
