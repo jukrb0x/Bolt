@@ -1,4 +1,6 @@
-# Commands
+---
+title: "Commands"
+---
 
 ## bolt go
 

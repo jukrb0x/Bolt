@@ -1,0 +1,115 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Bolt",
+  "description": "Unreal Engine workflow automation - CLI tool and library for Node.js and Bun",
+  "colors": {
+    "primary": "#646cff",
+    "light": "#a5b4fc",
+    "dark": "#4f46e5"
+  },
+  "logo": {
+    "light": "/logo.svg",
+    "dark": "/logo.svg"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guide",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": [
+              "index",
+              "guides/getting-started",
+              "guides/installation",
+              "guides/first-project"
+            ]
+          },
+          {
+            "group": "Daily Workflow",
+            "pages": [
+              "guides/daily-workflow",
+              "guides/error-handling"
+            ]
+          },
+          {
+            "group": "How It Works",
+            "pages": [
+              "guides/architecture",
+              "guides/plugin-system",
+              "guides/runtime"
+            ]
+          },
+          {
+            "group": "Plugin Development",
+            "pages": [
+              "guides/plugin-development"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "guides/bolt-yaml",
+              "guides/interpolation",
+              "guides/project-structure",
+              "guides/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Reference",
+            "pages": [
+              "api/plugin-api",
+              "api/config-schema",
+              "api/built-in-handlers",
+              "api/library-usage"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/index",
+              "cli/go",
+              "cli/run",
+              "cli/list",
+              "cli/info",
+              "cli/check",
+              "cli/init",
+              "cli/config",
+              "cli/plugin",
+              "cli/inspect",
+              "cli/help",
+              "cli/version",
+              "cli/self-update"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/jukrb0x/Bolt"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/jukrb0x/Bolt"
+    }
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude"]
+  }
+}

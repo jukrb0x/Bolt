@@ -17,52 +17,37 @@ Key features:
   - Declarative configuration via bolt.yaml
   - Composable operations (ops) with variants
   - Plugin system for extensibility
-  - Built-in support for UE5 workflows`,
+  - Built-in support for UE5 workflows
+
+Full docs: https://bolt-ue.vercel.app`,
       },
       {
         id: "quick-start",
         title: "Quick Start",
-        content: `1. Create a bolt.yaml in your project root
-2. Define your targets, ops, and actions
-3. Run 'bolt go <ops...>' to execute a pipeline
+        content: `1. Initialize: bolt init
+2. Run workflow: bolt go update build start
 
-Example bolt.yaml:
+Example:
+  bolt init
+  bolt go update build start
 
-  project:
-    name: MyGame
-    engine_repo:
-      path: ./engine
-      vcs: git
-    project_repo:
-      path: ./project
-      vcs: svn
-    uproject: ./project/MyGame.uproject
-
-  targets:
-    editor: { kind: editor, config: Development }
-    game: { kind: game, config: Shipping }
-
-  ops:
-    build:
-      default: [compile-editor]
-      dev: [compile-editor, hot-reload]
-
-Run: bolt go build
-This executes the default variant of the 'build' op.`,
+Full guide: https://bolt-ue.vercel.app/guides/first-project`,
       },
       {
         id: "commands",
-        title: "Available Commands",
-        content: `bolt go <ops...>      Run ops in pipeline order
+        title: "Commands",
+        content: `bolt go <ops...>      Run ops in pipeline
 bolt run <action>     Execute a named action
-bolt list             List available ops and actions
-bolt info             Print project config summary
+bolt list             List ops and actions
+bolt info             Show project config
 bolt check            Validate bolt.yaml
-bolt config           Manage configuration
+bolt init            Interactive setup
 bolt plugin           Manage plugins
 bolt inspect          Debug op steps
-bolt version          Print version
-bolt self-update      Update bolt itself`,
+bolt --version        Print version
+bolt self-update      Update bolt
+
+Full reference: https://bolt-ue.vercel.app/cli/`,
       },
     ],
   },
@@ -74,67 +59,40 @@ bolt self-update      Update bolt itself`,
       {
         id: "usage",
         title: "Usage",
-        content: `bolt go <op1> <op2> ... [options]
-
-The 'go' command runs one or more ops in sequence. Each op expands
-into a series of steps that are executed in order.
+        content: `bolt go <op1> <op2> ... [--dry-run]
 
 Options:
   --dry-run    Print steps without executing
 
 Examples:
-  bolt go update:svn build start
+  bolt go update build start
   bolt go build --dry-run
-  bolt go sync:git compile-editor`,
+
+Full docs: https://bolt-ue.vercel.app/cli/go`,
       },
       {
-        id: "op-variants",
-        title: "Op Variants",
-        content: `Ops can have multiple variants selected with a colon:
+        id: "variants",
+        title: "Variants",
+        content: `Select op variants with a colon:
 
-  bolt go build:dev     # Uses 'dev' variant
-  bolt go build:ci      # Uses 'ci' variant
-  bolt go build         # Uses 'default' variant
+  bolt go build:dev     # 'dev' variant
+  bolt go build:ci      # 'ci' variant
+  bolt go build         # 'default' variant
 
-In bolt.yaml:
-
-  ops:
-    build:
-      default: [compile-editor]
-      dev: [compile-editor, hot-reload]
-      ci: [compile-editor, run-tests, package]`,
-      },
-      {
-        id: "op-params",
-        title: "Op Parameters",
-        content: `Pass parameters to ops using key=value syntax:
-
-  bolt go deploy env=staging region=us-east
-
-Parameters are available in op steps via template interpolation:
-
-  ops:
-    deploy:
-      default:
-        - exec: ./deploy.sh --env {{params.env}} --region {{params.region}}`,
+Pass inline params:
+  bolt go build --config=debug --platform=Win64`,
       },
       {
         id: "pipeline",
-        title: "Pipeline Mode",
-        content: `When running multiple ops, they form a pipeline:
+        title: "Pipeline",
+        content: `Ops run in go-pipeline.order regardless of argument order:
 
-  bolt go update build start
+  bolt go start build    # runs build first, then start
 
-This runs:
-  1. All steps from 'update' op
-  2. All steps from 'build' op
-  3. All steps from 'start' op
-
-The go-pipeline setting in bolt.yaml can configure behavior:
-
+Configure in bolt.yaml:
   go-pipeline:
-    parallel: false     # Run ops sequentially
-    fail-fast: true     # Stop on first error`,
+    order: [kill, update, build, start]
+    fail_stops: [build]`,
       },
     ],
   },
@@ -146,163 +104,30 @@ The go-pipeline setting in bolt.yaml can configure behavior:
       {
         id: "usage-run",
         title: "Usage",
-        content: `bolt run <action> [options]
-
-The 'run' command executes a named action from bolt.yaml.
-Actions are single-purpose, unlike ops which compose.
+        content: `bolt run <action> [--dry-run]
 
 Options:
   --dry-run    Print steps without executing
 
 Examples:
   bolt run package-game
-  bolt run deploy-server --dry-run`,
+  bolt run deploy --dry-run
+
+Full docs: https://bolt-ue.vercel.app/cli/run`,
       },
       {
-        id: "defining-actions",
-        title: "Defining Actions",
-        content: `Actions are defined in bolt.yaml under the 'actions' key:
+        id: "dependencies",
+        title: "Dependencies",
+        content: `Actions can depend on other actions:
 
   actions:
-    package-game:
-      - ue: package-game
-        target: game
-        output: ./Builds
+    build-game:
+      steps: [...]
+    deploy:
+      depends: [build-game]
+      steps: [...]
 
-    deploy-server:
-      - exec: ./scripts/deploy.sh
-        env:
-          SERVER_HOST: {{env.DEPLOY_HOST}}
-
-    clean:
-      - fs: rm
-        path: ./Builds
-      - fs: rm
-        path: ./Saved`,
-      },
-    ],
-  },
-  {
-    id: "ops",
-    title: "Ops System",
-    shortDesc: "Composable operations with variants",
-    sections: [
-      {
-        id: "op-basics",
-        title: "Op Basics",
-        content: `Ops are reusable, composable sequences of steps.
-They support variants and parameters for flexibility.
-
-Structure:
-
-  ops:
-    <name>:
-      default: [step1, step2, ...]
-      <variant>: [step1, step2, ...]
-
-Example:
-
-  ops:
-    sync:
-      default: [update:svn]
-      git: [update:git]
-      full: [update:svn, update:git]`,
-      },
-      {
-        id: "step-types",
-        title: "Step Types",
-        content: `Steps are the atomic units of execution:
-
-  - ue: <action>       Unreal Engine operations
-  - exec: <command>    Shell command execution
-  - fs: <action>       Filesystem operations
-  - git: <action>      Git operations
-  - svn: <action>      SVN operations
-  - json: <action>     JSON file operations
-  - plugin: <action>   Custom plugin operations
-
-Each step type has its own parameters and options.`,
-      },
-      {
-        id: "ue-steps",
-        title: "UE Steps",
-        content: `Unreal Engine step types:
-
-  ue: generate-project-files
-    Generate IDE project files
-
-  ue: compile-editor
-    Compile the editor target
-
-  ue: compile-game
-    Compile the game target
-
-  ue: cook-content
-    Cook content for the specified target
-
-  ue: package-game
-    Package the game for distribution
-
-  ue: run-automation
-    Run automation tests
-
-Parameters:
-  target: <name>       Target from bolt.yaml
-  config: <config>     Build configuration
-  output: <path>       Output directory (package-game)`,
-      },
-      {
-        id: "exec-steps",
-        title: "Exec Steps",
-        content: `Execute shell commands:
-
-  - exec: <command>
-    cwd: <directory>        # Working directory
-    env:                    # Environment variables
-      VAR: value
-    timeout: 300000         # Timeout in ms
-    silent: false           # Suppress output
-
-Examples:
-
-  - exec: npm run build
-    cwd: ./Frontend
-
-  - exec: ./scripts/deploy.sh
-    env:
-      ENV: production
-      DEBUG: "0"`,
-      },
-      {
-        id: "fs-steps",
-        title: "FS Steps",
-        content: `Filesystem operations:
-
-  fs: copy
-    src: <path>
-    dest: <path>
-
-  fs: rm
-    path: <path>
-
-  fs: mkdir
-    path: <path>
-
-  fs: write
-    path: <path>
-    content: <string>
-
-  fs: read
-    path: <path>
-
-Examples:
-
-  - fs: mkdir
-    path: ./Builds
-
-  - fs: copy
-    src: ./Dist
-    dest: ./Builds/v1.0`,
+bolt run deploy    # runs build-game first`,
       },
     ],
   },
@@ -312,150 +137,54 @@ Examples:
     shortDesc: "Configuration schema",
     sections: [
       {
-        id: "project-section",
+        id: "project",
         title: "Project Section",
-        content: `The project section defines basic project info:
+        content: `project:
+  name: MyGame
+  engine_repo:
+    path: ./engine
+    vcs: git
+    branch: main
+  project_repo:
+    path: ./project
+    vcs: svn
+  uproject: ./project/MyGame.uproject
 
-  project:
-    name: MyGame                    # Project name
-    engine_repo:                    # Engine configuration
-      path: ./engine                # Path to UE
-      vcs: git                      # VCS for engine (git/svn)
-      url: https://...              # Optional: repo URL
-      branch: main                  # Optional: git branch
-    project_repo:                   # Project configuration
-      path: ./project               # Project directory
-      vcs: svn                      # VCS for project (git/svn)
-      url: svn://...                # Optional: repo URL
-    uproject: ./project/MyGame.uproject  # Path to .uproject file`,
+Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml`,
       },
       {
-        id: "targets-section",
-        title: "Targets Section",
-        content: `Define build targets:
+        id: "targets",
+        title: "Targets",
+        content: `targets:
+  editor: { kind: editor, config: Development }
+  game: { kind: game, config: Shipping, name: MyGame }
 
-  targets:
-    editor:
-      kind: editor
-      config: Development
-
-    game-dev:
-      kind: game
-      config: Development
-      name: MyGame
-
-    game:
-      kind: game
-      config: Shipping
-      name: MyGame
-
-Target properties:
-  kind: editor | game | server | program
-  config: Development | Debug | Shipping | Test
-  name: Target name (for game/server targets)`,
+Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml#targets`,
       },
       {
-        id: "ops-section",
-        title: "Ops Section",
-        content: `Define composable operations:
+        id: "ops",
+        title: "Ops",
+        content: `ops:
+  build:
+    default:
+      - uses: ue/build
+        with:
+          target: editor
+    ci:
+      - uses: ue/build
+      - run: npm test
 
-  ops:
-    update:
-      default: [update:svn]
-      full: [update:svn, update:git]
-
-    build:
-      default: [generate-project-files, compile-editor]
-
-    start:
-      default: [run-editor]
-
-    go-to:
-      default: [update, build, start]
-      dev: [update:full, build, start]`,
-      },
-      {
-        id: "actions-section",
-        title: "Actions Section",
-        content: `Define single-purpose actions:
-
-  actions:
-    clean:
-      - fs: rm
-        path: ./Saved
-      - fs: rm
-        path: ./Intermediate
-
-    package:
-      - ue: package-game
-        target: game
-        output: ./Builds/{{env.BUILD_NUMBER}}`,
-      },
-      {
-        id: "notifications",
-        title: "Notifications",
-        content: `Configure notifications for long-running ops:
-
-  notifications:
-    on_success: true
-    on_failure: true
-    slack:
-      webhook_url: {{env.SLACK_WEBHOOK}}
-    discord:
-      webhook_url: {{env.DISCORD_WEBHOOK}}
-
-Notifications are sent when ops complete.`,
+Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml#ops`,
       },
       {
         id: "interpolation",
-        title: "Template Interpolation",
-        content: `Use {{...}} syntax for dynamic values:
+        title: "Interpolation",
+        content: `Use \${{ }} for dynamic values:
 
-  {{env.VAR}}           Environment variable
-  {{params.name}}       Op parameter
-  {{project.name}}      Project config value
-  {{target.name}}       Current target name
+  \${{ env.VAR }}         Environment variable
+  \${{ project.name }}   Project config value
 
-Examples:
-
-  - exec: ./deploy.sh
-    env:
-      VERSION: {{env.BUILD_VERSION}}
-
-  - fs: mkdir
-    path: ./Builds/{{params.branch}}`,
-      },
-      {
-        id: "init-section",
-        title: "_init Section (Templates)",
-        content: `Templates can include an _init section to define interactive questions:
-
-_init:
-  project_name:
-    prompt: "Project name"
-    default: "my-project"
-
-  engine_vcs:
-    prompt: "Engine VCS"
-    type: select
-    options: [git, svn]
-    default: git
-
-  engine_branch:
-    prompt: "Engine branch"
-    default: main
-    condition: "engine_vcs == 'git'"
-
-Question properties:
-  prompt: Question text shown to user
-  type: text | select | confirm
-  default: Default value
-  options: Array of options (for select type)
-  required: Whether answer is required
-  condition: Expression to show conditionally
-
-Use \${{ _init.var_name }} in template to reference answers.
-After Q&A, the _init section is removed from output.`,
+Full docs: https://bolt-ue.vercel.app/reference/interpolation`,
       },
     ],
   },
