@@ -38,7 +38,7 @@ export class PluginRegistry {
           try {
             await this.loadFromPath(entry, candidate);
           } catch (e: any) {
-            console.warn(`[bolt] Failed to load plugin "${entry}" from ${candidate}: ${e.message}`);
+            console.warn(`[Bolt] Failed to load plugin "${entry}" from ${candidate}: ${e.message}`);
           }
           break;
         }
