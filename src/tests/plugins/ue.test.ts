@@ -152,7 +152,13 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
   mkdirSync(binariesDir, { recursive: true });
   writeFileSync(`${binariesDir}/zero.dll`, "");
   writeFileSync(`${binariesDir}/nonzero.dll`, "content");
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_root: fakeProject } };
+  const fakeCfg = {
+    ...testCfg,
+    project: {
+      ...testCfg.project,
+      uproject: `${fakeProject}/Test.uproject`,
+    },
+  };
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -169,7 +175,13 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
 test("fix-dll does not fail when no DLLs found", async () => {
   const fakeProject = `${os.tmpdir()}/bolt-fixdll-empty`;
   mkdirSync(fakeProject, { recursive: true });
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, project_root: fakeProject } };
+  const fakeCfg = {
+    ...testCfg,
+    project: {
+      ...testCfg.project,
+      uproject: `${fakeProject}/Test.uproject`,
+    },
+  };
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -261,7 +273,7 @@ test("start with target logs target name", async () => {
 });
 
 test("start with target throws when binary not found", async () => {
-  const ctx = makeCtx();
+  const ctx = makeCtx(false);
   await expect(
     uePlugin.handlers["start"]({ target: "NonExistentProgram_XYZ" }, ctx),
   ).rejects.toThrow("No binary found");
