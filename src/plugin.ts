@@ -24,38 +24,56 @@ export type BoltPluginHandler = (
 ) => Promise<void>;
 
 // ---------------------------------------------------------------------------
-// Decorator-based description for `bolt ai`
+// @handler decorator — marks a method as a plugin handler
 // ---------------------------------------------------------------------------
 
-/** Symbol key for storing per-handler description templates on the class. */
-const DESCRIPTIONS = Symbol.for("bolt:descriptions");
+/** Symbol key for storing handler metadata on the class. */
+const HANDLERS = Symbol.for("bolt:handlers");
 
-type DescriptionMap = Map<string, string>;
+interface HandlerMeta {
+  /** The public handler name (defaults to method name). */
+  alias: string;
+  /** Description template for `bolt ai`. Use ${paramName} for interpolation. */
+  description?: string;
+}
+
+type HandlerMap = Map<string, HandlerMeta>;
 
 /**
- * Method decorator — attach a description template to a handler.
- * Use `${paramName}` for interpolation with the step's `with:` params at generation time.
+ * Method decorator — mark a method as a plugin handler.
+ * Only decorated methods are exposed as handlers by PluginBase.
+ *
+ * @param description  Optional description template for `bolt ai`.
+ *                     Use `${paramName}` for interpolation with step's `with:` params.
+ * @param alias        Optional handler name override (defaults to method name).
  *
  * @example
- *   @describe("Build ${target} (${config})")
+ *   @handler("Build ${target} (${config})")
  *   async build(params, ctx) { ... }
+ *
+ *   @handler("Override INI ${file}", "ini-override")
+ *   async iniOverride(params, ctx) { ... }
+ *
+ *   @handler()  // no description, method name as handler name
+ *   async kill(params, ctx) { ... }
  */
-export function describe(template: string) {
+export function handler(description?: string, alias?: string) {
   return function (_target: any, propertyKey: string, _descriptor: PropertyDescriptor) {
     const ctor = _target.constructor;
-    if (!ctor[DESCRIPTIONS]) ctor[DESCRIPTIONS] = new Map<string, string>();
-    (ctor[DESCRIPTIONS] as DescriptionMap).set(propertyKey, template);
+    if (!ctor[HANDLERS]) ctor[HANDLERS] = new Map<string, HandlerMeta>();
+    (ctor[HANDLERS] as HandlerMap).set(propertyKey, {
+      alias: alias ?? propertyKey,
+      description,
+    });
   };
 }
 
 /**
- * Get the description template for a handler on a plugin class.
- * Returns undefined if no @describe decorator was used.
+ * Get handler metadata for all decorated methods on a plugin class.
  */
-export function getDescriptionTemplate(plugin: BoltPlugin, handlerName: string): string | undefined {
+function getHandlerMap(plugin: BoltPlugin): HandlerMap | undefined {
   const ctor = (plugin as any).constructor;
-  const map = ctor?.[DESCRIPTIONS] as DescriptionMap | undefined;
-  return map?.get(handlerName);
+  return ctor?.[HANDLERS] as HandlerMap | undefined;
 }
 
 /**
@@ -67,9 +85,15 @@ export function resolveDescription(
   handlerName: string,
   params: Record<string, string>,
 ): string | undefined {
-  const template = getDescriptionTemplate(plugin, handlerName);
-  if (!template) return undefined;
-  return template.replace(/\$\{([\w-]+)\}/g, (_, key) => params[key] ?? key);
+  const map = getHandlerMap(plugin);
+  if (!map) return undefined;
+  // Find by alias match (handlerName is the public name)
+  for (const [, meta] of map) {
+    if (meta.alias === handlerName && meta.description) {
+      return meta.description.replace(/\$\{([\w-]+)\}/g, (_, key) => params[key] ?? key);
+    }
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +109,7 @@ export interface BoltPlugin {
 
 /**
  * Base class for class-based plugins.
- * Methods become handlers automatically. Use @describe() to annotate them.
+ * Only methods decorated with @handler() are exposed as handlers.
  * Subclasses must set `namespace`.
  */
 export abstract class PluginBase implements BoltPlugin {
@@ -95,19 +119,18 @@ export abstract class PluginBase implements BoltPlugin {
 
   get handlers(): Record<string, BoltPluginHandler> {
     if (this._handlers) return this._handlers;
-    const proto = Object.getPrototypeOf(this);
-    const names = Object.getOwnPropertyNames(proto).filter(
-      (n) => n !== "constructor" && typeof proto[n] === "function",
-    );
+    const map = getHandlerMap(this);
     const result: Record<string, BoltPluginHandler> = {};
-    for (const name of names) {
-      result[name] = (params, ctx) => (this as any)[name](params, ctx);
+    if (map) {
+      for (const [methodName, meta] of map) {
+        result[meta.alias] = (params, ctx) => (this as any)[methodName](params, ctx);
+      }
     }
     this._handlers = result;
     return result;
   }
 
-  describe(handler: string, params: Record<string, string>): string | undefined {
-    return resolveDescription(this, handler, params);
+  describe(handlerName: string, params: Record<string, string>): string | undefined {
+    return resolveDescription(this, handlerName, params);
   }
 }

@@ -78,10 +78,13 @@ export interface RunOptions {
 // doesn't pull internal types (BoltConfig/Zod) into the public .d.ts.
 
 /**
- * Method decorator — attach a description template to a handler.
- * Use `${paramName}` for interpolation with the step's `with:` params.
+ * Method decorator — mark a method as a plugin handler.
+ * Only decorated methods are exposed as handlers by PluginBase.
+ *
+ * @param description  Optional description template for `bolt ai`.
+ * @param alias        Optional handler name override (defaults to method name).
  */
-export declare function describe(template: string): (
+export declare function handler(description?: string, alias?: string): (
   target: any,
   propertyKey: string,
   descriptor: PropertyDescriptor,
@@ -89,7 +92,7 @@ export declare function describe(template: string): (
 
 /**
  * Base class for class-based plugins.
- * Methods become handlers automatically. Use @describe() to annotate them.
+ * Only methods decorated with @handler() are exposed as handlers.
  */
 export declare abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
