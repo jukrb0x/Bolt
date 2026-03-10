@@ -228,17 +228,17 @@ timeout_hours: 6
 | 处理器 | 描述 |
 |---------|-------------|
 | `ue/build` | 构建编辑器、程序或游戏目标 |
-| `ue/build-engine` | 构建 UE 引擎本身 |
-| `ue/build-program` | 构建独立程序目标 |
+| `ue/build_engine` | 构建 UE 引擎本身 |
+| `ue/build_program` | 构建独立程序目标 |
 | `ue/start` | 启动 UE 编辑器或已构建的二进制文件 |
 | `ue/kill` | 终止所有运行中的 UE 进程 |
 | `ue/update-git` | 从 git 拉取最新代码 |
 | `ue/update-svn` | 更新 SVN 工作副本 |
-| `ue/svn-cleanup` | 运行 SVN cleanup（支持 TortoiseSVN） |
-| `ue/svn-revert` | 还原 SVN 更改 |
-| `ue/generate-project` | 重新生成项目文件 |
+| `ue/svn_cleanup` | 运行 SVN cleanup（支持 TortoiseSVN） |
+| `ue/svn_revert` | 还原 SVN 更改 |
+| `ue/generate_project` | 重新生成项目文件 |
 | `ue/fillddc` | 填充 Derived Data Cache |
-| `ue/fix-dll` | 删除导致链接器错误的零字节 DLL |
+| `ue/fix_dll` | 删除导致链接器错误的零字节 DLL |
 | `ue/info` | 打印项目和 VCS 信息 |
 | `fs/copy`, `fs/move`, `fs/delete`, `fs/mkdir` | 文件系统操作 |
 | `json/set`, `json/merge` | JSON 文件操作 |

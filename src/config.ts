@@ -25,27 +25,18 @@ const StepSchema = z.object({
 });
 export type Step = z.infer<typeof StepSchema>;
 
-const OpVariantSchema = z.array(StepSchema);
-export type OpVariant = z.infer<typeof OpVariantSchema>;
-
-const OpSchema = z.record(z.string(), z.union([OpVariantSchema, z.string()]));
-export type OpDef = Record<string, Step[] | string>;
+const OpSchema = z.record(z.string(), z.array(StepSchema));
+export type OpDef = Record<string, Step[]>;
 export type OpsMap = Record<string, OpDef>;
-/** Get variant steps from an op definition, skipping metadata keys like description. */
+
+/** Get steps from a variant value. */
 export function getOpVariant(op: OpDef, variant: string): Step[] | undefined {
-  const val = op[variant];
-  return Array.isArray(val) ? val : undefined;
+  return op[variant];
 }
 
-/** Get op description if defined. */
-export function getOpDescription(op: OpDef): string | undefined {
-  const val = op.description;
-  return typeof val === "string" ? val : undefined;
-}
-
-/** Get variant names from an op definition (excludes metadata keys). */
+/** Get variant names from an op definition. */
 export function getOpVariants(op: OpDef): string[] {
-  return Object.keys(op).filter((k) => Array.isArray(op[k]));
+  return Object.keys(op);
 }
 
 const GoPipelineSchema = z.object({

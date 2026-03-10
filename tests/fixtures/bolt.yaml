@@ -38,20 +38,20 @@ ops:
 
   update:
     default:
-      - uses: ue/update-git
-      - uses: ue/update-svn
+      - uses: ue/update_git
+      - uses: ue/update_svn
     git:
-      - uses: ue/update-git
+      - uses: ue/update_git
     svn:
-      - uses: ue/update-svn
+      - uses: ue/update_svn
 
   svn-cleanup:
     default:
-      - uses: ue/svn-cleanup
+      - uses: ue/svn_cleanup
 
   generate-project:
     default:
-      - uses: ue/generate-project
+      - uses: ue/generate_project
 
   build:
     default:
@@ -73,17 +73,17 @@ ops:
 
   fix-dll:
     default:
-      - uses: ue/fix-dll
+      - uses: ue/fix_dll
 
   build-engine:
     default:
-      - uses: ue/build-engine
+      - uses: ue/build_engine
         with:
           config: development
 
   build-program:
     default:
-      - uses: ue/build-program
+      - uses: ue/build_program
         with:
           config: development
           platform: Win64

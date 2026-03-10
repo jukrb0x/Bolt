@@ -63,25 +63,25 @@ test("build with target=engine runs setup and engine build", async () => {
 
 test("update-engine produces git pull command (default vcs=git)", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["update-engine"]({}, ctx);
+  await uePlugin.handlers["update_engine"]({}, ctx);
   expect(ctx.logged.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
 });
 
 test("update-project produces svn update command (default vcs=svn)", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["update-project"]({}, ctx);
+  await uePlugin.handlers["update_project"]({}, ctx);
   expect(ctx.logged.some((l) => l.includes("svn update"))).toBe(true);
 });
 
 test("generate-project produces GenerateProjectFiles command", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["generate-project"]({}, ctx);
+  await uePlugin.handlers["generate_project"]({}, ctx);
   expect(ctx.logged.some((l) => l.includes("GenerateProjectFiles.bat"))).toBe(true);
 });
 
 test("build-engine logs Setup.bat, GenerateProjectFiles.bat, and Build.bat -Target command", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({ config: "development" }, ctx);
+  await uePlugin.handlers["build_engine"]({ config: "development" }, ctx);
   expect(ctx.logged.some((l) => l.includes("Setup.bat"))).toBe(true);
   expect(ctx.logged.some((l) => l.includes("GenerateProjectFiles.bat"))).toBe(true);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
@@ -93,21 +93,21 @@ test("build-engine logs Setup.bat, GenerateProjectFiles.bat, and Build.bat -Targ
 
 test("build-engine defaults to development when config omitted", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({}, ctx);
+  await uePlugin.handlers["build_engine"]({}, ctx);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
   expect(buildLine).toContain("Development");
 });
 
 test("build-engine respects debug config", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-engine"]({ config: "debug" }, ctx);
+  await uePlugin.handlers["build_engine"]({ config: "debug" }, ctx);
   const buildLine = ctx.logged.find((l) => l.includes("-Target=")) ?? "";
   expect(buildLine).toContain("Debug");
 });
 
 test("build-program produces Build.bat with -project= flag", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-program"]({ target: "UnrealInsights" }, ctx);
+  await uePlugin.handlers["build_program"]({ target: "UnrealInsights" }, ctx);
   const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";
   expect(cmd).toContain("UnrealInsights");
   expect(cmd).toContain("-project=");
@@ -118,7 +118,7 @@ test("build-program produces Build.bat with -project= flag", async () => {
 
 test("build-program respects config and platform params", async () => {
   const ctx = makeCtx();
-  await uePlugin.handlers["build-program"](
+  await uePlugin.handlers["build_program"](
     { target: "AnvilSmith", config: "debug", platform: "Win64" },
     ctx,
   );
@@ -129,12 +129,12 @@ test("build-program respects config and platform params", async () => {
 
 test("build-program throws when target is missing", async () => {
   const ctx = makeCtx();
-  await expect(uePlugin.handlers["build-program"]({}, ctx)).rejects.toThrow("No target specified");
+  await expect(uePlugin.handlers["build_program"]({}, ctx)).rejects.toThrow("No target specified");
 });
 
 test("build-program throws when target is empty string", async () => {
   const ctx = makeCtx();
-  await expect(uePlugin.handlers["build-program"]({ target: "" }, ctx)).rejects.toThrow(
+  await expect(uePlugin.handlers["build_program"]({ target: "" }, ctx)).rejects.toThrow(
     "No target specified",
   );
 });
@@ -166,7 +166,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
     logger: new Logger({ sink: () => {} }),
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["fix-dll"]({}, ctx2);
+  await uePlugin.handlers["fix_dll"]({}, ctx2);
   expect(existsSync(`${binariesDir}/zero.dll`)).toBe(false);
   expect(existsSync(`${binariesDir}/nonzero.dll`)).toBe(true);
   rmSync(fakeProject, { recursive: true, force: true });
@@ -189,7 +189,7 @@ test("fix-dll does not fail when no DLLs found", async () => {
     logger: new Logger({ sink: () => {} }),
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["fix-dll"]({}, ctx2);
+  await uePlugin.handlers["fix_dll"]({}, ctx2);
   rmSync(fakeProject, { recursive: true, force: true });
 });
 
@@ -204,7 +204,7 @@ test("svn-cleanup with use_tortoise=false uses plain svn", async () => {
     logged: logged2,
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["svn-cleanup"]({}, ctx2);
+  await uePlugin.handlers["svn_cleanup"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
   expect(ctx2.logged.every((l) => !l.includes("TortoiseProc"))).toBe(true);
 });
@@ -220,7 +220,7 @@ test("svn-revert with use_tortoise=false uses plain svn", async () => {
     logged: logged2,
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["svn-revert"]({}, ctx2);
+  await uePlugin.handlers["svn_revert"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn revert"))).toBe(true);
   expect(ctx2.logged.every((l) => !l.includes("TortoiseProc"))).toBe(true);
 });
@@ -237,7 +237,7 @@ test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async
     logged: [] as string[],
     runtime: mockRuntime,
   };
-  await expect(uePlugin.handlers["svn-cleanup"]({}, ctx2)).rejects.toThrow(
+  await expect(uePlugin.handlers["svn_cleanup"]({}, ctx2)).rejects.toThrow(
     "TortoiseProc.exe not found",
   );
 });
@@ -254,7 +254,7 @@ test("svn-cleanup without use_tortoise uses svn when TortoiseProc absent", async
     logged: logged2,
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["svn-cleanup"]({}, ctx2);
+  await uePlugin.handlers["svn_cleanup"]({}, ctx2);
   expect(ctx2.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
 });
 
@@ -293,7 +293,7 @@ test("update-engine with engine_repo.vcs=svn calls svn update", async () => {
     logged: logged2,
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["update-engine"]({}, ctx2);
+  await uePlugin.handlers["update_engine"]({}, ctx2);
   expect(logged2.some((l) => l.includes("svn update"))).toBe(true);
 });
 
@@ -311,6 +311,6 @@ test("update-project with project_repo.vcs=git calls git pull", async () => {
     logged: logged2,
     runtime: mockRuntime,
   };
-  await uePlugin.handlers["update-project"]({}, ctx2);
+  await uePlugin.handlers["update_project"]({}, ctx2);
   expect(logged2.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
 });

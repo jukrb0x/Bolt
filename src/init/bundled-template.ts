@@ -37,20 +37,20 @@ ops:
 
   update:
     default:
-      - uses: ue/update-engine
-      - uses: ue/update-project
+      - uses: ue/update_engine
+      - uses: ue/update_project
     engine:
-      - uses: ue/update-engine
+      - uses: ue/update_engine
     project:
-      - uses: ue/update-project
+      - uses: ue/update_project
 
   svn-cleanup:
     default:
-      - uses: ue/svn-cleanup
+      - uses: ue/svn_cleanup
 
   genproj:
     default:
-      - uses: ue/generate-project
+      - uses: ue/generate_project
 
   setup:
     default:
@@ -90,7 +90,7 @@ ops:
 
   fix-dll:
     default:
-      - uses: ue/fix-dll
+      - uses: ue/fix_dll
 
 # go-pipeline controls \`bolt go\` execution order and failure behaviour
 # Ops run in order; if an op in fail_stops fails, pipeline stops immediately

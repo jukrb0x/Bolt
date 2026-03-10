@@ -1,9 +1,66 @@
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
-import type { BoltConfig } from "./config";
-import { getOpVariants, getOpDescription } from "./config";
+import type { BoltConfig, Step } from "./config";
+import { getOpVariant, getOpVariants } from "./config";
+import type { PluginRegistry } from "./plugin-registry";
 
-export function generateAiContext(cfg: BoltConfig, configPath: string): string {
+/** Describe a single step using the plugin's describe() if available. */
+function describeStep(step: Step, registry: PluginRegistry): string {
+  if (step.run) return step.run;
+  if (!step.uses) return "?";
+
+  // Resolve ops/ references — just show as "ops/<name>"
+  if (step.uses.startsWith("ops/")) return step.uses;
+
+  // Plugin call: "namespace/handler"
+  const slash = step.uses.indexOf("/");
+  if (slash === -1) return step.uses;
+
+  const ns = step.uses.slice(0, slash);
+  const handler = step.uses.slice(slash + 1);
+  const plugin = registry.get(ns);
+  if (!plugin?.describe) return step.uses;
+
+  const params = step.with ?? {};
+  return plugin.describe(handler, params) ?? step.uses;
+}
+
+/** Describe an op variant by describing its steps. */
+function describeVariant(
+  opName: string,
+  variant: string,
+  cfg: BoltConfig,
+  registry: PluginRegistry,
+): string {
+  const steps = getOpVariant(cfg.ops[opName], variant);
+  if (!steps || steps.length === 0) return "";
+  return steps.map((s) => describeStep(s, registry)).join(" → ");
+}
+
+/** Describe an action by describing its steps (resolving ops/ inline). */
+function describeAction(
+  steps: Step[],
+  cfg: BoltConfig,
+  registry: PluginRegistry,
+): string {
+  return steps.map((step) => {
+    if (step.uses?.startsWith("ops/")) {
+      const rest = step.uses.slice("ops/".length);
+      const [opName, variant = "default"] = rest.split(":");
+      const opSteps = getOpVariant(cfg.ops[opName] ?? {}, variant);
+      if (opSteps) {
+        return opSteps.map((s) => describeStep(s, registry)).join(" → ");
+      }
+    }
+    return describeStep(step, registry);
+  }).join(" → ");
+}
+
+export function generateAiContext(
+  cfg: BoltConfig,
+  configPath: string,
+  registry: PluginRegistry,
+): string {
   const yamlRaw = readFileSync(configPath, "utf8");
   const hash = createHash("sha256").update(yamlRaw).digest("hex").slice(0, 16);
 
@@ -25,24 +82,18 @@ export function generateAiContext(cfg: BoltConfig, configPath: string): string {
   lines.push(`| Task | Command | Description |`);
   lines.push(`|------|---------|-------------|`);
 
-  // Ops
   for (const [opName, op] of Object.entries(cfg.ops)) {
-    const desc = getOpDescription(op) ?? "";
     const variants = getOpVariants(op);
-    if (variants.length === 1 && variants[0] === "default") {
-      lines.push(`| ${opName} | \`bolt go ${opName}\` | ${desc} |`);
-    } else {
-      for (const v of variants) {
-        const label = v === "default" ? opName : `${opName} (${v})`;
-        const cmd = v === "default" ? `bolt go ${opName}` : `bolt go ${opName}:${v}`;
-        lines.push(`| ${label} | \`${cmd}\` | ${desc} |`);
-      }
+    for (const v of variants) {
+      const label = v === "default" ? opName : `${opName}:${v}`;
+      const cmd = v === "default" ? `bolt go ${opName}` : `bolt go ${opName}:${v}`;
+      const desc = describeVariant(opName, v, cfg, registry);
+      lines.push(`| ${label} | \`${cmd}\` | ${desc} |`);
     }
   }
 
-  // Actions
   for (const [actionName, action] of Object.entries(cfg.actions)) {
-    const desc = action.description ?? "";
+    const desc = describeAction(action.steps, cfg, registry);
     lines.push(`| ${actionName} | \`bolt run ${actionName}\` | ${desc} |`);
   }
 
@@ -59,15 +110,12 @@ export function generateAiContext(cfg: BoltConfig, configPath: string): string {
   lines.push(``);
 
   for (const [opName, op] of Object.entries(cfg.ops)) {
-    const desc = getOpDescription(op);
     const variants = getOpVariants(op);
-    if (variants.length === 1 && variants[0] === "default") {
-      lines.push(`- **${opName}** — \`bolt go ${opName}\`${desc ? ` — ${desc}` : ""}`);
-    } else {
-      const variantList = variants
-        .map((v) => (v === "default" ? `\`bolt go ${opName}\`` : `\`bolt go ${opName}:${v}\``))
-        .join(", ");
-      lines.push(`- **${opName}** — ${variantList}${desc ? ` — ${desc}` : ""}`);
+    for (const v of variants) {
+      const cmd = v === "default" ? `\`bolt go ${opName}\`` : `\`bolt go ${opName}:${v}\``;
+      const label = v === "default" ? `**${opName}**` : `**${opName}:${v}**`;
+      const desc = describeVariant(opName, v, cfg, registry);
+      lines.push(`- ${label} — ${cmd} — ${desc}`);
     }
   }
   lines.push(``);
@@ -80,16 +128,9 @@ export function generateAiContext(cfg: BoltConfig, configPath: string): string {
     lines.push(``);
 
     for (const [name, action] of Object.entries(cfg.actions)) {
-      const desc = action.description;
       const deps = action.depends?.length ? ` (depends: ${action.depends.join(", ")})` : "";
-      if (desc) {
-        lines.push(`- **${name}**${deps}: ${desc}`);
-      } else {
-        const stepSummary = action.steps
-          .map((s) => s.uses ?? s.run ?? "?")
-          .join(" → ");
-        lines.push(`- **${name}**${deps}: ${stepSummary}`);
-      }
+      const desc = describeAction(action.steps, cfg, registry);
+      lines.push(`- **${name}**${deps}: ${desc}`);
     }
     lines.push(``);
   }

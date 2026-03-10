@@ -34,8 +34,8 @@ describe("resolveOps", () => {
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("update");
     expect(op.steps).toHaveLength(2);
-    expect(op.steps[0].uses).toBe("ue/update-engine");
-    expect(op.steps[1].uses).toBe("ue/update-project");
+    expect(op.steps[0].uses).toBe("ue/update_engine");
+    expect(op.steps[1].uses).toBe("ue/update_project");
   });
 
   test("update:project 1 step using project variant", () => {
@@ -43,7 +43,7 @@ describe("resolveOps", () => {
     const [op] = resolveOps(parsed, testCfg);
     expect(op.name).toBe("update[project]");
     expect(op.steps).toHaveLength(1);
-    expect(op.steps[0].uses).toBe("ue/update-project");
+    expect(op.steps[0].uses).toBe("ue/update_project");
   });
 
   test("build steps from ops.build.default", () => {
