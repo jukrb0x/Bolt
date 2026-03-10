@@ -1,4 +1,4 @@
-import type { BoltConfig, Step } from "./config";
+import { type BoltConfig, type Step, getOpVariant } from "./config";
 
 export interface ParsedOp {
   name: string; // op name (e.g. "update", "build")
@@ -134,21 +134,21 @@ export function resolveOps(parsed: ParsedOp[], cfg: BoltConfig): ResolvedOp[] {
 
     if (!p.isExact) {
       // Use value as variant key directly
-      const steps = opDef[p.value];
+      const steps = getOpVariant(opDef, p.value);
       if (!steps) throw new Error(`Unknown variant "${p.value}" for op "${p.name}"`);
       const displayName = p.value === "default" ? p.name : `${p.name}[${p.value}]`;
       return { name: displayName, steps, params: p.params };
     }
 
     // isExact: try as variant key first
-    const variantSteps = opDef[p.value];
+    const variantSteps = getOpVariant(opDef, p.value);
     if (variantSteps) {
       const displayName = p.value === "default" ? p.name : `${p.name}[${p.value}]`;
       return { name: displayName, steps: variantSteps, params: p.params };
     }
 
     // Fall back to "default" variant, deep-clone and override with.target
-    const defaultSteps = opDef["default"];
+    const defaultSteps = getOpVariant(opDef, "default");
     if (!defaultSteps) throw new Error(`Unknown variant "${p.value}" for op "${p.name}"`);
 
     const cloned: Step[] = defaultSteps.map((step) => {

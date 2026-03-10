@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { getOpVariants } from "../config";
 import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import pc from "picocolors";
@@ -58,7 +59,7 @@ export default defineCommand({
       console.log(pc.dim("  (none)"));
     } else {
       for (const [name, op] of Object.entries(cfg.ops)) {
-        const variants = Object.keys(op).filter((v) => v !== "default");
+        const variants = getOpVariants(op).filter((v) => v !== "default");
         const suffix = variants.length > 0 ? pc.dim(`  [${variants.join(", ")}]`) : "";
         console.log(`  ${pc.cyan(name.padEnd(24))}${suffix}`);
       }

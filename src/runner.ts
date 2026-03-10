@@ -1,4 +1,4 @@
-import type { BoltConfig, Step, GoPipeline } from "./config";
+import { type BoltConfig, type Step, type GoPipeline, getOpVariant } from "./config";
 import { Logger } from "./logger";
 import { interpolate } from "./interpolate";
 import { sortByPipeline, type ResolvedOp } from "./go";
@@ -261,7 +261,7 @@ export class Runner {
       const [opName, variant = "default"] = op.split(":");
       const opDef = this.cfg.ops[opName];
       if (!opDef) throw new Error(`Unknown op: "${opName}"`);
-      const steps = opDef[variant];
+      const steps = getOpVariant(opDef, variant);
       if (!steps) throw new Error(`Unknown variant "${variant}" for op "${opName}"`);
       const yamlParams = Object.fromEntries(
         Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
