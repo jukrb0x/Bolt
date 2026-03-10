@@ -11,6 +11,7 @@ import configCmd from "./commands/config";
 import inspectCmd from "./commands/inspect";
 import helpCmd from "./commands/help";
 import initCmd from "./commands/init";
+import aiCmd from "./commands/ai";
 import pkg from "../package.json";
 
 const main = defineCommand({
@@ -30,6 +31,7 @@ const main = defineCommand({
     plugin: pluginCmd,
     inspect: inspectCmd,
     "self-update": updateCmd,
+    ai: aiCmd,
     help: helpCmd,
     version: versionCmd,
   },

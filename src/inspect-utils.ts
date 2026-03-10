@@ -1,4 +1,5 @@
 import { interpolate } from "./interpolate";
+import { getOpVariant } from "./config";
 import type { BoltConfig, Step } from "./config";
 
 export interface ActionSection {
@@ -62,7 +63,7 @@ export function walkSteps(
         lines.push(`  ${idx}  uses: ${uses}  (unknown op)`);
         continue;
       }
-      const nestedSteps = opDef[variant];
+      const nestedSteps = getOpVariant(opDef, variant);
       if (!nestedSteps) {
         lines.push(`  ${idx}  uses: ${uses}  (unknown variant "${variant}")`);
         continue;

@@ -1,0 +1,14 @@
+{
+  "name": "bolt-ue",
+  "version": "1.3.0",
+  "description": "Bolt — Unreal Engine workflow automation CLI. Build, update, launch, and automate UE daily tasks.",
+  "author": {
+    "name": "Jabriel",
+    "email": "jabrielah@outlook.com"
+  },
+  "homepage": "https://github.com/jukrb0x/Bolt",
+  "repository": "https://github.com/jukrb0x/Bolt",
+  "license": "MIT",
+  "keywords": ["skills", "ue", "unreal engine", "build", "automation", "workflows"],
+  "skills": ["../skills/bolt-ue"]
+}
