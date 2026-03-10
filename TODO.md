@@ -69,4 +69,4 @@ Let people start and setup their working environment easily.
 
 
 ## VCS
-- [ ] IMPORTANT - current the template or ue/update plugin still assume the git+svn for engine+project, we need to separate them into ue/update-engine and ue/update-project
+- [ ] IMPORTANT - current the template or ue/update plugin still assume the git+svn for engine+project, we need to separate them into ue/update_engine and ue/update_project

@@ -54,9 +54,15 @@ export type BoltPluginHandler = (
   ctx: BoltPluginContext,
 ) => Promise<void>;
 
+export type DescribeFunction = (
+  handler: string,
+  params: Record<string, string>,
+) => string | undefined;
+
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
+  describe?: DescribeFunction;
 }
 
 export interface RunOptions {
@@ -64,4 +70,29 @@ export interface RunOptions {
   configPath?: string;
   cwd?: string;
   dryRun?: boolean;
+}
+
+// --- Public type declarations for decorator & base class ---
+// The actual implementations live in plugin.ts and are available at runtime
+// via the bundled binary. We declare types here so dts-bundle-generator
+// doesn't pull internal types (BoltConfig/Zod) into the public .d.ts.
+
+/**
+ * Method decorator — attach a description template to a handler.
+ * Use `${paramName}` for interpolation with the step's `with:` params.
+ */
+export declare function describe(template: string): (
+  target: any,
+  propertyKey: string,
+  descriptor: PropertyDescriptor,
+) => void;
+
+/**
+ * Base class for class-based plugins.
+ * Methods become handlers automatically. Use @describe() to annotate them.
+ */
+export declare abstract class PluginBase implements BoltPlugin {
+  abstract namespace: string;
+  get handlers(): Record<string, BoltPluginHandler>;
+  describe(handler: string, params: Record<string, string>): string | undefined;
 }

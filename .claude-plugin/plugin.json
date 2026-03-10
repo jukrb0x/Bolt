@@ -8,7 +8,7 @@
   },
   "homepage": "https://github.com/jukrb0x/Bolt",
   "repository": "https://github.com/jukrb0x/Bolt",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["skills", "ue", "unreal engine", "build", "automation", "workflows"],
   "skills": ["../skills/bolt-ue"]
 }
