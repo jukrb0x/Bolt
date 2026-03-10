@@ -92,7 +92,7 @@ timeout_hours: 12  # Increase from 6 to 12
 
 **Solution**:
 1. Resolve conflicts manually
-2. Use `ue/svn-cleanup` or `ue/svn-revert`
+2. Use `ue/svn_cleanup` or `ue/svn_revert`
 3. Reset working copy
 
 ```bash
@@ -113,7 +113,7 @@ git reset --hard
 
 **Cause**: Corrupted DLL files in Binaries directories.
 
-**Solution**: Use `ue/fix-dll` handler to remove zero-byte DLLs
+**Solution**: Use `ue/fix_dll` handler to remove zero-byte DLLs
 
 ```bash
 bolt run fix-dll

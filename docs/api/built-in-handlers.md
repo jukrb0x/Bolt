@@ -20,7 +20,7 @@ For `kind: editor`: invokes `Build.bat` with `-Target="<ProjectName>Editor Win64
 
 For all other kinds: invokes `Build.bat <name> Win64 <config> -project=... -WaitMutex -FromMsBuild`.
 
-### ue/build-engine
+### ue/build_engine
 Build the UE engine from source.
 
 Runs in sequence: `Setup.bat --force` (if present), `GenerateProjectFiles.bat` (if present), then `Build.bat -Target="UE4Editor Win64 <config>"`.
@@ -29,7 +29,7 @@ Runs in sequence: `Setup.bat --force` (if present), `GenerateProjectFiles.bat` (
 |------|----------|-------------|
 | `config` | no | Build configuration (default: `development`) |
 
-### ue/build-program
+### ue/build_program
 Build an arbitrary standalone program target.
 
 | Param | Required | Description |
@@ -83,7 +83,7 @@ svn update <svn_root> --non-interactive --trust-server-cert
 
 Falls back to `project_path` if `svn_root` is not set.
 
-### ue/svn-cleanup
+### ue/svn_cleanup
 Run SVN cleanup on the working copy. Uses TortoiseProc (full cleanup with all flags) if available/configured, otherwise falls back to `svn cleanup`.
 
 TortoiseProc behaviour is controlled by `use_tortoise` in bolt.yaml:
@@ -91,7 +91,7 @@ TortoiseProc behaviour is controlled by `use_tortoise` in bolt.yaml:
 - `false` — always use plain svn
 - absent — auto-detect (TortoiseProc wins if found)
 
-### ue/svn-revert
+### ue/svn_revert
 Revert all local SVN changes.
 
 | Param | Required | Description |
@@ -100,7 +100,7 @@ Revert all local SVN changes.
 
 Uses TortoiseProc cleanup-with-revert if available, otherwise `svn revert -R`.
 
-### ue/generate-project
+### ue/generate_project
 Regenerate UE project files.
 
 ```bash
@@ -116,7 +116,7 @@ Runs `UE4Editor-Cmd.exe -run=Automation RunTests FillDDCForPIETest -unattended -
 
 No params.
 
-### ue/ini-set
+### ue/ini_set
 Set a value in a UE INI file.
 
 | Param | Required | Description |
@@ -135,7 +135,7 @@ Runs `git log -1`, `git rev-parse --abbrev-ref HEAD` (in `ue_path`), and `svn in
 
 No params.
 
-### ue/fix-dll
+### ue/fix_dll
 Fix zero-byte DLL files that can cause linker errors.
 
 Recursively scans:

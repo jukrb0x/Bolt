@@ -61,14 +61,30 @@ declare module "bolt" {
   	runtime: Runtime;
   }
   export type BoltPluginHandler = (params: Record<string, string>, ctx: BoltPluginContext) => Promise<void>;
+  export type DescribeFunction = (handler: string, params: Record<string, string>) => string | undefined;
   export interface BoltPlugin {
   	namespace: string;
   	handlers: Record<string, BoltPluginHandler>;
+  	describe?: DescribeFunction;
   }
   export interface RunOptions {
   	config?: BoltPluginConfig;
   	configPath?: string;
   	cwd?: string;
   	dryRun?: boolean;
+  }
+  /**
+   * Method decorator — attach a description template to a handler.
+   * Use `${paramName}` for interpolation with the step's `with:` params.
+   */
+  export declare function describe(template: string): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
+  /**
+   * Base class for class-based plugins.
+   * Methods become handlers automatically. Use @describe() to annotate them.
+   */
+  export declare abstract class PluginBase implements BoltPlugin {
+  	abstract namespace: string;
+  	get handlers(): Record<string, BoltPluginHandler>;
+  	describe(handler: string, params: Record<string, string>): string | undefined;
   }
 }

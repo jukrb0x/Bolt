@@ -226,17 +226,17 @@ timeout_hours: 6
 | Handler | Description |
 |---------|-------------|
 | `ue/build` | Build editor, program, or game target |
-| `ue/build-engine` | Build the UE engine itself |
-| `ue/build-program` | Build a standalone program target |
+| `ue/build_engine` | Build the UE engine itself |
+| `ue/build_program` | Build a standalone program target |
 | `ue/start` | Launch UE editor or a built binary |
 | `ue/kill` | Kill all running UE processes |
 | `ue/update-git` | Pull latest from git |
 | `ue/update-svn` | Update SVN working copy |
-| `ue/svn-cleanup` | Run SVN cleanup (TortoiseSVN-aware) |
-| `ue/svn-revert` | Revert SVN changes |
-| `ue/generate-project` | Regenerate project files |
+| `ue/svn_cleanup` | Run SVN cleanup (TortoiseSVN-aware) |
+| `ue/svn_revert` | Revert SVN changes |
+| `ue/generate_project` | Regenerate project files |
 | `ue/fillddc` | Fill Derived Data Cache |
-| `ue/fix-dll` | Remove zero-byte DLLs causing linker errors |
+| `ue/fix_dll` | Remove zero-byte DLLs causing linker errors |
 | `ue/info` | Print project and VCS info |
 | `fs/copy`, `fs/move`, `fs/delete`, `fs/mkdir` | File system operations |
 | `json/set`, `json/merge` | JSON file manipulation |
