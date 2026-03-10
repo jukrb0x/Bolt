@@ -1,4 +1,4 @@
-import { PluginBase, describe } from "../plugin";
+import { PluginBase, handler } from "../plugin";
 import type { BoltPluginContext } from "../plugin";
 import path from "path";
 import { existsSync, readdirSync, statSync, renameSync, mkdirSync } from "fs";
@@ -47,7 +47,7 @@ function findZeroByteDlls(dir: string): string[] {
 class UEPlugin extends PluginBase {
   namespace = "ue";
 
-  @describe("Build ${target} (${config})")
+  @handler("Build target: ${target} with config:(${config})")
   async build(params: Record<string, string>, ctx: BoltPluginContext) {
     const targetName = params.target;
     if (!targetName || targetName.trim() === "") {
@@ -95,7 +95,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Update engine repository")
+  @handler("Update engine repository")
   async update_engine(params: Record<string, string>, ctx: BoltPluginContext) {
     const repo = ctx.cfg.project.engine_repo;
     const vcs = repo.vcs ?? "git";
@@ -106,7 +106,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Update project repository")
+  @handler("Update project repository")
   async update_project(params: Record<string, string>, ctx: BoltPluginContext) {
     const repo = ctx.cfg.project.project_repo;
     const vcs = repo.vcs ?? "svn";
@@ -117,18 +117,18 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("SVN cleanup")
+  @handler("SVN cleanup")
   async svn_cleanup(params: Record<string, string>, ctx: BoltPluginContext) {
     await svnPlugin.handlers["cleanup"]({ path: ctx.cfg.project.project_repo.path }, ctx);
   }
 
-  @describe("SVN revert ${path}")
+  @handler("SVN revert ${path}")
   async svn_revert(params: Record<string, string>, ctx: BoltPluginContext) {
     const p = params.path ?? ctx.cfg.project.project_repo.path;
     await svnPlugin.handlers["revert"]({ path: p }, ctx);
   }
 
-  @describe("Run engine Setup.bat")
+  @handler("Run engine Setup.bat")
   async setup(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ctx.cfg.project.engine_repo.path;
     const setupBat = `${w(uePath)}\\Setup.bat`;
@@ -141,7 +141,7 @@ class UEPlugin extends PluginBase {
     await run(cmd, ctx);
   }
 
-  @describe("Generate project files")
+  @handler("Generate project files")
   async generate_project(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ctx.cfg.project.engine_repo.path;
     const projFile = ctx.cfg.project.uproject;
@@ -151,7 +151,7 @@ class UEPlugin extends PluginBase {
     );
   }
 
-  @describe("Launch ${target} (${config})")
+  @handler("Launch ${target} (${config})")
   async start(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ctx.cfg.project.engine_repo.path;
     const projFile = ctx.cfg.project.uproject;
@@ -204,7 +204,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Terminate all UE processes")
+  @handler("Terminate all UE processes")
   async kill(params: Record<string, string>, ctx: BoltPluginContext) {
     const procs = [
       "UE4Editor.exe",
@@ -220,7 +220,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Fill DDC for PIE")
+  @handler("Fill DDC for PIE")
   async fillddc(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ctx.cfg.project.engine_repo.path;
     const projFile = ctx.cfg.project.uproject;
@@ -230,7 +230,7 @@ class UEPlugin extends PluginBase {
     );
   }
 
-  @describe("Set INI ${file} [${section}] ${key}")
+  @handler("Set INI ${file} [${section}] ${key}")
   async ini_set(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, section, key, value, "value-list": valueList, "insert-front": insertFront } = params;
     const projectPath = ctx.cfg.project.project_repo.path;
@@ -255,6 +255,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
+  @handler()
   async ini_get(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, section, key, type } = params;
     const projectPath = ctx.cfg.project.project_repo.path;
@@ -272,6 +273,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
+  @handler()
   async ini_remove(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, section, key } = params;
     const projectPath = ctx.cfg.project.project_repo.path;
@@ -287,7 +289,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Override INI ${file} with ${override-file}")
+  @handler("Override INI ${file} with ${override-file}")
   async ini_override(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, "override-file": overrideFile } = params;
     const projectPath = ctx.cfg.project.project_repo.path;
@@ -301,6 +303,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
+  @handler()
   async ini_read_all(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file } = params;
     const projectPath = ctx.cfg.project.project_repo.path;
@@ -322,12 +325,12 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Build engine from source")
+  @handler("Build engine from source")
   async build_engine(params: Record<string, string>, ctx: BoltPluginContext) {
     await this.build({ ...params, target: "engine" }, ctx);
   }
 
-  @describe("Build program ${target}")
+  @handler("Build program ${target}")
   async build_program(params: Record<string, string>, ctx: BoltPluginContext) {
     if (!params.target || params.target.trim() === "") {
       throw new Error(`No target specified. Use: bolt go build-program --target=<Name>`);
@@ -335,7 +338,7 @@ class UEPlugin extends PluginBase {
     await this.build(params, ctx);
   }
 
-  @describe("Show VCS info")
+  @handler("Show VCS info")
   async info(params: Record<string, string>, ctx: BoltPluginContext) {
     ctx.logger.info("=== VCS Info ===");
     const engineVcs = ctx.cfg.project.engine_repo.vcs ?? "git";
@@ -355,7 +358,7 @@ class UEPlugin extends PluginBase {
     }
   }
 
-  @describe("Fix 0-byte DLL files")
+  @handler("Fix 0-byte DLL files")
   async fix_dll(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ctx.cfg.project.engine_repo.path;
     const projectDir = getProjectDir(ctx.cfg.project.uproject);
