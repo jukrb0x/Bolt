@@ -41,9 +41,6 @@ Let people start and setup their working environment easily.
 - [x] npm package - make the library useful, let other code can call
 - [ ] Python SDK for Bolt plugin
 
-## Advanced
-
-- [ ] `bolt mcp` - to be brainstroming
 
 ## cross-platform
 
@@ -53,8 +50,7 @@ Let people start and setup their working environment easily.
 - [ ] ue/build
 
 ## Agentic
-- [ ] Generate SKILL.md
-- [ ] MCP
+- [x] `bolt ai` - Generate a dynamic and maintainable SKILL.md for LLMs to use bolt
 
 ## Project scope 
 - [ ] support community svn - project scope todo
