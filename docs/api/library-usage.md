@@ -7,14 +7,14 @@ Bolt can also be used as a library for programmatic workflow automation. Both Bu
 ## Installation
 
 ```bash
-npm install bolt-ue
+npm install boltstack
 # or
-bun add bolt-ue
+bun add boltstack
 ```
 
 ## High-Level API
 ```typescript
-import { run, go, createContext } from "bolt-ue";
+import { run, go, createContext } from "boltstack";
 
 // Run a named action
 await run("build", {
@@ -41,8 +41,8 @@ const ctx = createContext({
 
 ## Direct Plugin Access
 ```typescript
-import { git, fs, ue } from "bolt-ue/plugins";
-import { createContext } from "bolt-ue";
+import { git, fs, ue } from "boltstack/plugins";
+import { createContext } from "boltstack";
 
 const ctx = createContext({
   project: {
@@ -63,8 +63,8 @@ await fs.handlers.copy({
 
 ## Core Internals
 ```typescript
-import { Runner, Logger, createRuntime } from "bolt-ue/core";
-import { loadConfig } from "bolt-ue";
+import { Runner, Logger, createRuntime } from "boltstack/core";
+import { loadConfig } from "boltstack";
 
 const config = await loadConfig("./bolt.yaml");
 const logger = new Logger();
@@ -77,9 +77,9 @@ await runner.run("build");
 ## Subpath Exports
 | Export | Description |
 |-------|-------------|
-| `bolt-ue` | High-level API (run, go, createContext, loadConfig) |
-| `bolt-ue/plugins` | Built-in plugins (git, svn, ue, fs, json) |
-| `bolt-ue/core` | Core internals (Runner, Logger, createRuntime) |
+| `boltstack` | High-level API (run, go, createContext, loadConfig) |
+| `boltstack/plugins` | Built-in plugins (git, svn, ue, fs, json) |
+| `boltstack/core` | Core internals (Runner, Logger, createRuntime) |
 
 ## Runtime Compatibility
 The library uses a runtime abstraction layer:
@@ -92,7 +92,7 @@ The CLI remains Bun-only for optimal performance, but the library works everywhe
 The library includes TypeScript definitions for all public APIs.
 
 ```typescript
-import type { BoltPlugin, BoltPluginContext, BoltLogger } from "bolt-ue";
+import type { BoltPlugin, BoltPluginContext, BoltLogger } from "boltstack";
 ```
 
 ## See Also
