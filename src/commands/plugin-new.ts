@@ -22,18 +22,25 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  const indexTs = `import type { BoltPlugin } from "bolt";
+  // Convert kebab-case to PascalCase for class name
+  const className = name
+    .split(/[-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
 
-const plugin: BoltPlugin = {
-  namespace: "${name}",
-  handlers: {
-    run: async (params, ctx) => {
-      ctx.logger.info("${name}/run called");
-    },
-  },
-};
+  const indexTs = `import { PluginBase, handler } from "bolt";
+import type { BoltPluginContext } from "bolt";
 
-export default plugin;
+class ${className}Plugin extends PluginBase {
+  namespace = "${name}";
+
+  @handler("Run ${name} plugin")
+  async run(params: Record<string, string>, ctx: BoltPluginContext) {
+    ctx.logger.info("${name}/run called");
+  }
+}
+
+export default new ${className}Plugin();
 `;
 
   const tsconfig = {
