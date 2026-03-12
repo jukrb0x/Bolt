@@ -1,9 +1,9 @@
 /**
  * Type declarations for Bolt plugins.
- * Import as: import type { BoltPlugin, BoltPluginContext } from "bolt";
+ * Import as: import { PluginBase, handler } from "boltstack";
  */
 
-declare module "bolt" {
+declare module "boltstack" {
   export interface SpawnResult {
   	exitCode: number;
   	stdout: string;

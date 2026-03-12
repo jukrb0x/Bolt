@@ -21,3 +21,6 @@ export type {
   BoltPluginContext,
   BoltLogger,
 } from "./plugin";
+
+// Plugin API (class-based)
+export { PluginBase, handler } from "./plugin";
