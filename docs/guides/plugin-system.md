@@ -46,7 +46,7 @@ cd .bolt/plugins/myplugin
 bun install
 ```
 
-This installs `bolt-ue` from npm, which provides `declare module "bolt"` so your editor resolves `import type { BoltPlugin } from "bolt"`.
+This installs `boltstack` from npm, which provides `declare module "bolt"` so your editor resolves `import type { BoltPlugin } from "bolt"`.
 
 ### 3. Implement
 
@@ -132,13 +132,13 @@ See [Built-in Handlers](/api/built-in-handlers.md) for the full list of built-in
 
 ## Type Package
 
-Plugin types are published to npm as `bolt-ue`:
+Plugin types are published to npm as `boltstack`:
 
 ```bash
-bun add -d bolt-ue
+bun add -d boltstack
 ```
 
-`bolt-ue` ships a single `bolt.d.ts` containing `declare module "bolt"`. The scaffolded `tsconfig.json` includes `"bolt-ue"` in `compilerOptions.types`, which activates the ambient declaration so `import type { BoltPlugin } from "bolt"` resolves correctly in any TS LSP.
+`boltstack` ships a single `bolt.d.ts` containing `declare module "bolt"`. The scaffolded `tsconfig.json` includes `"boltstack"` in `compilerOptions.types`, which activates the ambient declaration so `import type { BoltPlugin } from "bolt"` resolves correctly in any TS LSP.
 
 ## Overriding Built-ins
 

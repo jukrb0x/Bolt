@@ -43,9 +43,9 @@ export default plugin;
       module: "ESNext",
       moduleResolution: "bundler",
       strict: true,
-      // bun-types provides Bun globals; bolt-ue provides `declare module "bolt"`
+      // bun-types provides Bun globals; boltstack provides `declare module "bolt"`
       // which makes `import type { BoltPlugin } from "bolt"` resolvable.
-      types: ["bun-types", "bolt-ue"],
+      types: ["bun-types", "boltstack"],
     },
   };
 
@@ -54,9 +54,9 @@ export default plugin;
     type: "module",
     devDependencies: {
       "bun-types": "latest",
-      // bolt-ue provides `declare module "bolt"` — after `bun install` the TS LSP
-      // resolves `import type { BoltPlugin } from "bolt"` via node_modules/bolt-ue.
-      "bolt-ue": "latest",
+      // boltstack provides `declare module "bolt"` — after `bun install` the TS LSP
+      // resolves `import type { BoltPlugin } from "bolt"` via node_modules/boltstack.
+      "boltstack": "latest",
     },
   };
 

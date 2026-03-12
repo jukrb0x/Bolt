@@ -31,7 +31,7 @@ cd .bolt/plugins/myplugin
 bun install
 ```
 
-This installs the `bolt-ue` package, which provides TypeScript definitions for the plugin API.
+This installs the `boltstack` package, which provides TypeScript definitions for the plugin API.
 
 ## Step 3: Implement Plugin
 Edit `index.ts`:

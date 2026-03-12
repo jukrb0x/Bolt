@@ -152,10 +152,10 @@ ops:
 
 ## Type Package
 
-Plugin types are available via the `bolt-ue` npm package:
+Plugin types are available via the `boltstack` npm package:
 
 ```bash
-bun add -d bolt-ue
+bun add -d boltstack
 ```
 
 This provides `declare module "bolt"` for type resolution in your editor.

@@ -47,7 +47,7 @@ function findZeroByteDlls(dir: string): string[] {
 class UEPlugin extends PluginBase {
   namespace = "ue";
 
-  @handler("Build target: ${target} with config:(${config})")
+  @handler("Build target: ${target} with config: ${config}")
   async build(params: Record<string, string>, ctx: BoltPluginContext) {
     const targetName = params.target;
     if (!targetName || targetName.trim() === "") {

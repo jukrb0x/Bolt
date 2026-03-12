@@ -5,7 +5,7 @@ title: "Release Process"
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth login`)
-- `npm` logged in (`npm login`) for `bolt-ue` type package
+- `npm` logged in (`npm login`) for `boltstack` type package
 - Clean `main` branch with no uncommitted changes
 
 ## Bump the version
@@ -38,7 +38,7 @@ bun run release:dry       # dry-run — shows every step without executing
 8. Open `$EDITOR` for a custom release notes preamble (prepended before auto-generated git log)
 9. Tag `v<version>` and push to origin
 10. Create GitHub release with native binary + `bolt.d.ts` attached
-11. Publish `bolt-ue` to npm (`--tag next` for pre-releases)
+11. Publish `boltstack` to npm (`--tag next` for pre-releases)
 12. Restore `src/version.ts` to `<version>-dev` and push
 
 After the tag is pushed, the CI workflow (`.github/workflows/release.yml`) automatically builds the other platform's binary and uploads it to the same GitHub release.
@@ -61,7 +61,7 @@ bunx tsc --project tsconfig.types.json   # emits to dist-types/
 bun run scripts/gen-types.ts             # wraps into declare module "bolt" { }
 ```
 
-The output is a single flat file — no imports, no runtime code. Published to npm as the `bolt-ue` package.
+The output is a single flat file — no imports, no runtime code. Published to npm as the `boltstack` package.
 
 ## Environment Variables
 

@@ -17,9 +17,7 @@ Key features:
   - Declarative configuration via bolt.yaml
   - Composable operations (ops) with variants
   - Plugin system for extensibility
-  - Built-in support for UE5 workflows
-
-Full docs: https://bolt-ue.vercel.app`,
+  - Built-in support for UE5 workflows`,
       },
       {
         id: "quick-start",
@@ -29,9 +27,7 @@ Full docs: https://bolt-ue.vercel.app`,
 
 Example:
   bolt init
-  bolt go update build start
-
-Full guide: https://bolt-ue.vercel.app/guides/first-project`,
+  bolt go update build start`,
       },
       {
         id: "commands",
@@ -45,9 +41,7 @@ bolt init            Interactive setup
 bolt plugin           Manage plugins
 bolt inspect          Debug op steps
 bolt --version        Print version
-bolt self-update      Update bolt
-
-Full reference: https://bolt-ue.vercel.app/cli/`,
+bolt self-update      Update bolt`,
       },
     ],
   },
@@ -66,9 +60,7 @@ Options:
 
 Examples:
   bolt go update build start
-  bolt go build --dry-run
-
-Full docs: https://bolt-ue.vercel.app/cli/go`,
+  bolt go build --dry-run`,
       },
       {
         id: "variants",
@@ -111,9 +103,7 @@ Options:
 
 Examples:
   bolt run package-game
-  bolt run deploy --dry-run
-
-Full docs: https://bolt-ue.vercel.app/cli/run`,
+  bolt run deploy --dry-run`,
       },
       {
         id: "dependencies",
@@ -148,18 +138,14 @@ bolt run deploy    # runs build-game first`,
   project_repo:
     path: ./project
     vcs: svn
-  uproject: ./project/MyGame.uproject
-
-Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml`,
+  uproject: ./project/MyGame.uproject`,
       },
       {
         id: "targets",
         title: "Targets",
         content: `targets:
   editor: { kind: editor, config: Development }
-  game: { kind: game, config: Shipping, name: MyGame }
-
-Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml#targets`,
+  game: { kind: game, config: Shipping, name: MyGame }`,
       },
       {
         id: "ops",
@@ -172,9 +158,7 @@ Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml#targets`,
           target: editor
     ci:
       - uses: ue/build
-      - run: npm test
-
-Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml#ops`,
+      - run: npm test`,
       },
       {
         id: "interpolation",
@@ -182,9 +166,7 @@ Full docs: https://bolt-ue.vercel.app/reference/bolt-yaml#ops`,
         content: `Use \${{ }} for dynamic values:
 
   \${{ env.VAR }}         Environment variable
-  \${{ project.name }}   Project config value
-
-Full docs: https://bolt-ue.vercel.app/reference/interpolation`,
+  \${{ project.name }}   Project config value`,
       },
     ],
   },
