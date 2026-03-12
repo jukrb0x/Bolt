@@ -5,6 +5,7 @@
  *
  * Prerequisites:
  *   - gh CLI installed and authenticated
+ *   - npm logged in (for publishing to npm registry)
  *   - bun installed
  *   - Git working tree clean
  *
@@ -64,6 +65,24 @@ try {
 } catch {
   console.error("  gh CLI not found. Install from https://cli.github.com/");
   if (!DRY_RUN) process.exit(1);
+}
+
+// 4. Check npm authentication
+step("Checking npm authentication");
+let npmLoggedIn = false;
+try {
+  execSync("npm whoami", { stdio: "pipe" });
+  npmLoggedIn = true;
+  console.log("  logged in");
+} catch {
+  console.log("  not logged in");
+}
+
+if (!npmLoggedIn && !DRY_RUN) {
+  console.log(pc.yellow("\n  npm is not logged in. Please log in to publish the package."));
+  console.log(pc.dim("  Run: npm login"));
+  console.log("");
+  process.exit(1);
 }
 
 // 4. Write src/version.ts with release version (BEFORE compile)
