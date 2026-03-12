@@ -33,7 +33,7 @@ Uses Node.js equivalents:
 The runtime is auto-detected based on the environment:
 
 ```typescript
-import { createRuntime } from "bolt-ue/core";
+import { createRuntime } from "boltstack/core";
 
 const runtime = createRuntime(); // Auto-detects Bun vs Node.js
 ```
@@ -43,7 +43,7 @@ const runtime = createRuntime(); // Auto-detects Bun vs Node.js
 When writing plugins or using the library, you typically don't need to interact with the runtime directly. However, if you need to spawn processes:
 
 ```typescript
-import { createRuntime } from "bolt-ue/core";
+import { createRuntime } from "boltstack/core";
 
 const runtime = createRuntime();
 
@@ -75,9 +75,9 @@ The library maintains Node.js compatibility for:
 
 | Export | Bun | Node.js | Description |
 |--------|-----|--------|-------------|
-| `bolt-ue` | ✓ | ✓ | High-level API |
-| `bolt-ue/plugins` | ✓ | ✓ | Built-in plugins |
-| `bolt-ue/core` | ✓ | ✓ | Core internals |
+| `boltstack` | ✓ | ✓ | High-level API |
+| `boltstack/plugins` | ✓ | ✓ | Built-in plugins |
+| `boltstack/core` | ✓ | ✓ | Core internals |
 
 ## Development
 

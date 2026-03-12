@@ -298,10 +298,10 @@ ops:
 
 ### 类型定义
 
-插件类型通过 `bolt-ue` npm 包提供：
+插件类型通过 `boltstack` npm 包提供：
 
 ```
-bun add -d bolt-ue
+bun add -d boltstack
 ```
 
 安装后 `import type { BoltPlugin, BoltPluginContext } from "bolt"` 可以正确解析。脚手架会自动设置。
@@ -313,15 +313,15 @@ Bolt 也可以作为库用于编程式工作流自动化。支持 Bun 和 Node.j
 ### 安装
 
 ```bash
-npm install bolt-ue
+npm install boltstack
 # 或
-bun add bolt-ue
+bun add boltstack
 ```
 
 ### 高级 API
 
 ```typescript
-import { run, go, createContext } from "bolt-ue";
+import { run, go, createContext } from "boltstack";
 
 // 运行命名动作
 await run("build", {
@@ -349,8 +349,8 @@ const ctx = createContext({
 ### 直接访问插件
 
 ```typescript
-import { git, fs, ue } from "bolt-ue/plugins";
-import { createContext } from "bolt-ue";
+import { git, fs, ue } from "boltstack/plugins";
+import { createContext } from "boltstack";
 
 const ctx = createContext({
   project: {
@@ -372,8 +372,8 @@ await fs.handlers.copy({
 ### 核心内部
 
 ```typescript
-import { Runner, Logger, createRuntime } from "bolt-ue/core";
-import { loadConfig } from "bolt-ue";
+import { Runner, Logger, createRuntime } from "boltstack/core";
+import { loadConfig } from "boltstack";
 
 const config = await loadConfig("./bolt.yaml");
 const logger = new Logger();
@@ -385,9 +385,9 @@ await runner.run("build");
 
 ### 子路径导出
 
-- `bolt-ue` - 高级 API（run、go、createContext、loadConfig）
-- `bolt-ue/plugins` - 内置插件（git、svn、ue、fs、json）
-- `bolt-ue/core` - 核心内部（Runner、Logger、createRuntime）
+- `boltstack` - 高级 API（run、go、createContext、loadConfig）
+- `boltstack/plugins` - 内置插件（git、svn、ue、fs、json）
+- `boltstack/core` - 核心内部（Runner、Logger、createRuntime）
 
 ### 运行时兼容性
 

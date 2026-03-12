@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bolt-ue",
+      "name": "boltstack",
       "dependencies": {
         "citty": "^0.2.1",
         "ink": "6.7.0",

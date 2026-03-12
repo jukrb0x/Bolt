@@ -32,28 +32,28 @@ test("scaffoldPlugin index.ts has correct namespace", async () => {
   expect(indexTs).toContain('from "bolt"');
 });
 
-test("scaffoldPlugin package.json has bolt-ue devDependency (project-scope)", async () => {
+test("scaffoldPlugin package.json has boltstack devDependency (project-scope)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const pkg = JSON.parse(
     readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8")
   );
-  expect(pkg.devDependencies["bolt-ue"]).toBe("latest");
+  expect(pkg.devDependencies["boltstack"]).toBe("latest");
 });
 
-test("scaffoldPlugin tsconfig.json includes bolt-ue in types", async () => {
+test("scaffoldPlugin tsconfig.json includes boltstack in types", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const tsconfig = JSON.parse(
     readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "tsconfig.json"), "utf8")
   );
-  expect(tsconfig.compilerOptions.types).toContain("bolt-ue");
+  expect(tsconfig.compilerOptions.types).toContain("boltstack");
   expect(tsconfig.compilerOptions.types).toContain("bun-types");
 });
 
-test("scaffoldPlugin package.json has bolt-ue devDependency (user-scope)", async () => {
+test("scaffoldPlugin package.json has boltstack devDependency (user-scope)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   const userBase = path.join(tmpDir, "userhome");
   mkdirSync(userBase, { recursive: true });
@@ -62,7 +62,7 @@ test("scaffoldPlugin package.json has bolt-ue devDependency (user-scope)", async
   const pkg = JSON.parse(
     readFileSync(path.join(userBase, "plugins", "myplugin", "package.json"), "utf8")
   );
-  expect(pkg.devDependencies["bolt-ue"]).toBe("latest");
+  expect(pkg.devDependencies["boltstack"]).toBe("latest");
 });
 
 test("scaffoldPlugin throws if directory already exists", async () => {

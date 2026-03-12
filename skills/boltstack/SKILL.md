@@ -1,5 +1,5 @@
 ---
-name: bolt-ue
+name: boltstack
 description: Use when the user asks to build, update, launch, or automate Unreal Engine workflows using Bolt. Triggers include mentioning bolt, UE builds, editor builds, SVN/git updates, daily workflows, pipeline ops, or any task defined in bolt.yaml.
 ---
 
