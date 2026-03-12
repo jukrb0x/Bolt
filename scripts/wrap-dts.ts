@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Post-process dts-bundle-generator output to wrap in declare module "bolt".
+ * Post-process dts-bundle-generator output to wrap in declare module "boltstack".
  */
 import { readFileSync, writeFileSync } from "fs";
 
@@ -14,13 +14,13 @@ const stripped = content
 
 const wrapped = `/**
  * Type declarations for Bolt plugins.
- * Import as: import type { BoltPlugin, BoltPluginContext } from "bolt";
+ * Import as: import { PluginBase, handler } from "boltstack";
  */
 
-declare module "bolt" {
+declare module "boltstack" {
 ${stripped.split("\n").map(l => l ? "  " + l : "").join("\n").trimEnd()}
 }
 `;
 
 writeFileSync(file, wrapped, "utf8");
-console.log(`Wrapped ${file} in declare module "bolt"`);
+console.log(`Wrapped ${file} in declare module "boltstack"`);

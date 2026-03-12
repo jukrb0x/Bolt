@@ -28,8 +28,8 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join("");
 
-  const indexTs = `import { PluginBase, handler } from "bolt";
-import type { BoltPluginContext } from "bolt";
+  const indexTs = `import { PluginBase, handler } from "boltstack";
+import type { BoltPluginContext } from "boltstack";
 
 class ${className}Plugin extends PluginBase {
   namespace = "${name}";
@@ -50,8 +50,7 @@ export default new ${className}Plugin();
       module: "ESNext",
       moduleResolution: "bundler",
       strict: true,
-      // bun-types provides Bun globals; boltstack provides `declare module "bolt"`
-      // which makes `import type { BoltPlugin } from "bolt"` resolvable.
+      // bun-types provides Bun globals; boltstack provides PluginBase, handler, and types
       types: ["bun-types", "boltstack"],
     },
   };
@@ -61,8 +60,6 @@ export default new ${className}Plugin();
     type: "module",
     devDependencies: {
       "bun-types": "latest",
-      // boltstack provides `declare module "bolt"` — after `bun install` the TS LSP
-      // resolves `import type { BoltPlugin } from "bolt"` via node_modules/boltstack.
       "boltstack": "latest",
     },
   };
