@@ -41,6 +41,18 @@ const devtoolsShimPlugin: BunPlugin = {
   },
 };
 
+// Plugin to provide boltstack module for dynamically loaded plugins
+// When plugins import from "boltstack", redirect to the internal plugin module
+const boltstackPlugin: BunPlugin = {
+  name: "boltstack-internal",
+  setup(build) {
+    build.onResolve({ filter: /^boltstack$/ }, () => ({
+      path: join(ROOT, "src/plugin.ts"),
+      namespace: "file",
+    }));
+  },
+};
+
 const result = await Bun.build({
   entrypoints: [join(ROOT, "src/main.ts")],
   compile: {
@@ -52,7 +64,7 @@ const result = await Bun.build({
     identifiers: true,
     syntax: true,
   },
-  plugins: [devtoolsShimPlugin],
+  plugins: [devtoolsShimPlugin, boltstackPlugin],
   // Define NODE_ENV as production so ink's DEV checks are tree-shaken
   define: {
     "process.env.NODE_ENV": '"production"',
