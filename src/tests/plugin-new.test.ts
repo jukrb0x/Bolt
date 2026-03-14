@@ -28,10 +28,9 @@ test("scaffoldPlugin index.ts has correct namespace", async () => {
     path.join(tmpDir, ".bolt", "plugins", "myns", "index.ts"),
     "utf8"
   );
-  expect(indexTs).toContain('namespace = "myns"');
-  expect(indexTs).toContain('class MynsPlugin extends PluginBase');
-  expect(indexTs).toContain('@handler');
-  expect(indexTs).toContain('from "boltstack"');
+  expect(indexTs).toContain('namespace: "myns"');
+  expect(indexTs).toContain('handlers:');
+  expect(indexTs).toContain('import type { BoltPlugin');
 });
 
 test("scaffoldPlugin package.json has boltstack devDependency (project-scope)", async () => {

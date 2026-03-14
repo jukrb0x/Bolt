@@ -22,25 +22,18 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  // Convert kebab-case to PascalCase for class name
-  const className = name
-    .split(/[-_]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
+  const indexTs = `import type { BoltPlugin, BoltPluginContext } from "boltstack";
 
-  const indexTs = `import { PluginBase, handler } from "boltstack";
-import type { BoltPluginContext } from "boltstack";
+const plugin: BoltPlugin = {
+  namespace: "${name}",
+  handlers: {
+    run: async (params: Record<string, string>, ctx: BoltPluginContext) => {
+      ctx.logger.info("${name}/run called");
+    },
+  },
+};
 
-class ${className}Plugin extends PluginBase {
-  namespace = "${name}";
-
-  @handler("Run ${name} plugin")
-  async run(params: Record<string, string>, ctx: BoltPluginContext) {
-    ctx.logger.info("${name}/run called");
-  }
-}
-
-export default new ${className}Plugin();
+export default plugin;
 `;
 
   const tsconfig = {
@@ -50,7 +43,7 @@ export default new ${className}Plugin();
       module: "ESNext",
       moduleResolution: "bundler",
       strict: true,
-      // bun-types provides Bun globals; boltstack provides PluginBase, handler, and types
+      // bun-types provides Bun globals; boltstack provides types via declare module "boltstack"
       types: ["bun-types", "boltstack"],
     },
   };

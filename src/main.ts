@@ -1,3 +1,19 @@
+// Register boltstack as a runtime module for dynamically loaded plugins
+// This allows plugins to import { PluginBase, handler } from "boltstack"
+Bun.plugin({
+  name: "boltstack-resolver",
+  setup(build) {
+    build.module("boltstack", () => {
+      return {
+        exports: {
+          PluginBase: require("./plugin").PluginBase,
+          handler: require("./plugin").handler,
+        },
+      };
+    });
+  },
+});
+
 import { defineCommand, runMain } from "citty";
 import runCmd from "./commands/run";
 import listCmd from "./commands/list";
@@ -13,6 +29,10 @@ import helpCmd from "./commands/help";
 import initCmd from "./commands/init";
 import aiCmd from "./commands/ai";
 import pkg from "../package.json";
+
+// Export PluginBase and handler for dynamically loaded plugins
+// This allows plugins to import from "boltstack" at runtime
+export { PluginBase, handler } from "./plugin";
 
 const main = defineCommand({
   meta: {

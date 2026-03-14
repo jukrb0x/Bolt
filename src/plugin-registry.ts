@@ -19,28 +19,46 @@ export class PluginRegistry {
   }
 
   async loadFromPath(namespace: string, pluginPath: string): Promise<void> {
+    // Try to load the plugin directly
+    // This works for:
+    // 1. Object-based plugins (import type is erased)
+    // 2. Pre-compiled JS plugins
     const mod = await import(pluginPath);
     const plugin: BoltPlugin = mod.default ?? mod;
+
     if (!plugin || !plugin.handlers) {
-      throw new Error(`Plugin at "${pluginPath}" has no default export with handlers`);
+      throw new Error(
+        `Plugin at "${pluginPath}" has no default export with handlers.\n` +
+        `For class-based plugins, run: bolt plugin build ${namespace}`
+      );
     }
-    this.register({ ...plugin, namespace });
+
+    this.register({ ...plugin, namespace: plugin.namespace || namespace });
   }
 
   async loadDirectory(dir: string): Promise<void> {
     if (!existsSync(dir)) return;
+
     for (const entry of readdirSync(dir)) {
       const entryPath = path.join(dir, entry);
       if (!statSync(entryPath).isDirectory()) continue;
-      const candidates = [path.join(entryPath, "index.ts"), path.join(entryPath, "index.js")];
-      for (const candidate of candidates) {
-        if (existsSync(candidate)) {
-          try {
-            await this.loadFromPath(entry, candidate);
-          } catch (e: any) {
-            console.warn(`[Bolt] Failed to load plugin "${entry}" from ${candidate}: ${e.message}`);
-          }
-          break;
+
+      // Prefer compiled .js over .ts
+      const jsFile = path.join(entryPath, "index.js");
+      const tsFile = path.join(entryPath, "index.ts");
+
+      let candidate: string | null = null;
+      if (existsSync(jsFile)) {
+        candidate = jsFile;
+      } else if (existsSync(tsFile)) {
+        candidate = tsFile;
+      }
+
+      if (candidate) {
+        try {
+          await this.loadFromPath(entry, candidate);
+        } catch (e: any) {
+          console.warn(`[Bolt] Failed to load plugin "${entry}" from ${candidate}: ${e.message}`);
         }
       }
     }
