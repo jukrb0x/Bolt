@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import type { BoltConfig, Step } from "./config";
 import { getOpVariant, getOpVariants } from "./config";
 import type { PluginRegistry } from "./plugin-registry";
+import { getParamMap } from "./plugin";
 
 /** Describe a single step using the plugin's describe() if available. */
 function describeStep(step: Step, registry: PluginRegistry): string {
@@ -19,10 +20,23 @@ function describeStep(step: Step, registry: PluginRegistry): string {
   const ns = step.uses.slice(0, slash);
   const handler = step.uses.slice(slash + 1);
   const plugin = registry.get(ns);
-  if (!plugin?.describe) return step.uses;
+  if (!plugin) return step.uses;
 
-  const params = step.with ?? {};
-  return plugin.describe(handler, params) ?? step.uses;
+  // Try describe() first (existing behavior)
+  if (plugin.describe) {
+    const params = step.with ?? {};
+    const desc = plugin.describe(handler, params);
+    if (desc) return desc;
+  }
+
+  // Fallback: use @param metadata to show parameter info
+  const paramMap = getParamMap(plugin as any, handler);
+  if (paramMap && paramMap.size > 0) {
+    const paramDescs = [...paramMap.entries()].map(([name, meta]) => `${name}: ${meta.description}`);
+    return `${step.uses} (${paramDescs.join(", ")})`;
+  }
+
+  return step.uses;
 }
 
 /** Describe an op variant by describing its steps. */
