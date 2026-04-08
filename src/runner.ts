@@ -59,6 +59,22 @@ export class Runner {
       gitPlugin,
       svnPlugin,
     ]);
+
+    // Call onInit for any plugins that implement lifecycle hooks
+    for (const ns of this.registry.listNamespaces()) {
+      const plugin = this.registry.get(ns) as any;
+      if (typeof plugin?.onInit === "function") {
+        const pluginCtx: BoltPluginContext = {
+          cfg: this.cfg,
+          configDir: this.opts.configDir ?? process.cwd(),
+          dryRun: this.opts.dryRun ?? false,
+          logger: this.opts.logger ?? new Logger(),
+          runtime: this.runtime,
+        };
+        await plugin.onInit(pluginCtx);
+      }
+    }
+
     return this.registry;
   }
 
@@ -298,9 +314,12 @@ export class Runner {
     if (typeof pluginInstance.onBeforeStep === "function") {
       await pluginInstance.onBeforeStep(op, mergedParams, pluginCtx);
     }
-    await handler(mergedParams, pluginCtx);
-    if (typeof pluginInstance.onAfterStep === "function") {
-      await pluginInstance.onAfterStep(op, mergedParams, pluginCtx);
+    try {
+      await handler(mergedParams, pluginCtx);
+    } finally {
+      if (typeof pluginInstance.onAfterStep === "function") {
+        await pluginInstance.onAfterStep(op, mergedParams, pluginCtx);
+      }
     }
   }
 
