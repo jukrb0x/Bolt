@@ -48,6 +48,7 @@ export type GoPipeline = z.infer<typeof GoPipelineSchema>;
 const PluginEntrySchema = z.object({
   namespace: z.string(),
   path: z.string(),
+  config: z.record(z.unknown()).optional(),
 });
 export type PluginEntry = z.infer<typeof PluginEntrySchema>;
 
