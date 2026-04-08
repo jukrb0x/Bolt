@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import { buildRegistry } from "../plugin-registry";
-import UEPlugin from "../plugins/ue";
+import { builtinPlugins } from "../plugins";
 import path from "path";
 import pc from "picocolors";
 
@@ -16,7 +16,7 @@ export default defineCommand({
     }
     const cfg = await loadConfig(configPath);
     const configDir = path.dirname(configPath);
-    const registry = await buildRegistry(cfg, configDir, [UEPlugin]);
+    const registry = await buildRegistry(cfg, configDir, Object.values(builtinPlugins));
 
     const namespaces = registry.listNamespaces();
     if (namespaces.length === 0) {
