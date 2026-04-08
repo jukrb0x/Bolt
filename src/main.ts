@@ -1,3 +1,4 @@
+import "./virtual-module"; // Register "boltstack" virtual module before anything loads plugins
 import { defineCommand, runMain } from "citty";
 import runCmd from "./commands/run";
 import listCmd from "./commands/list";
