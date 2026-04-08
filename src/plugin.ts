@@ -30,6 +30,42 @@ export type BoltPluginHandler = (
 /** Symbol key for storing handler metadata on the class. */
 const HANDLERS = Symbol.for("bolt:handlers");
 
+/** Symbol key for storing parameter metadata on the class. */
+export const PARAMS = Symbol.for("bolt:params");
+
+interface ParamMeta {
+  description: string;
+}
+
+type ParamMap = Map<string, ParamMeta>;
+type ClassParamMap = Map<string, ParamMap>;
+
+/**
+ * Parameter decorator — attach metadata to a handler parameter.
+ * Stores a `Map<methodName, Map<paramName, { description }>>` on the class constructor.
+ *
+ * @param name         Logical parameter name (key in the `with:` block).
+ * @param description  Human-readable description for `bolt ai`.
+ */
+export function param(name: string, description: string) {
+  return function (_target: any, propertyKey: string, _parameterIndex: number) {
+    const ctor = _target.constructor;
+    if (!ctor[PARAMS]) ctor[PARAMS] = new Map<string, ParamMap>();
+    const classMap = ctor[PARAMS] as ClassParamMap;
+    if (!classMap.has(propertyKey)) classMap.set(propertyKey, new Map());
+    classMap.get(propertyKey)!.set(name, { description });
+  };
+}
+
+/**
+ * Retrieve the param metadata map for a specific method on a plugin instance.
+ */
+export function getParamMap(plugin: { constructor: any }, methodName: string): ParamMap | undefined {
+  const ctor = plugin.constructor;
+  const classMap = ctor?.[PARAMS] as ClassParamMap | undefined;
+  return classMap?.get(methodName);
+}
+
 interface HandlerMeta {
   /** The public handler name (defaults to method name). */
   alias: string;
