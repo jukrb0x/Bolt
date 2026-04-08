@@ -119,3 +119,44 @@ describe("definePlugin()", () => {
     expect(descriptor.deps).toEqual(["git", "fs"]);
   });
 });
+
+describe("PluginBase.withDescriptor()", () => {
+  test("returns a subclass with namespace pre-set", () => {
+    const descriptor = definePlugin({
+      namespace: "test-wd",
+      version: "1.0.0",
+      description: "Test withDescriptor",
+    });
+
+    class MyPlugin extends PluginBase.withDescriptor(descriptor) {
+      @handler("Say hello")
+      async hello(_params: Record<string, string>, _ctx: any) {}
+    }
+
+    const instance = new MyPlugin();
+    expect(instance.namespace).toBe("test-wd");
+    expect(instance.descriptor).toBe(descriptor);
+    expect(instance.config).toBeUndefined();
+    expect(Object.keys(instance.handlers)).toContain("hello");
+  });
+
+  test("accepts config and deps in constructor", () => {
+    const descriptor = definePlugin({
+      namespace: "configured-wd",
+      version: "1.0.0",
+      description: "With config",
+      configSchema: z.object({ token: z.string() }),
+      deps: ["git"],
+    });
+
+    class Configured extends PluginBase.withDescriptor(descriptor) {
+      @handler()
+      async run(_params: Record<string, string>, _ctx: any) {}
+    }
+
+    const mockGitPlugin = { namespace: "git", handlers: {} };
+    const instance = new Configured({ token: "abc" }, { git: mockGitPlugin });
+    expect(instance.config).toEqual({ token: "abc" });
+    expect(instance.deps!.git).toBe(mockGitPlugin);
+  });
+});

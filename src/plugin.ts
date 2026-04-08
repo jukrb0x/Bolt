@@ -151,6 +151,9 @@ export interface BoltPlugin {
  */
 export abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
+  descriptor?: PluginDescriptor<any>;
+  config?: unknown;
+  deps?: Record<string, BoltPlugin>;
 
   private _handlers?: Record<string, BoltPluginHandler>;
 
@@ -169,6 +172,30 @@ export abstract class PluginBase implements BoltPlugin {
 
   describe(handlerName: string, params: Record<string, string>): string | undefined {
     return resolveDescription(this, handlerName, params);
+  }
+
+  static withDescriptor<TConfig = unknown>(
+    desc: PluginDescriptor<TConfig>,
+  ): {
+    new (config?: TConfig, deps?: Record<string, BoltPlugin>): PluginBase & {
+      config: TConfig | undefined;
+      deps: Record<string, BoltPlugin> | undefined;
+      descriptor: PluginDescriptor<TConfig>;
+    };
+  } {
+    abstract class BoundPlugin extends PluginBase {
+      namespace = desc.namespace;
+      override descriptor = desc as PluginDescriptor<any>;
+      override config: TConfig | undefined;
+      override deps: Record<string, BoltPlugin> | undefined;
+
+      constructor(config?: TConfig, deps?: Record<string, BoltPlugin>) {
+        super();
+        this.config = config;
+        this.deps = deps;
+      }
+    }
+    return BoundPlugin as any;
   }
 }
 
