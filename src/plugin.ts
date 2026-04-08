@@ -137,6 +137,13 @@ export function resolveDescription(
 // Plugin interface & base class
 // ---------------------------------------------------------------------------
 
+/** Optional lifecycle hooks that class-based plugins can implement. */
+export interface PluginLifecycleHooks {
+  onInit?(ctx: BoltPluginContext): Promise<void>;
+  onBeforeStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  onAfterStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+}
+
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;

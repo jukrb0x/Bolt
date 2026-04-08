@@ -294,7 +294,14 @@ export class Runner {
       logger: this.opts.logger ?? new Logger(),
       runtime: this.runtime,
     };
+    const pluginInstance = plugin as any; // May have lifecycle hooks
+    if (typeof pluginInstance.onBeforeStep === "function") {
+      await pluginInstance.onBeforeStep(op, mergedParams, pluginCtx);
+    }
     await handler(mergedParams, pluginCtx);
+    if (typeof pluginInstance.onAfterStep === "function") {
+      await pluginInstance.onAfterStep(op, mergedParams, pluginCtx);
+    }
   }
 
   private async runLocalAction(actionPath: string, params: Record<string, string>): Promise<void> {
