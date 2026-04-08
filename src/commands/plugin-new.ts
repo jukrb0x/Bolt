@@ -22,44 +22,38 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  const indexTs = `import type { BoltPlugin, BoltPluginContext } from "boltstack";
+  const indexTs = `import { definePlugin, PluginBase, handler, param } from "boltstack";
+import type { BoltPluginContext } from "boltstack";
 
-const plugin: BoltPlugin = {
+const descriptor = definePlugin({
   namespace: "${name}",
-  handlers: {
-    run: async (params: Record<string, string>, ctx: BoltPluginContext) => {
-      ctx.logger.info("${name}/run called");
-    },
-  },
-};
+  version: "0.1.0",
+  description: "TODO: describe your plugin",
+});
 
-export default plugin;
+export default class extends PluginBase.withDescriptor(descriptor) {
+  @handler("Run ${name}")
+  async run(
+    @param("input", "Input value to process")
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ) {
+    ctx.logger.info(\`${name}/run called with: \${JSON.stringify(params)}\`);
+  }
+}
 `;
-
-  const tsconfig = {
-    $schema: "https://json.schemastore.org/tsconfig",
-    compilerOptions: {
-      target: "ESNext",
-      module: "ESNext",
-      moduleResolution: "bundler",
-      strict: true,
-      // bun-types provides Bun globals; boltstack provides types via declare module "boltstack"
-      types: ["bun-types", "boltstack"],
-    },
-  };
 
   const packageJson = {
     name,
     type: "module",
     devDependencies: {
-      "bun-types": "latest",
       "boltstack": "latest",
     },
   };
 
   writeFileSync(path.join(pluginDir, "index.ts"), indexTs, "utf8");
-  writeFileSync(path.join(pluginDir, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n", "utf8");
   writeFileSync(path.join(pluginDir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
+  // No tsconfig needed — Bun handles TS natively, and bolt JIT-compiles plugins
   return pluginDir;
 }
 
