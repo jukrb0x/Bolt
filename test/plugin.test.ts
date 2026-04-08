@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { handler, param, getParamMap, PluginBase, PARAMS } from "../src/plugin";
+import { handler, param, getParamMap, PluginBase, PARAMS, definePlugin } from "../src/plugin";
+import { z } from "zod";
 
 describe("@param decorator", () => {
   test("stores parameter metadata on the class constructor", () => {
@@ -69,5 +70,52 @@ describe("@param decorator", () => {
 
     const instance = new NoParams();
     expect(getParamMap(instance, "run")).toBeUndefined();
+  });
+});
+
+describe("definePlugin()", () => {
+  test("returns a descriptor with required fields", () => {
+    const descriptor = definePlugin({
+      namespace: "my-plugin",
+      version: "1.0.0",
+      description: "A test plugin",
+    });
+
+    expect(descriptor.namespace).toBe("my-plugin");
+    expect(descriptor.version).toBe("1.0.0");
+    expect(descriptor.description).toBe("A test plugin");
+    expect(descriptor.configSchema).toBeUndefined();
+    expect(descriptor.deps).toBeUndefined();
+  });
+
+  test("accepts a Zod config schema", () => {
+    const descriptor = definePlugin({
+      namespace: "configured",
+      version: "0.1.0",
+      description: "Plugin with config",
+      configSchema: z.object({
+        apiKey: z.string(),
+        retries: z.number().default(3),
+      }),
+    });
+
+    expect(descriptor.configSchema).toBeDefined();
+    // Schema should parse valid config
+    const result = descriptor.configSchema!.safeParse({ apiKey: "abc" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.retries).toBe(3); // default applied
+    }
+  });
+
+  test("accepts deps array", () => {
+    const descriptor = definePlugin({
+      namespace: "with-deps",
+      version: "1.0.0",
+      description: "Depends on others",
+      deps: ["git", "fs"],
+    });
+
+    expect(descriptor.deps).toEqual(["git", "fs"]);
   });
 });

@@ -1,5 +1,6 @@
 import type { BoltConfig } from "./config";
 import type { Runtime } from "./runtime/types";
+import type { ZodType } from "zod";
 
 /** Subset of Logger exposed to plugin handlers. */
 export interface BoltLogger {
@@ -169,4 +170,37 @@ export abstract class PluginBase implements BoltPlugin {
   describe(handlerName: string, params: Record<string, string>): string | undefined {
     return resolveDescription(this, handlerName, params);
   }
+}
+
+// ---------------------------------------------------------------------------
+// definePlugin() — typed plugin descriptor
+// ---------------------------------------------------------------------------
+
+export interface PluginDescriptor<TConfig = unknown> {
+  namespace: string;
+  version: string;
+  description: string;
+  configSchema?: ZodType<TConfig>;
+  deps?: string[];
+}
+
+/**
+ * Define a plugin descriptor. Pass the result to `PluginBase.withDescriptor()`.
+ *
+ * @example
+ *   const descriptor = definePlugin({
+ *     namespace: "deploy",
+ *     version: "1.0.0",
+ *     description: "Deployment automation",
+ *     configSchema: z.object({ host: z.string() }),
+ *     deps: ["git"],
+ *   });
+ */
+export function definePlugin<TConfig = unknown>(
+  opts: PluginDescriptor<TConfig>,
+): PluginDescriptor<TConfig> {
+  if (!opts.namespace) throw new Error("definePlugin: namespace is required");
+  if (!opts.version) throw new Error("definePlugin: version is required");
+  if (!opts.description) throw new Error("definePlugin: description is required");
+  return { ...opts };
 }
