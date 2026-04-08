@@ -128,6 +128,7 @@ export class PluginRegistry {
       }
       // Return the instance directly — it implements BoltPlugin and keeps
       // prototype methods (describe, handlers getter) working correctly
+      if (!instance.namespace) instance.namespace = namespace;
       return instance;
     }
 
@@ -198,20 +199,21 @@ export class PluginRegistry {
     const exported = mod.default ?? mod;
 
     // Validate config against descriptor schema if available
+    let validatedConfig = config;
     if (typeof exported === "function" && exported.prototype) {
-      // Peek at descriptor to validate config
-      const tempInstance = Object.create(exported.prototype);
-      if (tempInstance.descriptor?.configSchema && config !== undefined) {
-        const result = tempInstance.descriptor.configSchema.safeParse(config);
+      // Construct a temporary instance to access the descriptor
+      const temp = new exported();
+      if (temp.descriptor?.configSchema && config !== undefined) {
+        const result = temp.descriptor.configSchema.safeParse(config);
         if (!result.success) {
           const issues = result.error.issues.map((i: any) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
           throw new Error(`Invalid config for plugin "${namespace}":\n${issues}`);
         }
-        config = result.data; // Use parsed (with defaults applied)
+        validatedConfig = result.data; // Use parsed (with defaults applied)
       }
     }
 
-    const plugin = this.resolvePluginExport(exported, namespace, config, deps);
+    const plugin = this.resolvePluginExport(exported, namespace, validatedConfig, deps);
     this.register(plugin);
   }
 }
