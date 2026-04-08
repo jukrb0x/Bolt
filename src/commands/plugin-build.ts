@@ -4,7 +4,6 @@ import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, unlinkS
 import { homedir } from "os";
 import path from "path";
 import pc from "picocolors";
-import { spawnSync } from "child_process";
 
 export default defineCommand({
   meta: { description: "Build/compile a TypeScript plugin to JavaScript" },
@@ -59,14 +58,17 @@ export default defineCommand({
 
     console.log(pc.dim(`Building plugin: ${pluginDir}`));
 
-    // Use Bun to compile TypeScript to JavaScript
-    const result = spawnSync("bun", ["build", indexTs, "--outfile", path.join(pluginDir, "index.js"), "--target=bun"], {
-      cwd: pluginDir,
-      stdio: "inherit",
+    const buildResult = await Bun.build({
+      entrypoints: [indexTs],
+      outdir: pluginDir,
+      target: "bun",
+      external: ["boltstack"],
+      naming: "index.js",
     });
 
-    if (result.status !== 0) {
-      console.error(pc.red("Build failed"));
+    if (!buildResult.success) {
+      const errors = buildResult.logs.map((l: any) => l.message ?? String(l)).join("\n");
+      console.error(pc.red(`Build failed:\n${errors}`));
       process.exit(1);
     }
 

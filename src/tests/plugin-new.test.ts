@@ -10,13 +10,13 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-test("scaffoldPlugin creates index.ts, tsconfig.json, package.json", async () => {
+test("scaffoldPlugin creates index.ts, package.json (no tsconfig)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const pluginDir = path.join(tmpDir, ".bolt", "plugins", "myplugin");
   expect(existsSync(path.join(pluginDir, "index.ts"))).toBe(true);
-  expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(true);
+  expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(false);
   expect(existsSync(path.join(pluginDir, "package.json"))).toBe(true);
 });
 
@@ -28,9 +28,9 @@ test("scaffoldPlugin index.ts has correct namespace", async () => {
     path.join(tmpDir, ".bolt", "plugins", "myns", "index.ts"),
     "utf8"
   );
-  expect(indexTs).toContain('namespace: "myns"');
-  expect(indexTs).toContain('handlers:');
-  expect(indexTs).toContain('import type { BoltPlugin');
+  expect(indexTs).toContain('"myns"');
+  expect(indexTs).toContain('from "boltstack"');
+  expect(indexTs).toContain('definePlugin(');
 });
 
 test("scaffoldPlugin package.json has boltstack devDependency (project-scope)", async () => {
@@ -43,15 +43,15 @@ test("scaffoldPlugin package.json has boltstack devDependency (project-scope)", 
   expect(pkg.devDependencies["boltstack"]).toBe("latest");
 });
 
-test("scaffoldPlugin tsconfig.json includes boltstack in types", async () => {
+test("scaffoldPlugin package.json has boltstack devDependency (no bun-types)", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
-  const tsconfig = JSON.parse(
-    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "tsconfig.json"), "utf8")
+  const pkg = JSON.parse(
+    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8")
   );
-  expect(tsconfig.compilerOptions.types).toContain("boltstack");
-  expect(tsconfig.compilerOptions.types).toContain("bun-types");
+  expect(pkg.devDependencies["boltstack"]).toBe("latest");
+  expect(pkg.devDependencies["bun-types"]).toBeUndefined();
 });
 
 test("scaffoldPlugin package.json has boltstack devDependency (user-scope)", async () => {
