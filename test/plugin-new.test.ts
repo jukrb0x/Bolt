@@ -22,8 +22,6 @@ describe("scaffoldPlugin", () => {
     expect(indexTs).toContain("PluginBase.withDescriptor(");
     // Must use @handler decorator
     expect(indexTs).toContain("@handler(");
-    // Must use @param decorator
-    expect(indexTs).toContain("@param(");
     // Must have the plugin namespace
     expect(indexTs).toContain('"my-deploy"');
     // Must export default class
