@@ -22,7 +22,7 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  const indexTs = `import { definePlugin, PluginBase, handler, param } from "boltstack";
+  const indexTs = `import { definePlugin, PluginBase, handler } from "boltstack";
 import type { BoltPluginContext } from "boltstack";
 
 const descriptor = definePlugin({
@@ -33,11 +33,7 @@ const descriptor = definePlugin({
 
 export default class extends PluginBase.withDescriptor(descriptor) {
   @handler("Run ${name}")
-  async run(
-    @param("input", "Input value to process")
-    params: Record<string, string>,
-    ctx: BoltPluginContext,
-  ) {
+  async run(params: Record<string, string>, ctx: BoltPluginContext) {
     ctx.logger.info(\`${name}/run called with: \${JSON.stringify(params)}\`);
   }
 }
