@@ -22,6 +22,8 @@ describe("scaffoldPlugin", () => {
     expect(indexTs).toContain("PluginBase.withDescriptor(");
     // Must use @handler decorator
     expect(indexTs).toContain("@handler(");
+    // Must use @param decorator
+    expect(indexTs).toContain("@param(");
     // Must have the plugin namespace
     expect(indexTs).toContain('"my-deploy"');
     // Must export default class
@@ -37,8 +39,10 @@ describe("scaffoldPlugin", () => {
     expect(pkg.dependencies?.boltstack).toBeUndefined();
   });
 
-  test("does not generate tsconfig.json", async () => {
-    const pluginDir = await scaffoldPlugin({ name: "no-tsconfig", baseDir: TEST_DIR, isUser: false });
-    expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(false);
+  test("generates tsconfig.json with experimentalDecorators", async () => {
+    const pluginDir = await scaffoldPlugin({ name: "with-tsconfig", baseDir: TEST_DIR, isUser: false });
+    expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(true);
+    const tsconfig = JSON.parse(readFileSync(path.join(pluginDir, "tsconfig.json"), "utf8"));
+    expect(tsconfig.compilerOptions.experimentalDecorators).toBe(true);
   });
 });
