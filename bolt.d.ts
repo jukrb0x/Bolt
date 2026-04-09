@@ -87,7 +87,41 @@ declare module "boltstack" {
    */
   export declare abstract class PluginBase implements BoltPlugin {
   	abstract namespace: string;
+  	descriptor?: PluginDescriptor<any>;
+  	config?: unknown;
+  	deps?: Record<string, BoltPlugin>;
   	get handlers(): Record<string, BoltPluginHandler>;
   	describe(handler: string, params: Record<string, string>): string | undefined;
+  	onInit?(ctx: BoltPluginContext): Promise<void>;
+  	onBeforeStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  	onAfterStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  	static withDescriptor<TConfig = unknown>(desc: PluginDescriptor<TConfig>): {
+  		new (config?: TConfig, deps?: Record<string, BoltPlugin>): PluginBase & {
+  			config: TConfig | undefined;
+  			deps: Record<string, BoltPlugin> | undefined;
+  			descriptor: PluginDescriptor<TConfig>;
+  		};
+  	};
+  }
+  export interface PluginDescriptor<TConfig = unknown> {
+  	namespace: string;
+  	version: string;
+  	description: string;
+  	configSchema?: import("zod").ZodType<TConfig>;
+  	deps?: string[];
+  }
+  /**
+   * Define a plugin descriptor. Pass to `PluginBase.withDescriptor()`.
+   */
+  export declare function definePlugin<TConfig = unknown>(opts: PluginDescriptor<TConfig>): PluginDescriptor<TConfig>;
+  /**
+   * Parameter decorator — document a named parameter for a handler method.
+   */
+  export declare function param(name: string, description: string): (target: any, propertyKey: string, parameterIndex: number) => void;
+  /** Optional lifecycle hooks for class-based plugins. */
+  export interface PluginLifecycleHooks {
+  	onInit?(ctx: BoltPluginContext): Promise<void>;
+  	onBeforeStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  	onAfterStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
   }
 }
