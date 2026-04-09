@@ -22,7 +22,7 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  const indexTs = `import { definePlugin, PluginBase, handler } from "boltstack";
+  const indexTs = `import { definePlugin, PluginBase, handler, param } from "boltstack";
 import type { BoltPluginContext } from "boltstack";
 
 const descriptor = definePlugin({
@@ -33,11 +33,21 @@ const descriptor = definePlugin({
 
 export default class extends PluginBase.withDescriptor(descriptor) {
   @handler("Run ${name}")
-  async run(params: Record<string, string>, ctx: BoltPluginContext) {
+  async run(
+    @param("input", "Input value to process")
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ) {
     ctx.logger.info(\`${name}/run called with: \${JSON.stringify(params)}\`);
   }
 }
 `;
+
+  const tsconfig = {
+    compilerOptions: {
+      experimentalDecorators: true,
+    },
+  };
 
   const packageJson = {
     name,
@@ -48,8 +58,8 @@ export default class extends PluginBase.withDescriptor(descriptor) {
   };
 
   writeFileSync(path.join(pluginDir, "index.ts"), indexTs, "utf8");
+  writeFileSync(path.join(pluginDir, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n", "utf8");
   writeFileSync(path.join(pluginDir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
-  // No tsconfig needed — Bun handles TS natively, and bolt JIT-compiles plugins
   return pluginDir;
 }
 

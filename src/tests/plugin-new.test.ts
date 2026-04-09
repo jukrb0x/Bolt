@@ -10,13 +10,13 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-test("scaffoldPlugin creates index.ts, package.json (no tsconfig)", async () => {
+test("scaffoldPlugin creates index.ts, tsconfig.json, package.json", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const pluginDir = path.join(tmpDir, ".bolt", "plugins", "myplugin");
   expect(existsSync(path.join(pluginDir, "index.ts"))).toBe(true);
-  expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(false);
+  expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(true);
   expect(existsSync(path.join(pluginDir, "package.json"))).toBe(true);
 });
 
