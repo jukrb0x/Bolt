@@ -38,6 +38,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # local/private files (not for version control)
 .local/
 
+# local-first AI working memory (specs, plans, brainstorms, scratch)
+docs/superpowers/
+
 # IntelliJ based IDEs
 .idea
 
