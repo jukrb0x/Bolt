@@ -20,7 +20,7 @@
     "url": "https://github.com/jukrb0x/Bolt.git"
   },
   "type": "module",
-  "workspaces": ["docs"],
+  "workspaces": ["apps/*"],
   "exports": {
     ".": {
       "import": "./src/index.ts",
