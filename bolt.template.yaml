@@ -1,42 +1,26 @@
-# bolt.yaml — project automation config
-
-# Optional: _init section for interactive template questions
-# _init:
-#   project_name:
-#     prompt: "Project name"
-#     default: "my-project"
+# bolt.yaml - shared project contract (commit this)
 #
-#   engine_vcs:
-#     prompt: "Engine VCS"
-#     type: select
-#     options: [git, svn]
-#     default: git
+# This file holds the team-shared automation contract. It must NOT contain
+# machine-specific paths. Per-machine paths (engine/project/uproject) live in
+# bolt.local.yaml (gitignored) — see bolt.local.example.yaml. Run `bolt init`
+# to scaffold both files.
 #
-#   engine_branch:
-#     prompt: "Engine branch"
-#     default: main
-#     condition: "engine_vcs == 'git'"
-#
-# Use ${{ _init.var_name }} to reference answers in template.
-# After Q&A, the _init section is removed from output.
-
 # Optional: stop the entire run if it exceeds this duration
 # timeout_hours: 6
-
+#
 # Optional: notify via WeCom or Telegram on build events
 # notifications:
-#   on_start: true        # flight plan message before first op
-#   on_op_complete: true  # one message per op that finishes
-#   on_failure: true      # immediate alert on op failure
-#   on_complete: true     # final summary after all ops
+#   on_start: true
+#   on_op_complete: true
+#   on_failure: true
+#   on_complete: true
 #   providers:
 #     - type: wecom
 #       webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
-#       # chat_id: "YOUR_CHATID"   # optional: target a specific group chat
 #     - type: telegram
 #       bot_token: "123456:ABC-DEF"
 #       chat_id: "-1001234567890"
-
+#
 # Optional: declare project-scope plugins by explicit path
 # plugins:
 #   - namespace: myplugin
@@ -45,17 +29,15 @@
 
 project:
   name: MyProject
-  engine_repo:
-    path: ./engine
+  engine:                    # repo identity only — path lives in bolt.local.yaml
     vcs: git
     # url: https://github.com/EpicGames/UnrealEngine.git
     branch: main
-  project_repo:
-    path: ./project
+  project:
     vcs: svn
     # url: svn://svn.example.com/project/trunk
-  uproject: ./project/MyProject.uproject
 
+# Build targets referenced by the ue/build handler (via --target=<name>).
 targets:
   editor:
     kind: editor
@@ -65,130 +47,33 @@ targets:
     name: MyClient
     config: shipping
 
-# Op definitions for `bolt go`
-# Each op has named variants; "default" is used when no value is given.
-ops:
-  kill:
-    default:
-      - uses: ue/kill
+# tasks: the only building block. A task is a named list of steps.
+# Steps use `uses: ns/handler` (plugin), `uses: task/<name>` (compose another
+# task), or `run: <shell>`. Compose and parameterize freely.
+tasks:
+  kill:    [{ uses: ue/kill }]
+  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  genproj: [{ uses: ue/generate_project }]
+  setup:   [{ uses: ue/setup }]
+  build:   [{ uses: ue/build, with: { target: editor } }]
+  fillddc: [{ uses: ue/fillddc }]
+  start:   [{ uses: ue/start }]
 
-  update:
-    default:
-      - uses: ue/update_engine
-      - uses: ue/update_project
-    engine:
-      - uses: ue/update_engine
-    project:
-      - uses: ue/update_project
+# flows: named, ordered goals. `bolt run <flow>` runs the steps in order.
+# Fail-fast: the first failing task aborts the flow. List a task in
+# continue_on_fail to let it fail without aborting.
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]   # update/build failures abort; start may fail
+  reset:
+    description: Kill, update, regenerate, rebuild
+    steps: [kill, update, genproj, build]
+    continue_on_fail: [kill]    # kill may fail (nothing running) without aborting
 
-  svn-cleanup:
-    default:
-      - uses: ue/svn_cleanup
-
-  genproj:
-    default:
-      - uses: ue/generate_project
-
-  setup:
-    default:
-      - uses: ue/setup
-
-  build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-    engine:
-      - uses: ue/build
-        with:
-          target: engine
-    editor:
-      - uses: ue/build
-        with:
-          target: editor
-    program:
-      - uses: ue/build
-        with:
-          target: program
-          # Supply target at runtime:
-          #   bolt go build:program --target=UnrealInsights
-
-  fillddc:
-    default:
-      - uses: ue/fillddc
-
-  start:
-    default:
-      - uses: ue/start
-
-  info:
-    default:
-      - uses: ue/info
-
-  fix-dll:
-    default:
-      - uses: ue/fix_dll
-
-# go-pipeline controls bolt go execution order and failure behaviour
-go-pipeline:
-  order:
-    - kill
-    - info
-    - update
-    - svn-cleanup
-    - setup
-    - genproj
-    - build
-    - fillddc
-    - fix-dll
-    - start
-  fail_stops:
-    - build # if build fails, stop; other ops continue on failure
-
-# Named action profiles (reusable, runnable with `bolt run <name>`)
-actions:
-  build_editor:
-    steps:
-      - uses: ue/build
-        with:
-          target: editor
-          config: development
-
-  build_editor_with_ops:
-    steps:
-      - uses: ops/build
-        with:
-          config: debug
-
-  build_editor_steps:
-    steps:
-      - uses: ue/build
-        with:
-          target: engine
-          config: development
-      - uses: ue/build
-        with:
-          target: editor
-          config: debug
-
-  build_and_start_editor:
-    steps:
-      - uses: ue/build
-        with:
-          target: editor
-      - uses: ue/start
-
-  daily_check:
-    steps:
-      - uses: ops/update:project
-      - uses: ops/build
-      - uses: ops/start
-        continue-on-error: true
-
-  full_reset:
-    steps:
-      - uses: ops/kill
-        continue-on-error: true
-      - uses: ops/update
-      - uses: ops/genproj
-      - uses: ops/build
+# Usage:
+#   bolt run build start                 # ad-hoc: run tasks in typed order
+#   bolt run daily                       # goal: run a flow
+#   bolt run build --target=client       # params replace variants
+#   bolt run reset --dry-run
