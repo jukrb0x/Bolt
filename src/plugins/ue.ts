@@ -333,7 +333,7 @@ class UEPlugin extends PluginBase {
   @handler("Build program ${target}")
   async build_program(params: Record<string, string>, ctx: BoltPluginContext) {
     if (!params.target || params.target.trim() === "") {
-      throw new Error(`No target specified. Use: bolt go build-program --target=<Name>`);
+      throw new Error(`No target specified. Use: bolt run <task> --target=<Name>`);
     }
     await this.build(params, ctx);
   }

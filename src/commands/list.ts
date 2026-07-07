@@ -1,11 +1,10 @@
 import { defineCommand } from "citty";
-import { getOpVariants } from "../config";
 import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import pc from "picocolors";
 
 export default defineCommand({
-  meta: { description: "List available ops and actions defined in bolt.yaml" },
+  meta: { description: "List tasks and flows defined in bolt.yaml" },
   async run() {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {
@@ -14,36 +13,31 @@ export default defineCommand({
     }
     const cfg = await loadConfig(configPath);
 
-    const ops = Object.entries(cfg.ops);
-    const actions = Object.keys(cfg.actions);
+    const tasks = Object.keys(cfg.tasks);
+    const flows = Object.entries(cfg.flows);
 
     console.log(pc.dim(`bolt.yaml: ${configPath}`));
 
     console.log("");
-    console.log(`${pc.underline(pc.bold("OPS"))} ${pc.dim("(bolt go)")}`);
+    console.log(`${pc.underline(pc.bold("TASKS"))} ${pc.dim("(bolt run <task...>)")}`);
     console.log("");
-    if (ops.length === 0) {
+    if (tasks.length === 0) {
       console.log(pc.dim("  (none)"));
     } else {
-      for (const [name, op] of ops) {
-        const variants = getOpVariants(op).filter((v) => v !== "default");
+      for (const name of tasks) {
         console.log(`  ${pc.cyan(name)}`);
-        if (variants.length > 0) {
-          for (const v of variants) {
-            console.log(`    ${pc.dim(`${name}:${v}`)}`);
-          }
-        }
       }
     }
 
     console.log("");
-    console.log(`${pc.underline(pc.bold("ACTIONS"))} ${pc.dim("(bolt run)")}`);
+    console.log(`${pc.underline(pc.bold("FLOWS"))} ${pc.dim("(bolt run <flow>)")}`);
     console.log("");
-    if (actions.length === 0) {
+    if (flows.length === 0) {
       console.log(pc.dim("  (none)"));
     } else {
-      for (const name of actions) {
-        console.log(`  ${pc.cyan(name)}`);
+      for (const [name, flow] of flows) {
+        console.log(`  ${pc.cyan(name)}${pc.dim(`  ${flow.steps.join(" → ")}`)}`);
+        if (flow.description) console.log(`    ${pc.dim(flow.description)}`);
       }
     }
 

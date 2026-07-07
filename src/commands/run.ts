@@ -1,10 +1,9 @@
 import { defineCommand } from "citty";
 import { findConfig } from "../discover";
-import { loadConfig } from "../config";
+import { loadConfig, type BoltConfig } from "../config";
 import { Runner } from "../runner";
 import { Logger } from "../logger";
 import { Notifier } from "../notify";
-import { makeCtx, walkSteps, collectSections } from "../inspect-utils";
 import path from "path";
 import { mkdirSync } from "fs";
 import pkg from "../../package.json";
@@ -13,41 +12,98 @@ function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
 
+/** Shorthand aliases for the `config` (build configuration) param. */
 const CONFIG_SHORTCUTS: Record<string, string> = { dev: "development", dbg: "debug" };
 
-/** Parse extra --key=value tokens into a params map (skips --dry-run). */
-function parseRunParams(rawArgs: string[]): Record<string, string> {
+export interface ParsedRun {
+  /** Positional task/flow names, in the order typed. */
+  names: string[];
+  /** Trailing `--k=v` flags collected as global params. */
+  params: Record<string, string>;
+  dryRun: boolean;
+}
+
+/**
+ * Parse raw argv into positional names + `--k=v` params + `--dry-run`.
+ * Names are collected in typed order (that order IS execution order — spec D3).
+ * `--k=v` flags apply to the whole invocation (spec D4). No `:variant`, no shared-param fill.
+ */
+export function parseRunArgs(rawArgs: string[]): ParsedRun {
+  const names: string[] = [];
   const params: Record<string, string> = {};
+  let dryRun = false;
+
   for (const arg of rawArgs) {
-    if (!arg.startsWith("--") || !arg.includes("=")) continue;
-    const inner = arg.slice(2);
-    const eq = inner.indexOf("=");
-    const k = inner.slice(0, eq);
-    const v = inner.slice(eq + 1);
-    if (k === "dry-run") continue;
-    params[k] = k === "config" ? (CONFIG_SHORTCUTS[v.toLowerCase()] ?? v) : v;
+    if (arg === "--dry-run") {
+      dryRun = true;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      const inner = arg.slice(2);
+      const eq = inner.indexOf("=");
+      if (eq === -1) continue; // unknown boolean-style flag — ignore
+      const k = inner.slice(0, eq);
+      const v = inner.slice(eq + 1);
+      if (k === "dry-run") continue;
+      params[k] = k === "config" ? (CONFIG_SHORTCUTS[v.toLowerCase()] ?? v) : v;
+      continue;
+    }
+    if (arg.startsWith("-")) continue; // ignore other short flags
+    names.push(arg);
   }
-  return params;
+
+  return { names, params, dryRun };
+}
+
+/**
+ * Resolve + execute parsed names against a Runner (spec D3 resolution):
+ * - exactly one name that is a flow → `runFlow`
+ * - otherwise every name must be a task → `runTask` in listed order (params applied to each)
+ *
+ * Throws (never exits) so callers/tests own the process lifecycle.
+ */
+export async function dispatchRun(
+  runner: Runner,
+  cfg: BoltConfig,
+  names: string[],
+  params: Record<string, string>,
+): Promise<void> {
+  if (names.length === 0) {
+    throw new Error("No task or flow specified. Example: bolt run build start");
+  }
+
+  if (names.length === 1 && cfg.flows[names[0]]) {
+    await runner.runFlow(names[0]);
+    return;
+  }
+
+  const unknown = names.filter((n) => !cfg.tasks[n]);
+  if (unknown.length > 0) {
+    const tasks = Object.keys(cfg.tasks).sort().join(", ") || "(none)";
+    const flows = Object.keys(cfg.flows).sort().join(", ") || "(none)";
+    throw new Error(
+      `Unknown task or flow: ${unknown.map((n) => `"${n}"`).join(", ")}\n` +
+        `  Tasks: ${tasks}\n  Flows: ${flows}`,
+    );
+  }
+
+  for (const name of names) {
+    await runner.runTask(name, params);
+  }
 }
 
 export default defineCommand({
-  meta: { description: "Run a named action defined in bolt.yaml" },
+  meta: { description: "Run tasks (in typed order) or a flow defined in bolt.yaml" },
   args: {
-    action: {
-      type: "positional",
-      description: "Name of the action to run",
-      required: true,
-    },
-    "dry-run": {
-      type: "boolean",
-      default: false,
-      description: "Print steps without executing",
-    },
+    "dry-run": { type: "boolean", default: false, description: "Print steps without executing" },
   },
-  async run({ args, rawArgs }) {
-    const action = args.action;
-    const dryRun = args["dry-run"];
-    const params = parseRunParams(rawArgs ?? []);
+  async run({ rawArgs }) {
+    const { names, params, dryRun } = parseRunArgs(rawArgs ?? []);
+
+    if (names.length === 0) {
+      console.error("[ERROR] No task or flow specified. Example: bolt run build start");
+      process.exit(1);
+    }
 
     const configPath = await findConfig(process.cwd());
     if (!configPath) {
@@ -55,46 +111,36 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const cfg = await loadConfig(configPath);
-    const configDir = path.dirname(configPath);
+    let cfg: BoltConfig;
+    try {
+      cfg = await loadConfig(configPath);
+    } catch (e: any) {
+      console.error(`[ERROR] ${e.message}`);
+      process.exit(1);
+    }
 
-    const logDir = path.join(path.dirname(configPath), ".bolt", "logs");
+    const configDir = path.dirname(configPath);
+    const logDir = path.join(configDir, ".bolt", "logs");
     mkdirSync(logDir, { recursive: true });
     const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
     const logger = new Logger({ logFile });
 
+    const isFlow = names.length === 1 && !!cfg.flows[names[0]];
     logger.info(`bolt ${pkg.version}`);
     logger.info(`Config: ${configPath}`);
-    logger.info(`Action: ${action}${dryRun ? " (dry-run)" : ""}`);
+    logger.info(`${isFlow ? "Flow" : "Tasks"}: ${names.join(" ")}${dryRun ? " (dry-run)" : ""}`);
 
-    try {
-      const ctx = makeCtx(cfg);
-      const sections = collectSections(action, cfg);
-      logger.info("Plan:");
-      const counter = { n: 1 };
-      for (const section of sections) {
-        if (sections.length > 1) {
-          logger.info(`  [${section.label}]`);
-        } else {
-          logger.info(`  ${section.label}`);
-        }
-        for (const line of walkSteps(section.steps, cfg, ctx, {}, counter)) {
-          logger.info(`  ${line}`);
-        }
-      }
-    } catch (e: any) {
-      logger.error(e.message);
-      logger.close();
-      process.exit(1);
-    }
-
-    const runner = new Runner(cfg, { dryRun, logger, configDir, notifier: dryRun ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications) });
+    const runner = new Runner(cfg, {
+      dryRun,
+      logger,
+      configDir,
+      notifier: dryRun ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications),
+    });
 
     const start = Date.now();
     try {
-      await runner.run(action, params);
-      const dur = ((Date.now() - start) / 1000).toFixed(1);
-      logger.info(`Done in ${dur}s`);
+      await dispatchRun(runner, cfg, names, params);
+      logger.info(`Done in ${((Date.now() - start) / 1000).toFixed(1)}s`);
       logger.info(`Log: ${logFile}`);
       logger.close();
       process.exit(0);

@@ -1,7 +1,6 @@
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import type { BoltConfig, Step } from "./config";
-import { getOpVariant, getOpVariants } from "./config";
 import type { PluginRegistry } from "./plugin-registry";
 import { getParamMap } from "./plugin";
 
@@ -10,8 +9,8 @@ function describeStep(step: Step, registry: PluginRegistry): string {
   if (step.run) return step.run;
   if (!step.uses) return "?";
 
-  // Resolve ops/ references — just show as "ops/<name>"
-  if (step.uses.startsWith("ops/")) return step.uses;
+  // task/<name> composition — show as-is
+  if (step.uses.startsWith("task/")) return step.uses;
 
   // Plugin call: "namespace/handler"
   const slash = step.uses.indexOf("/");
@@ -22,14 +21,12 @@ function describeStep(step: Step, registry: PluginRegistry): string {
   const plugin = registry.get(ns);
   if (!plugin) return step.uses;
 
-  // Try describe() first (existing behavior)
   if (plugin.describe) {
     const params = step.with ?? {};
     const desc = plugin.describe(handler, params);
     if (desc) return desc;
   }
 
-  // Fallback: use @param metadata to show parameter info
   const paramMap = getParamMap(plugin as any, handler);
   if (paramMap && paramMap.size > 0) {
     const paramDescs = [...paramMap.entries()].map(([name, meta]) => `${name}: ${meta.description}`);
@@ -39,35 +36,20 @@ function describeStep(step: Step, registry: PluginRegistry): string {
   return step.uses;
 }
 
-/** Describe an op variant by describing its steps. */
-function describeVariant(
-  opName: string,
-  variant: string,
-  cfg: BoltConfig,
-  registry: PluginRegistry,
-): string {
-  const steps = getOpVariant(cfg.ops[opName], variant);
+/** Describe a task by describing its steps (resolving task/ composition one level). */
+function describeTask(name: string, cfg: BoltConfig, registry: PluginRegistry): string {
+  const steps = cfg.tasks[name];
   if (!steps || steps.length === 0) return "";
-  return steps.map((s) => describeStep(s, registry)).join(" → ");
-}
-
-/** Describe an action by describing its steps (resolving ops/ inline). */
-function describeAction(
-  steps: Step[],
-  cfg: BoltConfig,
-  registry: PluginRegistry,
-): string {
-  return steps.map((step) => {
-    if (step.uses?.startsWith("ops/")) {
-      const rest = step.uses.slice("ops/".length);
-      const [opName, variant = "default"] = rest.split(":");
-      const opSteps = getOpVariant(cfg.ops[opName] ?? {}, variant);
-      if (opSteps) {
-        return opSteps.map((s) => describeStep(s, registry)).join(" → ");
+  return steps
+    .map((step) => {
+      if (step.uses?.startsWith("task/")) {
+        const inner = step.uses.slice("task/".length);
+        const innerSteps = cfg.tasks[inner];
+        if (innerSteps) return innerSteps.map((s) => describeStep(s, registry)).join(" → ");
       }
-    }
-    return describeStep(step, registry);
-  }).join(" → ");
+      return describeStep(step, registry);
+    })
+    .join(" → ");
 }
 
 export function generateAiContext(
@@ -89,62 +71,49 @@ export function generateAiContext(
   lines.push(`Bolt is a CLI tool for Unreal Engine workflow automation.`);
   lines.push(`Run commands from the directory containing bolt.yaml (or any child directory).`);
   lines.push(``);
+  lines.push(`Model: a **task** is a named list of steps; a **flow** is an ordered set of`);
+  lines.push(`tasks with a fail policy. \`bolt run <task...>\` runs tasks in the order given;`);
+  lines.push(`\`bolt run <flow>\` runs a predefined flow.`);
+  lines.push(``);
 
   // --- Quick reference table ---
   lines.push(`## Quick Reference`);
   lines.push(``);
-  lines.push(`| Task | Command | Description |`);
-  lines.push(`|------|---------|-------------|`);
+  lines.push(`| Name | Command | Steps |`);
+  lines.push(`|------|---------|-------|`);
 
-  for (const [opName, op] of Object.entries(cfg.ops)) {
-    const variants = getOpVariants(op);
-    for (const v of variants) {
-      const label = v === "default" ? opName : `${opName}:${v}`;
-      const cmd = v === "default" ? `bolt go ${opName}` : `bolt go ${opName}:${v}`;
-      const desc = describeVariant(opName, v, cfg, registry);
-      lines.push(`| ${label} | \`${cmd}\` | ${desc} |`);
-    }
+  for (const name of Object.keys(cfg.tasks)) {
+    lines.push(`| ${name} | \`bolt run ${name}\` | ${describeTask(name, cfg, registry)} |`);
   }
-
-  for (const [actionName, action] of Object.entries(cfg.actions)) {
-    const desc = describeAction(action.steps, cfg, registry);
-    lines.push(`| ${actionName} | \`bolt run ${actionName}\` | ${desc} |`);
-  }
-
-  lines.push(``);
-
-  // --- Ops detail ---
-  lines.push(`## Ops (\`bolt go <op>[:<variant>]\`)`);
-  lines.push(``);
-  lines.push(`Pipeline ops. Can chain multiple: \`bolt go update build start\`.`);
-  lines.push(`Pipeline order: ${cfg["go-pipeline"].order.join(" → ") || "(none)"}`);
-  if (cfg["go-pipeline"].fail_stops.length > 0) {
-    lines.push(`Fail stops: ${cfg["go-pipeline"].fail_stops.join(", ")}`);
+  for (const [name, flow] of Object.entries(cfg.flows)) {
+    lines.push(`| ${name} (flow) | \`bolt run ${name}\` | ${flow.steps.join(" → ")} |`);
   }
   lines.push(``);
 
-  for (const [opName, op] of Object.entries(cfg.ops)) {
-    const variants = getOpVariants(op);
-    for (const v of variants) {
-      const cmd = v === "default" ? `\`bolt go ${opName}\`` : `\`bolt go ${opName}:${v}\``;
-      const label = v === "default" ? `**${opName}**` : `**${opName}:${v}**`;
-      const desc = describeVariant(opName, v, cfg, registry);
-      lines.push(`- ${label} — ${cmd} — ${desc}`);
-    }
+  // --- Tasks detail ---
+  lines.push(`## Tasks (\`bolt run <task...>\`)`);
+  lines.push(``);
+  lines.push(`Named step sequences. Chain multiple in typed order: \`bolt run update build start\`.`);
+  lines.push(`Pass params with \`--key=value\` (applies to the whole run, e.g. \`--target=client\`).`);
+  lines.push(``);
+
+  for (const name of Object.keys(cfg.tasks)) {
+    lines.push(`- **${name}** — \`bolt run ${name}\` — ${describeTask(name, cfg, registry)}`);
   }
   lines.push(``);
 
-  // --- Actions detail ---
-  if (Object.keys(cfg.actions).length > 0) {
-    lines.push(`## Actions (\`bolt run <action>\`)`);
+  // --- Flows detail ---
+  if (Object.keys(cfg.flows).length > 0) {
+    lines.push(`## Flows (\`bolt run <flow>\`)`);
     lines.push(``);
-    lines.push(`Standalone workflows, independent of pipeline order.`);
+    lines.push(`Ordered task compositions. Fail-fast: the first failing task aborts the flow,`);
+    lines.push(`unless it is listed in \`continue_on_fail\`.`);
     lines.push(``);
 
-    for (const [name, action] of Object.entries(cfg.actions)) {
-      const deps = action.depends?.length ? ` (depends: ${action.depends.join(", ")})` : "";
-      const desc = describeAction(action.steps, cfg, registry);
-      lines.push(`- **${name}**${deps}: ${desc}`);
+    for (const [name, flow] of Object.entries(cfg.flows)) {
+      const cont = flow.continue_on_fail.length ? ` (continue_on_fail: ${flow.continue_on_fail.join(", ")})` : "";
+      const desc = flow.description ? `${flow.description} — ` : "";
+      lines.push(`- **${name}**${cont}: ${desc}${flow.steps.join(" → ")}`);
     }
     lines.push(``);
   }
@@ -164,15 +133,14 @@ export function generateAiContext(
   lines.push(`## Flags`);
   lines.push(``);
   lines.push(`- \`--dry-run\` — preview steps without executing`);
-  lines.push(`- \`--key=value\` — pass parameters to ops/actions (e.g. \`--target=UnrealInsights\`)`);
+  lines.push(`- \`--key=value\` — pass parameters to the run (e.g. \`--target=client --config=debug\`)`);
   lines.push(``);
 
   // --- Introspection ---
   lines.push(`## Introspection`);
   lines.push(``);
-  lines.push(`- \`bolt list\` — list all ops and actions`);
-  lines.push(`- \`bolt inspect go <op>\` — show resolved steps for an op`);
-  lines.push(`- \`bolt inspect run <action>\` — show resolved steps for an action`);
+  lines.push(`- \`bolt list\` — list all tasks and flows`);
+  lines.push(`- \`bolt inspect <name...>\` — show resolved steps for a task or flow`);
   lines.push(`- \`bolt info\` — project and VCS summary`);
   lines.push(`- \`bolt check\` — validate bolt.yaml schema`);
   lines.push(``);

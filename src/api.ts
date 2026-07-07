@@ -2,7 +2,6 @@
 import { loadConfig, type BoltConfig } from "./config";
 import { Runner } from "./runner";
 import { Logger } from "./logger";
-import { parseGoArgs, resolveOps } from "./go";
 import { findConfig } from "./discover";
 import { createRuntime, type Runtime } from "./runtime";
 import type { BoltPluginContext, BoltLogger } from "./plugin";
@@ -24,10 +23,13 @@ export interface RunOptions {
 }
 
 /**
- * Run a named action.
+ * Run a named task (params applied to every step).
  * @example await run("build", { configPath: "./bolt.yaml" })
  */
-export async function run(actionName: string, opts: RunOptions = {}): Promise<void> {
+export async function run(
+  taskName: string,
+  opts: RunOptions & { params?: Record<string, string> } = {},
+): Promise<void> {
   const runtime = opts.runtime ?? createRuntime();
   const config = opts.config ?? await loadConfig(
     opts.configPath ?? await findConfig(opts.cwd ?? process.cwd()),
@@ -35,25 +37,7 @@ export async function run(actionName: string, opts: RunOptions = {}): Promise<vo
   );
   const logger = opts.logger ?? new Logger();
   const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime });
-  await runner.run(actionName);
-}
-
-/**
- * Run go pipeline with ops.
- * @example await go(["update", "build"], { configPath: "./bolt.yaml" })
- */
-export async function go(args: string[], opts: RunOptions = {}): Promise<void> {
-  const runtime = opts.runtime ?? createRuntime();
-  const config = opts.config ?? await loadConfig(
-    opts.configPath ?? await findConfig(opts.cwd ?? process.cwd()),
-    runtime
-  );
-  const logger = opts.logger ?? new Logger();
-  const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime });
-
-  const parsed = parseGoArgs(args);
-  const resolved = resolveOps(parsed, config);
-  await runner.runOps(resolved, config["go-pipeline"]);
+  await runner.runTask(taskName, opts.params ?? {});
 }
 
 export interface CreateContextOptions {
@@ -74,9 +58,8 @@ export function createContext(opts: CreateContextOptions): BoltPluginContext {
       project: opts.project,
       vars: opts.vars ?? {},
       targets: {},
-      actions: {},
-      ops: {},
-      "go-pipeline": { order: [], fail_stops: [] },
+      tasks: {},
+      flows: {},
       plugins: [],
     },
     configDir: opts.configDir ?? process.cwd(),

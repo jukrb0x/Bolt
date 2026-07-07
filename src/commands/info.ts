@@ -1,5 +1,4 @@
 import { defineCommand } from "citty";
-import { getOpVariants } from "../config";
 import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import pc from "picocolors";
@@ -53,26 +52,24 @@ export default defineCommand({
     }
 
     console.log("");
-    console.log(`${pc.underline(pc.bold("OPS"))}`);
+    console.log(`${pc.underline(pc.bold("TASKS"))}`);
     console.log("");
-    if (Object.keys(cfg.ops).length === 0) {
+    if (Object.keys(cfg.tasks).length === 0) {
       console.log(pc.dim("  (none)"));
     } else {
-      for (const [name, op] of Object.entries(cfg.ops)) {
-        const variants = getOpVariants(op).filter((v) => v !== "default");
-        const suffix = variants.length > 0 ? pc.dim(`  [${variants.join(", ")}]`) : "";
-        console.log(`  ${pc.cyan(name.padEnd(24))}${suffix}`);
+      for (const name of Object.keys(cfg.tasks)) {
+        console.log(`  ${pc.cyan(name)}`);
       }
     }
 
     console.log("");
-    console.log(`${pc.underline(pc.bold("ACTIONS"))}`);
+    console.log(`${pc.underline(pc.bold("FLOWS"))}`);
     console.log("");
-    if (Object.keys(cfg.actions).length === 0) {
+    if (Object.keys(cfg.flows).length === 0) {
       console.log(pc.dim("  (none)"));
     } else {
-      for (const name of Object.keys(cfg.actions)) {
-        console.log(`  ${pc.cyan(name)}`);
+      for (const [name, flow] of Object.entries(cfg.flows)) {
+        console.log(`  ${pc.cyan(name.padEnd(24))}${pc.dim(flow.steps.join(" → "))}`);
       }
     }
 

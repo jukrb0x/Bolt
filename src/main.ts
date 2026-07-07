@@ -3,14 +3,12 @@ import { defineCommand, runMain } from "citty";
 import runCmd from "./commands/run";
 import listCmd from "./commands/list";
 import infoCmd from "./commands/info";
-import goCmd from "./commands/go";
 import checkCmd from "./commands/check";
 import versionCmd from "./commands/version";
 import updateCmd from "./commands/update";
 import pluginCmd from "./commands/plugin";
 import configCmd from "./commands/config";
 import inspectCmd from "./commands/inspect";
-import helpCmd from "./commands/help";
 import initCmd from "./commands/init";
 import aiCmd from "./commands/ai";
 import pkg from "../package.json";
@@ -22,7 +20,6 @@ const main = defineCommand({
     description: "Bolt - build and workflow automation for game development",
   },
   subCommands: {
-    go: goCmd,
     run: runCmd,
     list: listCmd,
     info: infoCmd,
@@ -33,7 +30,6 @@ const main = defineCommand({
     inspect: inspectCmd,
     "self-update": updateCmd,
     ai: aiCmd,
-    help: helpCmd,
     version: versionCmd,
   },
 });

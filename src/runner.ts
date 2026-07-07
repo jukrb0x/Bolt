@@ -1,7 +1,6 @@
-import { type BoltConfig, type Step, type GoPipeline, getOpVariant } from "./config";
+import { type BoltConfig, type Step } from "./config";
 import { Logger } from "./logger";
 import { interpolate } from "./interpolate";
-import { sortByPipeline, type ResolvedOp } from "./go";
 import { buildRegistry, type PluginRegistry } from "./plugin-registry";
 import type { BoltPluginContext } from "./plugin";
 import { createRuntime, type Runtime } from "./runtime";
@@ -23,6 +22,8 @@ interface RunnerOptions {
   notifier?: Notifier;
   runtime?: Runtime;
 }
+
+type InterpolateCtx = Record<string, Record<string, string>>;
 
 export class Runner {
   private registry?: PluginRegistry;
@@ -64,99 +65,25 @@ export class Runner {
     for (const ns of this.registry.listNamespaces()) {
       const plugin = this.registry.get(ns) as any;
       if (typeof plugin?.onInit === "function") {
-        const pluginCtx: BoltPluginContext = {
-          cfg: this.cfg,
-          configDir: this.opts.configDir ?? process.cwd(),
-          dryRun: this.opts.dryRun ?? false,
-          logger: this.opts.logger ?? new Logger(),
-          runtime: this.runtime,
-        };
-        await plugin.onInit(pluginCtx);
+        await plugin.onInit(this.pluginContext());
       }
     }
 
     return this.registry;
   }
 
-  async run(
-    actionName: string,
-    params: Record<string, string> = {},
-    visited = new Set<string>(),
-  ): Promise<void> {
-    await this.runAction(actionName, params, visited);
+  private pluginContext(): BoltPluginContext {
+    return {
+      cfg: this.cfg,
+      configDir: this.opts.configDir ?? process.cwd(),
+      dryRun: this.opts.dryRun ?? false,
+      logger: this.opts.logger ?? new Logger(),
+      runtime: this.runtime,
+    };
   }
 
-  private async runAction(
-    actionName: string,
-    params: Record<string, string>,
-    visited: Set<string>,
-  ): Promise<void> {
-    if (!this.cfg.actions[actionName]) throw new Error(`Unknown action: ${actionName}`);
-    if (visited.has(actionName)) throw new Error(`Dependency cycle detected at: ${actionName}`);
-    visited.add(actionName);
-
-    const isTopLevel = visited.size === 1;
-    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
-    const startTime = Date.now();
-
-    let ctx: BuildContext | undefined;
-    if (isTopLevel) {
-      const now = new Date(startTime);
-      const buildId = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, "0"),
-        String(now.getDate()).padStart(2, "0"),
-        "_",
-        String(now.getHours()).padStart(2, "0"),
-        String(now.getMinutes()).padStart(2, "0"),
-        String(now.getSeconds()).padStart(2, "0"),
-      ].join("");
-
-      let gitBranch: string | undefined;
-      try {
-        const proc = this.runtime.spawnSync(["git", "branch", "--show-current"]);
-        if (proc.exitCode === 0) gitBranch = proc.stdout.trim() || undefined;
-      } catch { /* not a git repo */ }
-
-      ctx = { buildId, projectName: this.cfg.project.name, mode: "run" as const, gitBranch, startTime };
-      await notifier.fire({ kind: "start", ctx, ops: [actionName] });
-    }
-
-    const action = this.cfg.actions[actionName];
-    const t0 = Date.now();
-    try {
-      for (const dep of action.depends ?? []) await this.runAction(dep, params, visited);
-      for (const step of action.steps) await this.execStep(step, params);
-      if (isTopLevel && ctx) {
-        const opDuration = Date.now() - t0;
-        await notifier.fire({ kind: "op_complete", ctx, opName: actionName, opDuration });
-        await notifier.fire({
-          kind: "complete",
-          ctx,
-          duration: Date.now() - startTime,
-          results: [{ op: actionName, ok: true, duration: opDuration }],
-        });
-      }
-    } catch (e: any) {
-      if (isTopLevel && ctx) {
-        const opDuration = Date.now() - t0;
-        await notifier.fire({ kind: "op_failure", ctx, opName: actionName, opDuration, error: e?.message });
-        await notifier.fire({
-          kind: "complete",
-          ctx,
-          duration: Date.now() - startTime,
-          results: [{ op: actionName, ok: false, duration: opDuration }],
-        });
-      }
-      throw e;
-    }
-  }
-
-  async runOps(ops: ResolvedOp[], pipeline: GoPipeline): Promise<void> {
-    const sorted = pipeline.order.length > 0 ? sortByPipeline(ops, pipeline.order) : ops;
-    const startTime = Date.now();
-
-    // ── Build context for notifications ───────────────────────────────────────
+  /** Build the notification BuildContext (buildId + auto-detected git branch). */
+  private buildContext(startTime: number): BuildContext {
     const now = new Date(startTime);
     const buildId = [
       now.getFullYear(),
@@ -174,20 +101,81 @@ export class Runner {
       if (proc.exitCode === 0) gitBranch = proc.stdout.trim() || undefined;
     } catch { /* not a git repo or git not available */ }
 
-    const ctx: import("./notify").BuildContext = {
-      buildId,
-      projectName: this.cfg.project.name,
-      mode: "go",
-      gitBranch,
-      startTime,
-    };
+    return { buildId, projectName: this.cfg.project.name, mode: "run", gitBranch, startTime };
+  }
+
+  // ── Public entry points ─────────────────────────────────────────────────────
+
+  /** Back-compat single-task entry. Prefer runTask/runFlow directly. */
+  async run(
+    name: string,
+    params: Record<string, string> = {},
+    visited = new Set<string>(),
+  ): Promise<void> {
+    await this.runTask(name, params, visited);
+  }
+
+  /**
+   * Run a single task by name (top-level). Fires start/op_complete/op_failure/
+   * complete notifications, treating the task name as the op name. Nested calls
+   * (visited already populated) skip notifications and just execute steps.
+   */
+  async runTask(
+    name: string,
+    params: Record<string, string> = {},
+    visited = new Set<string>(),
+  ): Promise<void> {
+    if (visited.size > 0) {
+      await this.execTask(name, params, visited);
+      return;
+    }
 
     const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
-    const opNames = sorted.map((o) => o.name);
-    const results: { op: string; ok: boolean; duration: number }[] = [];
-    await notifier.fire({ kind: "start", ctx, ops: opNames });
+    const startTime = Date.now();
+    const ctx = this.buildContext(startTime);
+    await notifier.fire({ kind: "start", ctx, ops: [name] });
 
-    for (const op of sorted) {
+    const t0 = Date.now();
+    try {
+      await this.execTask(name, params, visited);
+      const opDuration = Date.now() - t0;
+      await notifier.fire({ kind: "op_complete", ctx, opName: name, opDuration });
+      await notifier.fire({
+        kind: "complete",
+        ctx,
+        duration: Date.now() - startTime,
+        results: [{ op: name, ok: true, duration: opDuration }],
+      });
+    } catch (e: any) {
+      const opDuration = Date.now() - t0;
+      await notifier.fire({ kind: "op_failure", ctx, opName: name, opDuration, error: e?.message });
+      await notifier.fire({
+        kind: "complete",
+        ctx,
+        duration: Date.now() - startTime,
+        results: [{ op: name, ok: false, duration: opDuration }],
+      });
+      throw e;
+    }
+  }
+
+  /**
+   * Run a flow: its tasks in listed order. Fail-fast — the first failing task
+   * aborts the flow, UNLESS it is listed in `continue_on_fail` (then log a
+   * warning and continue). Fires flow-level start/op_complete/op_failure/complete
+   * notifications.
+   */
+  async runFlow(name: string): Promise<void> {
+    const flow = this.cfg.flows[name];
+    if (!flow) throw new Error(`Unknown flow: ${name}`);
+
+    const startTime = Date.now();
+    const ctx = this.buildContext(startTime);
+    const notifier = this.opts.notifier ?? Notifier.fromConfig(undefined);
+    const results: { op: string; ok: boolean; duration: number }[] = [];
+    await notifier.fire({ kind: "start", ctx, ops: flow.steps });
+
+    for (const taskName of flow.steps) {
       if (this.cfg.timeout_hours) {
         const elapsedHours = (Date.now() - startTime) / 3_600_000;
         if (elapsedHours >= this.cfg.timeout_hours) {
@@ -196,35 +184,55 @@ export class Runner {
       }
 
       const t0 = Date.now();
-      this.opts.logger?.step(op.name);
+      this.opts.logger?.step(taskName);
       try {
-        for (const step of op.steps) await this.execStep(step, op.params ?? {});
+        await this.execTask(taskName, {}, new Set<string>());
         const opDuration = Date.now() - t0;
-        this.opts.logger?.success(op.name, opDuration / 1000);
-        results.push({ op: op.name, ok: true, duration: opDuration });
-        await notifier.fire({ kind: "op_complete", ctx, opName: op.name, opDuration });
+        this.opts.logger?.success(taskName, opDuration / 1000);
+        results.push({ op: taskName, ok: true, duration: opDuration });
+        await notifier.fire({ kind: "op_complete", ctx, opName: taskName, opDuration });
       } catch (e: any) {
         const opDuration = Date.now() - t0;
-        this.opts.logger?.fail(op.name, opDuration / 1000);
+        this.opts.logger?.fail(taskName, opDuration / 1000);
         if (e?.message) this.opts.logger?.error(e.message);
-        results.push({ op: op.name, ok: false, duration: opDuration });
-        await notifier.fire({ kind: "op_failure", ctx, opName: op.name, opDuration, error: e?.message });
-        if (pipeline.fail_stops.includes(op.name)) {
+        results.push({ op: taskName, ok: false, duration: opDuration });
+        await notifier.fire({ kind: "op_failure", ctx, opName: taskName, opDuration, error: e?.message });
+        if (!flow.continue_on_fail.includes(taskName)) {
           await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
           throw e;
         }
-        this.opts.logger?.warn(`"${op.name}" failed but is not in fail_stops — continuing`);
+        this.opts.logger?.warn(`"${taskName}" failed but is in continue_on_fail — continuing`);
       }
     }
 
     await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
   }
 
-  private async execStep(step: Step, opParams: Record<string, string> = {}): Promise<void> {
-    const ctx = {
-      project: this.cfg.project as Record<string, string>,
+  // ── Core execution ──────────────────────────────────────────────────────────
+
+  /** Run a task's steps with cycle detection. No notifications (nested-safe). */
+  private async execTask(
+    name: string,
+    params: Record<string, string>,
+    visited: Set<string>,
+  ): Promise<void> {
+    const steps = this.cfg.tasks[name];
+    if (!steps) throw new Error(`Unknown task: ${name}`);
+    if (visited.has(name)) throw new Error(`Dependency cycle detected at: ${name}`);
+    visited.add(name);
+    for (const step of steps) await this.execStep(step, params, visited);
+  }
+
+  private async execStep(
+    step: Step,
+    params: Record<string, string> = {},
+    visited = new Set<string>(),
+  ): Promise<void> {
+    const ctx: InterpolateCtx = {
+      project: this.cfg.project as unknown as Record<string, string>,
       vars: this.cfg.vars,
       env: process.env as Record<string, string>,
+      params,
     };
 
     if (step.run) {
@@ -237,7 +245,7 @@ export class Runner {
 
     if (step.uses) {
       this.opts.onStep?.(step.uses);
-      await this.dispatch(step, ctx, opParams);
+      await this.dispatch(step, ctx, params, visited);
       return;
     }
   }
@@ -251,8 +259,9 @@ export class Runner {
 
   private async dispatch(
     step: Step,
-    ctx: Record<string, Record<string, string>>,
-    opParams: Record<string, string>,
+    ctx: InterpolateCtx,
+    params: Record<string, string>,
+    visited: Set<string>,
   ): Promise<void> {
     const uses = step.uses ?? "";
 
@@ -273,24 +282,17 @@ export class Runner {
     const ns = uses.slice(0, slashIdx);
     const op = uses.slice(slashIdx + 1);
 
-    if (ns === "ops") {
-      const [opName, variant = "default"] = op.split(":");
-      const opDef = this.cfg.ops[opName];
-      if (!opDef) throw new Error(`Unknown op: "${opName}"`);
-      const steps = getOpVariant(opDef, variant);
-      if (!steps) throw new Error(`Unknown variant "${variant}" for op "${opName}"`);
-      const yamlParams = Object.fromEntries(
-        Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
-      );
-      const mergedParams = { ...yamlParams, ...opParams };
-      for (const s of steps) await this.execStep(s, mergedParams);
-      return;
-    }
-
+    // Interpolated step.with, then run params applied as a shallow override (params win).
     const yamlParams = Object.fromEntries(
       Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
     );
-    const mergedParams = { ...yamlParams, ...opParams };
+    const mergedParams = { ...yamlParams, ...params };
+
+    // task/<name> → compose another task inline, sharing the cycle-detection set.
+    if (ns === "task") {
+      await this.execTask(op, mergedParams, visited);
+      return;
+    }
 
     const paramStr = Object.entries(mergedParams)
       .map(([k, v]) => `${k}=${v}`)
@@ -303,13 +305,7 @@ export class Runner {
     const handler = plugin.handlers[op];
     if (!handler) throw new Error(`Unknown op "${op}" in plugin "${ns}"`);
 
-    const pluginCtx: BoltPluginContext = {
-      cfg: this.cfg,
-      configDir: this.opts.configDir ?? process.cwd(),
-      dryRun: this.opts.dryRun ?? false,
-      logger: this.opts.logger ?? new Logger(),
-      runtime: this.runtime,
-    };
+    const pluginCtx = this.pluginContext();
     const pluginInstance = plugin as any; // May have lifecycle hooks
     if (typeof pluginInstance.onBeforeStep === "function") {
       await pluginInstance.onBeforeStep(op, mergedParams, pluginCtx);
