@@ -1,0 +1,14 @@
+# bolt.local.example.yaml - per-machine paths (COMMITTED as an example)
+#
+# Copy this to bolt.local.yaml (gitignored) and edit the paths for your machine.
+# `bolt init` generates bolt.local.yaml for you and tries to auto-detect uproject.
+# Relative paths resolve against the directory containing bolt.yaml.
+
+engine_path:  D:/UE                                  # local Unreal Engine root
+project_path: D:/Games/MyProject                     # local project working copy
+uproject:     D:/Games/MyProject/MyProject.uproject  # path to the .uproject file
+use_tortoise: true                                   # use TortoiseSVN/Proc for SVN ops
+
+# Optional per-machine variable overrides (shallow-merged over bolt.yaml vars)
+# vars:
+#   some_key: some_local_value

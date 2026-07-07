@@ -51,3 +51,4 @@ docs/superpowers/
 .claude/settings.local.json
 
 bolt.yaml
+bolt.local.yaml
