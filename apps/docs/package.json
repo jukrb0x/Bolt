@@ -2,13 +2,13 @@
   "name": "bolt-docs",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "mintlify dev",
-    "build": "mintlify build",
-    "preview": "mintlify preview"
+    "dev": "mint dev",
+    "validate": "mint validate",
+    "broken-links": "mint broken-links"
   },
+  "type": "module",
   "devDependencies": {
-    "mintlify": "^4.2.415"
+    "mint": "^4.2.666"
   }
 }
