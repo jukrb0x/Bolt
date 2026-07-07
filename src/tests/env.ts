@@ -12,12 +12,6 @@ export const mockRuntime: Runtime = {
   },
 };
 
-const required = (key: string): string => {
-  const val = Bun.env[key];
-  if (!val) throw new Error(`Missing required env var: ${key} — check .env.local`);
-  return val;
-};
-
 const optional = (key: string, defaultVal: string): string => {
   return Bun.env[key] || defaultVal;
 };
@@ -44,18 +38,14 @@ export const testCfg: BoltConfig = {
     editor: { kind: "editor", config: "development" },
     client: { kind: "program", name: "MyClient", config: "shipping" },
   },
-  actions: {},
-  ops: {
-    kill: { default: [{ uses: "ue/kill" }] },
-    update: {
-      default: [{ uses: "ue/update_engine" }, { uses: "ue/update_project" }],
-      engine: [{ uses: "ue/update_engine" }],
-      project: [{ uses: "ue/update_project" }],
-    },
-    build: { default: [{ uses: "ue/build", with: { target: "editor" } }] },
-    start: { default: [{ uses: "ue/start" }] },
+  vars: {},
+  tasks: {
+    kill: [{ uses: "ue/kill" }],
+    update: [{ uses: "ue/update_engine" }, { uses: "ue/update_project" }],
+    build: [{ uses: "ue/build", with: { target: "editor" } }],
+    start: [{ uses: "ue/start" }],
   },
-  "go-pipeline": { order: [], fail_stops: [] },
+  flows: {},
   plugins: [],
   timeout_hours: undefined,
 };

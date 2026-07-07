@@ -1,6 +1,6 @@
 // src/index.ts
 // High-level API
-export { run, go, createContext, type RunOptions, type CreateContextOptions } from "./api";
+export { run, createContext, type RunOptions, type CreateContextOptions } from "./api";
 
 // Config
 export { loadConfig, checkConfig } from "./config";
@@ -9,9 +9,8 @@ export type {
   Project,
   RepoConfig,
   Target,
-  Action,
+  Flow,
   Step,
-  GoPipeline,
 } from "./config";
 
 // Types
