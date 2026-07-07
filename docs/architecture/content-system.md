@@ -13,7 +13,7 @@ workflow automation**. It turns repetitive UE tasks — updating source control
 chainable commands driven by a per-project `bolt.yaml`:
 
 ```
-bolt go update build start
+bolt run update build start
 ```
 
 - **CLI**: Bun-only, for speed.
@@ -96,9 +96,9 @@ reference from the project's `bolt.yaml`:
 
 - Header includes a **content hash** of `bolt.yaml` (line 2:
   `<!-- bolt.yaml hash: … -->`) for staleness detection.
-- A quick-reference table + detailed sections for **ops** (`bolt go <op>[:var]`),
-  **actions** (`bolt run <action>`), **targets**, pipeline order/fail-stops,
-  flags, and introspection commands.
+- A quick-reference table + detailed sections for **tasks** (`bolt run <task...>`),
+  **flows** (`bolt run <flow>`, fail-fast with `continue_on_fail`), **targets**, flags, and
+  introspection commands.
 - Written to `.bolt/ai-context.md` (the `.bolt/` dir is gitignored in end-user
   projects).
 
@@ -110,8 +110,8 @@ An agent skill (shipped via `.claude-plugin/plugin.json`) that instructs LLMs to
 2. Read `.bolt/ai-context.md`; if missing or the hash is stale, run `bolt ai`
    and re-read.
 3. Use **only** commands present in the context — never guess.
-4. Follow safety rules (`--dry-run` first, confirm `bolt go kill`, respect
-   `fail_stops`, don't edit `bolt.yaml` unprompted).
+4. Follow safety rules (`--dry-run` first, confirm any `kill` task, respect
+   fail-fast flow aborts, don't edit `bolt.yaml`/`bolt.local.yaml` unprompted).
 
 ### `.claude-plugin/plugin.json`
 
