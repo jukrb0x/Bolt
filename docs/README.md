@@ -26,6 +26,12 @@ Shared knowledge for humans and AI agents. This is NOT the docs website
 
 Never committed. Delete freely.
 
+## Start here
+
+New to the project (human or agent)? Read
+`architecture/content-system.md` — it covers Bolt's purpose and how docs +
+AI context are organized (the two AI layers).
+
 ## For agents
 
 Read `AGENTS.md` (repo root) first — it has the Context Map. Read from

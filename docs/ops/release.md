@@ -54,11 +54,11 @@ Both jobs upload directly to the release created by the local script. No separat
 
 ## bolt.d.ts
 
-`bolt.d.ts` is generated from `src/plugin-api.ts` via:
+`bolt.d.ts` is generated from `src/plugin-api.ts` via `bun run build:types`:
 
 ```
-bunx tsc --project tsconfig.types.json   # emits to dist-types/
-bun run scripts/gen-types.ts             # wraps into declare module "bolt" { }
+bunx dts-bundle-generator --no-banner --project tsconfig.json -o bolt.d.ts src/plugin-api.ts
+bun run scripts/wrap-dts.ts bolt.d.ts    # wraps into a declare module block
 ```
 
 The output is a single flat file — no imports, no runtime code. Published to npm as the `boltstack` package.
