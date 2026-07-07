@@ -78,33 +78,37 @@ Then re-read `.bolt/ai-context.md`.
 ### Step 4: Use the context
 
 The loaded `ai-context.md` contains the **complete command reference** for this project:
-- All ops and their variants (`bolt go <op>[:<variant>]`)
-- All actions (`bolt run <action>`)
+- All tasks (`bolt run <task>`) and their steps
+- All flows (`bolt run <flow>`) and their `continue_on_fail` policy
 - Defined targets
-- Pipeline order and fail-stop rules
 - Available flags
 
 **Use only commands listed in the context.** Do not guess or invent commands.
 
+## Model
+
+- A **task** is a named list of steps (the only building block).
+- A **flow** is an ordered set of tasks. Fail-fast: the first failing task aborts
+  the flow, unless it is listed in `continue_on_fail`.
+- One verb, `bolt run`: pass task names to run them in the order you type, or a
+  single flow name to run a predefined flow. What you type is what runs — there
+  is no hidden reordering.
+
+## Config split
+
+- `bolt.yaml` — shared, committed contract (project identity, tasks, flows, targets). No machine paths.
+- `bolt.local.yaml` — per-machine paths (engine/project/uproject), gitignored. `bolt init` scaffolds both.
+
 ## Command Syntax
 
-### Pipeline ops: `bolt go`
+### `bolt run`
 
-Run one or more ops in pipeline-sorted order:
 ```bash
-bolt go update build start          # chain multiple ops
-bolt go build:editor                # specific variant
-bolt go build --config=debug        # with parameters
-bolt go update build --dry-run      # preview without executing
-```
-
-### Named actions: `bolt run`
-
-Run a standalone action workflow:
-```bash
-bolt run daily_check
-bolt run build_editor --dry-run
-bolt run build_editor --config=debug
+bolt run update build start         # tasks: run in the typed order
+bolt run daily                      # flow: run a predefined goal
+bolt run build --target=client      # params (replace old variants)
+bolt run build --config=debug       # build configuration param
+bolt run update build --dry-run     # preview without executing
 ```
 
 ### Flags
@@ -112,46 +116,43 @@ bolt run build_editor --config=debug
 | Flag | Effect |
 |------|--------|
 | `--dry-run` | Preview steps without executing |
-| `--key=value` | Pass parameter to ops/actions |
+| `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`) |
 
 ### Introspection (when ai-context.md is insufficient)
 
 ```bash
-bolt list                    # all ops and actions
-bolt inspect go <op>         # resolved steps for an op
-bolt inspect run <action>    # resolved steps for an action
+bolt list                    # all tasks and flows
+bolt inspect <name...>       # resolved steps for a task or flow
 bolt info                    # project and VCS summary
 ```
 
 ## Safety Rules
 
 1. **Always `--dry-run` first** for build, update, or any destructive operation. Show the user the plan before executing.
-2. **Never run `bolt go kill` without confirmation** — it terminates all running UE processes.
-3. **Respect fail_stops** — if the context says `build` is a fail-stop, do not chain ops after it unless the user explicitly asks.
-4. **Do not modify bolt.yaml** unless the user explicitly asks. Configuration changes can break workflows.
+2. **Never run a `kill` task without confirmation** — it terminates all running UE processes.
+3. **Respect fail-fast** — flows abort on the first failing task by default; do not work around an aborted flow (e.g. by re-running downstream tasks) unless the user explicitly asks.
+4. **Do not modify bolt.yaml / bolt.local.yaml** unless the user explicitly asks. Configuration changes can break workflows.
 
 ## Common Patterns
 
 **Build the editor:**
-Check `ai-context.md` for the exact command — it varies per project. Typical patterns:
-- `bolt go build:editor` (pipeline op with variant)
-- `bolt run build_editor` (named action)
+Check `ai-context.md` for the exact task name — it varies per project. Typical:
+- `bolt run build` (task; may default to the editor target)
+- `bolt run build --target=editor`
 
 **Daily sync + build + launch:**
-- `bolt go update build start` (pipeline — runs in configured order)
-- `bolt run daily_check` (if defined as an action)
+- `bolt run update build start` (tasks in typed order)
+- `bolt run daily` (if a flow is defined)
 
-**Update only project repo (not engine):**
-- `bolt go update:project`
-
-**Build with a specific config:**
-- `bolt go build:editor --config=debug`
+**Build with a specific config or target:**
+- `bolt run build --config=debug`
+- `bolt run build --target=client`
 
 ## Errors
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | "bolt.yaml not found" | Not in a Bolt project directory | `cd` to the project root |
-| "Unknown op" | Op not defined in this project's bolt.yaml | Run `bolt list` to see available ops |
-| "Unknown variant" | Variant not defined for this op | Run `bolt inspect go <op>` to see variants |
-| Build fails mid-pipeline | Build error in UE | Check the log file path printed in output |
+| "bolt.local.yaml missing or invalid" | Per-machine config absent | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
+| "Unknown task or flow" | Name not defined in this project's bolt.yaml | Run `bolt list` to see available tasks/flows |
+| Build fails mid-flow | Build error in UE | Check the log file path printed in output |
