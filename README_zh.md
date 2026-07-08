@@ -9,7 +9,7 @@
 Bolt 是一个 CLI 工具，将重复的 UE 任务——更新源代码控制、重新构建编辑器、启动游戏、填充 DDC——转化为可以链式调用、脚本化和与团队共享的单行命令。
 
 ```
-bolt go update build start
+bolt run update build start
 ```
 
 不再手动运行 Build.bat。不再在 TortoiseSVN、编辑器和一堆批处理脚本之间来回切换。在 `bolt.yaml` 中定义一次工作流程，随处运行。
@@ -34,170 +34,183 @@ bolt self-update
 
 ## 快速开始
 
-安装后，使用交互式设置初始化你的项目：
+安装后，在你的项目中生成配置：
 
 ```bash
 cd /path/to/your/ue/project
 bolt init
 ```
 
-这将：
-1. 询问你的项目结构（UE 路径、项目路径、版本控制）
-2. 生成带有合理默认值的 `bolt.yaml` 配置文件
-3. 设置常用操作（update、build、start、kill）
-4. 配置你的 go 流水线
+`bolt init` 会写入两个文件：
 
-生成的配置完全可定制——编辑 `bolt.yaml` 添加自定义操作、动作或插件。
+1. `bolt.yaml`——共享、提交到版本库的契约（项目标识、tasks、flows）。不含机器路径。
+2. `bolt.local.yaml`——本机路径（引擎/项目/uproject），已 gitignore。`bolt init` 会尝试自动探测你的 `.uproject`。
+
+编辑 `bolt.local.yaml` 里的路径，然后运行：
+
+```bash
+bolt run daily --dry-run     # 预览
+bolt run daily               # 执行
+```
 
 ## 工作原理
 
-定义你的项目：
+Bolt 只有两个构建块：
+
+- **task（任务）** 是一个命名的步骤列表（唯一的构建块）。
+- **flow（流程）** 是一组有序的 task。Flow 是**快速失败**的：第一个失败的 task 会中止整个流程，除非它被列入 `continue_on_fail`。
+
+一切都通过一个动词 `bolt run` 执行。传入任务名按你输入的顺序运行，或传入单个 flow 名运行预定义目标。你输入什么就运行什么——没有隐藏的重排序。
 
 ```yaml
-# bolt.yaml
+# bolt.yaml——共享契约，提交到版本库（不含机器路径）
 project:
   name: MyGame
-  engine_repo:
-    path: C:/UnrealEngine
-    vcs: git
-    branch: main
-  project_repo:
-    path: C:/Projects/MyGame
-    vcs: svn
-  uproject: C:/Projects/MyGame/MyGame.uproject
+  engine: { vcs: git, branch: main }
+  project: { vcs: svn }
+
+tasks:
+  kill:    [{ uses: ue/kill }]
+  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build:   [{ uses: ue/build, with: { target: editor } }]
+  start:   [{ uses: ue/start }]
+
+flows:
+  daily:
+    description: 更新、构建并启动编辑器
+    steps: [update, build, start]
+    continue_on_fail: [start]    # update/build 失败则中止；start 允许失败
 ```
 
-然后在一条命令中运行任意操作组合：
+```yaml
+# bolt.local.yaml——本机路径，已 gitignore
+engine_path:  C:/UnrealEngine
+project_path: C:/Projects/MyGame
+uproject:     C:/Projects/MyGame/MyGame.uproject
+use_tortoise: true
+```
+
+然后在一条命令中运行任意组合：
 
 ```
-bolt go kill update build start      # 完全重置并重新构建
-bolt go build                        # 仅重新构建编辑器
-bolt go update:svn build --config=debug   # SVN 更新后 debug 构建
-bolt go build start --config=shipping    # shipping 构建并启动
+bolt run kill update build start     # 临时：按输入顺序运行任务
+bolt run build                       # 仅重新构建编辑器
+bolt run build --config=debug        # 参数取代旧的变体（variant）
+bolt run daily                       # 运行预定义 flow
 ```
-
-Bolt 会正确按顺序执行它们，在关键失败时停止，在非关键失败时继续。
 
 ## 命令
 
 | 命令 | 描述 |
 |---------|-------------|
-| `bolt go <ops...>` | 按流水线顺序运行一个或多个操作 |
-| `bolt run <action>` | 运行 bolt.yaml 中的命名动作 |
-| `bolt list` | 列出所有可用的操作和动作 |
+| `bolt run <names...>` | 按输入顺序运行任务，或运行单个 flow |
+| `bolt list` | 列出所有 task 和 flow |
+| `bolt inspect <names...>` | 显示某个 task 或 flow 解析后的步骤 |
 | `bolt info` | 显示项目和 VCS 状态 |
-| `bolt check` | 验证 bolt.yaml |
+| `bolt check` | 校验 `bolt.yaml` 和 `bolt.local.yaml` |
+| `bolt init` | 生成 `bolt.yaml` + `bolt.local.yaml` |
+| `bolt config` | 在 `$EDITOR` 中打开当前 `bolt.yaml` |
+| `bolt ai` | 为 LLM agent 生成 `.bolt/ai-context.md` |
 | `bolt version` | 打印版本 |
 | `bolt self-update` | 更新到最新版本 |
 | `bolt plugin list` | 列出活动插件及其处理器 |
 | `bolt plugin new <name>` | 创建新插件脚手架 |
 
-## bolt.yaml
+## 配置
 
-### 项目
+配置分成两部分：你提交的共享 `bolt.yaml`，以及你 gitignore 的本机 `bolt.local.yaml`。Bolt 在加载时将两者合并，因此插件处理器看到的是统一的 project。
+
+### bolt.yaml（共享，提交）
 
 ```yaml
 project:
   name: MyGame
-  engine_repo:
-    path: C:/UnrealEngine
-    vcs: git                   # git | svn
-    url: ""                    # 可选：远程 URL
-    branch: main               # 可选：用于 git 仓库
-  project_repo:
-    path: C:/Projects/MyGame
-    vcs: svn                   # git | svn
-    url: ""                    # 可选：远程 URL
-    branch: main               # 可选：用于 git 仓库
-  uproject: C:/Projects/MyGame/MyGame.uproject
-  use_tortoise: true           # 可选：true | false | auto-detect
-```
+  engine:                    # 仅仓库标识——路径在 bolt.local.yaml 中
+    vcs: git                 # git | svn
+    url: ""                  # 可选：远程 URL
+    branch: main             # 可选：用于 git 仓库
+  project:
+    vcs: svn                 # git | svn
+    url: ""                  # 可选：远程 URL
 
-### 目标
-
-```yaml
 targets:
   editor:
-    kind: editor               # editor | program | game | client | server
-    config: development        # development | debug | shipping | test
+    kind: editor             # editor | program | game | client | server
+    config: development      # development | debug | shipping | test
   client:
     kind: program
     name: MyClient
     config: shipping
+
+tasks:
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build:  [{ uses: ue/build, with: { target: editor } }]
+  start:  [{ uses: ue/start }]
+
+flows:
+  daily:
+    steps: [update, build, start]
+    continue_on_fail: [start]
+
+timeout_hours: 6             # 可选：运行超过该时长则中止
 ```
 
-### 操作 (Ops)
-
-操作是由 `bolt go` 调用的命名、可复用步骤。每个操作可以有命名变体：
+### bolt.local.yaml（本机，gitignore）
 
 ```yaml
-ops:
+engine_path:  C:/UnrealEngine                       # 本机 UE 根目录
+project_path: C:/Projects/MyGame                    # 本机项目工作副本
+uproject:     C:/Projects/MyGame/MyGame.uproject    # .uproject 文件
+use_tortoise: true                                  # 可选：SVN 操作使用 TortoiseSVN/Proc
+```
+
+`bolt.local.yaml` 中的相对路径以 `bolt.yaml` 所在目录为基准解析。
+
+### 任务 (Tasks)
+
+task 是一个命名的步骤列表。每个步骤要么调用插件处理器（`uses: ns/handler`），要么组合另一个 task（`uses: task/<name>`），要么运行 shell 命令（`run:`）：
+
+```yaml
+tasks:
   build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-    editor:
-      - uses: ue/build
-        with:
-          target: editor
-    program:
-      - uses: ue/build
-        with:
-          target: client
+    - uses: ue/build
+      with:
+        target: editor
+  reset:
+    - uses: ue/kill
+      continue-on-error: true    # 步骤级：出错不中止整个运行
+    - uses: task/update          # 内联组合另一个 task
+    - uses: task/build
+  notify:
+    - run: echo "done at ${{ env.TIME }}"
 ```
 
-运行时选择变体：
+按输入顺序临时运行任务。`--key=value` 参数作用于整个运行，并覆盖 `with:` 的值：
 
 ```
-bolt go build:program
-bolt go --build=program
+bolt run reset build start
+bolt run build --target=client --config=shipping
+bolt run update build --dry-run
 ```
 
-### Go 流水线
+### 流程 (Flows)
 
-控制执行顺序和失败行为：
+flow 是由 task 组成的命名有序目标。Flow 是快速失败的——第一个失败的 task 会中止运行——除非该 task 被列入 `continue_on_fail`：
 
 ```yaml
-go-pipeline:
-  order:
-    - kill
-    - update
-    - build
-    - start
-  fail_stops:
-    - build      # 如果构建失败则停止运行；其他操作失败时继续
-```
-
-`bolt go` 始终遵循流水线顺序，无论参数顺序如何：
-
-```
-bolt go start build    # 先执行 build，然后 start
-```
-
-### 动作 (Actions)
-
-`bolt run` 的命名配置文件——可组合，支持依赖：
-
-```yaml
-actions:
-  full_reset:
-    steps:
-      - uses: ue/kill
-        continue-on-error: true
-      - uses: ops/update
-      - uses: ops/build
-
-  daily_check:
-    depends:
-      - full_reset
-    steps:
-      - uses: ops/start
+flows:
+  daily:
+    description: 更新、构建并启动编辑器
+    steps: [update, build, start]
+    continue_on_fail: [start]    # update/build 中止；start 允许失败
+  reset:
+    steps: [kill, update, genproj, build]
+    continue_on_fail: [kill]     # kill 允许失败（没有进程在运行）而不中止
 ```
 
 ```
-bolt run full_reset
-bolt run daily_check    # 先运行 full_reset，然后启动
+bolt run daily
+bolt run reset --dry-run
 ```
 
 ### 通知
@@ -217,12 +230,6 @@ notifications:
       chat_id: "-100..."
 ```
 
-### 超时
-
-```yaml
-timeout_hours: 6
-```
-
 ## 内置处理器
 
 | 处理器 | 描述 |
@@ -232,16 +239,16 @@ timeout_hours: 6
 | `ue/build_program` | 构建独立程序目标 |
 | `ue/start` | 启动 UE 编辑器或已构建的二进制文件 |
 | `ue/kill` | 终止所有运行中的 UE 进程 |
-| `ue/update-git` | 从 git 拉取最新代码 |
-| `ue/update-svn` | 更新 SVN 工作副本 |
+| `ue/update_engine` | 更新引擎仓库（git/svn） |
+| `ue/update_project` | 更新项目仓库（git/svn） |
+| `ue/setup` | 运行引擎 `Setup.bat` |
 | `ue/svn_cleanup` | 运行 SVN cleanup（支持 TortoiseSVN） |
 | `ue/svn_revert` | 还原 SVN 更改 |
 | `ue/generate_project` | 重新生成项目文件 |
 | `ue/fillddc` | 填充 Derived Data Cache |
 | `ue/fix_dll` | 删除导致链接器错误的零字节 DLL |
 | `ue/info` | 打印项目和 VCS 信息 |
-| `fs/copy`, `fs/move`, `fs/delete`, `fs/mkdir` | 文件系统操作 |
-| `json/set`, `json/merge` | JSON 文件操作 |
+| `ue/ini_set`、`ue/ini_get`、`ue/ini_remove`、`ue/ini_override`、`ue/ini_read_all` | 编辑 UE `.ini` 配置 |
 
 ## 插件
 
@@ -274,15 +281,14 @@ const plugin: BoltPlugin = {
 export default plugin;
 ```
 
-在 bolt.yaml 中使用：
+在 task 中使用：
 
 ```yaml
-ops:
+tasks:
   deploy:
-    default:
-      - uses: myplugin/deploy
-        with:
-          env: staging
+    - uses: myplugin/deploy
+      with:
+        env: staging
 ```
 
 ### 插件范围
@@ -321,17 +327,13 @@ bun add boltstack
 ### 高级 API
 
 ```typescript
-import { run, go, createContext } from "boltstack";
+import { run, createContext } from "boltstack";
 
-// 运行命名动作
+// 运行命名任务；参数作用于每个步骤
 await run("build", {
   configPath: "./bolt.yaml",
-  dryRun: false
-});
-
-// 通过流水线运行操作
-await go(["update", "build", "start"], {
-  configPath: "./bolt.yaml"
+  params: { target: "client" },
+  dryRun: false,
 });
 
 // 创建上下文用于直接调用插件
@@ -349,7 +351,7 @@ const ctx = createContext({
 ### 直接访问插件
 
 ```typescript
-import { git, fs, ue } from "boltstack/plugins";
+import { ue, fs } from "boltstack/plugins";
 import { createContext } from "boltstack";
 
 const ctx = createContext({
@@ -361,12 +363,7 @@ const ctx = createContext({
   },
 });
 
-// 直接调用插件处理器
-await git.handlers.pull({ path: "C:/UnrealEngine" }, ctx);
-await fs.handlers.copy({
-  src: "C:/src/file.txt",
-  dst: "C:/dest/file.txt"
-}, ctx);
+await ue.handlers.build({ target: "editor" }, ctx);
 ```
 
 ### 核心内部
@@ -375,17 +372,16 @@ await fs.handlers.copy({
 import { Runner, Logger, createRuntime } from "boltstack/core";
 import { loadConfig } from "boltstack";
 
-const config = await loadConfig("./bolt.yaml");
-const logger = new Logger();
-const runtime = createRuntime(); // 自动检测 Bun vs Node.js
+const config = await loadConfig("./bolt.yaml", createRuntime());
+const runner = new Runner(config, { logger: new Logger() });
 
-const runner = new Runner(config, { logger, runtime });
-await runner.run("build");
+await runner.runTask("build", {});   // 运行 task
+await runner.runFlow("daily");        // 运行 flow
 ```
 
 ### 子路径导出
 
-- `boltstack` - 高级 API（run、go、createContext、loadConfig）
+- `boltstack` - 高级 API（run、createContext、loadConfig、checkConfig）
 - `boltstack/plugins` - 内置插件（git、svn、ue、fs、json）
 - `boltstack/core` - 核心内部（Runner、Logger、createRuntime）
 
@@ -399,13 +395,13 @@ CLI 仍仅支持 Bun 以获得最佳性能，但库可在任何地方运行。
 
 ## 文档
 
-- [架构](docs/architecture.md)
-- [配置参考](docs/config.md)
-- [命令](docs/commands.md)
-- [内置处理器](docs/handlers.md)
-- [插件系统](docs/plugins.md)
-- [Runner 内部](docs/runner.md)
-- [发布流程](docs/release.md)
+完整文档位于 `apps/docs`（Mintlify）：
+
+- **指南**：快速开始、安装、第一个项目
+- **工作原理**：架构、插件系统、运行时
+- **CLI 参考**：每个命令的文档
+- **API 参考**：插件 API、配置模式、内置处理器、库使用
+- **配置**：bolt.yaml 模式、插值、故障排查
 
 ## 开发
 
@@ -414,7 +410,7 @@ CLI 仍仅支持 Bun 以获得最佳性能，但库可在任何地方运行。
 ```bash
 bun install
 bun run dev          # 从源码运行
-bun test             # 运行测试（需要 .env.local 配置 UE_PATH）
+bun test             # 运行测试（需要 bolt.local.yaml 配置本机路径）
 bun run build:types  # 重新生成 bolt.d.ts
 bun run release:dry  # 预览发布流程
 ```

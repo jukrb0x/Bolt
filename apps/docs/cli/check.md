@@ -2,7 +2,7 @@
 title: "bolt check"
 ---
 
-Validate bolt.yaml against the schema.
+Validate `bolt.yaml` and (if present) `bolt.local.yaml`.
 
 ## Usage
 
@@ -12,7 +12,17 @@ bolt check
 
 ## Description
 
-Validates your `bolt.yaml` configuration file against Bolt's schema. Reports each schema error as `path → message`. Checks file existence, YAML syntax, and full Zod schema validation.
+Validates your configuration against Bolt's schema. It checks **both** files:
+
+- **`bolt.yaml`** — file existence, YAML syntax, and full schema validation
+  (project identity, targets, tasks, flows).
+- **`bolt.local.yaml`** — if present, its YAML syntax and schema
+  (`engine_path`, `project_path`, `uproject`). If it is **missing**, that is
+  surfaced as an error with an actionable hint.
+
+Every problem is reported as a `path → message` row. A missing or invalid
+`bolt.local.yaml` does not stop the check — it is collected alongside any
+`bolt.yaml` errors so you see everything at once.
 
 ## Options
 
@@ -22,27 +32,44 @@ None.
 
 | Code | Description |
 |------|-------------|
-| 0 | Configuration is valid |
-| 1 | Configuration has errors |
+| 0 | Both files are valid |
+| 1 | `bolt.yaml` not found, or one or more validation errors |
 
 ## Examples
 
 ```bash
-# Check configuration
+# Validate configuration
 bolt check
 
-# Use in CI scripts
-bolt check && bolt go build:ci
+# Use in CI: only build if the config is valid
+bolt check && bolt run build
 ```
 
-Output on error:
+Output when valid:
 ```
-[ERROR] Validation failed:
-  project.name → Required
-  targets.editor.kind → Expected 'editor' | 'program' | 'game' | 'client' | 'server'
+bolt.yaml: /path/to/bolt.yaml
+✓ bolt.yaml is valid
+```
+
+Output when the per-machine file is missing:
+```
+bolt.yaml: /path/to/bolt.yaml
+✗ bolt.yaml has 1 error(s):
+
+  bolt.local.yaml                     missing — copy bolt.local.example.yaml or run bolt init
+```
+
+Output on a schema error:
+```
+bolt.yaml: /path/to/bolt.yaml
+✗ bolt.yaml has 2 error(s):
+
+  project.name                        Required
+  targets.editor.kind                 Invalid enum value
 ```
 
 ## See Also
 
 - [bolt info](./info.md) - Show project configuration
+- [bolt init](./init.md) - Scaffold bolt.yaml and bolt.local.yaml
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema

@@ -2,7 +2,7 @@
 title: "bolt list"
 ---
 
-List all available ops and actions.
+List all tasks and flows defined in `bolt.yaml`.
 
 ## Usage
 
@@ -12,7 +12,10 @@ bolt list
 
 ## Description
 
-Lists all ops defined in `bolt.yaml` with their non-default variants, and all action names. Useful for discovering what workflows are available in your project.
+Lists every **task** (`bolt run <task...>`) and every **flow** (`bolt run <flow>`)
+defined in your project. Each flow also shows its ordered steps and description, so
+you can see at a glance what a flow will run. Useful for discovering what workflows
+are available in your project.
 
 ## Options
 
@@ -26,19 +29,26 @@ bolt list
 
 Output example:
 ```
-Ops:
-  update (default, full, git, svn)
-  build (default, ci, editor)
-  start (default)
+bolt.yaml: /path/to/bolt.yaml
 
-Actions:
-  package-game
-  deploy
-  clean
+TASKS (bolt run <task...>)
+
+  kill
+  update
+  genproj
+  build
+  start
+
+FLOWS (bolt run <flow>)
+
+  daily  update → build → start
+    Update, build, and launch the editor
+  reset  kill → update → genproj → build
+    Kill, update, regenerate, rebuild
 ```
 
 ## See Also
 
-- [bolt go](./go.md) - Run ops in pipeline order
-- [bolt run](./run.md) - Run a named action
+- [bolt run](./run.md) - Run tasks or a flow
+- [bolt inspect](./inspect.md) - Preview resolved steps
 - [bolt info](./info.md) - Show project configuration

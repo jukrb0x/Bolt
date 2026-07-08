@@ -22,8 +22,6 @@ This creates a directory at `.bolt/plugins/myplugin/` with:
 - `package.json` - Dependencies
 - `tsconfig.json` - TypeScript configuration
 
-```
-
 ## Step 2: Install Dependencies
 
 ```bash
@@ -86,31 +84,25 @@ export default plugin;
 ```
 
 ## Step 4: Use in bolt.yaml
-Add to your project's `ops` section:
+Add a task that uses your handlers (composing the built-in `build` task with `task/`):
 
 ```yaml
-ops:
-  build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-    ci:
-      - uses: ue/build
-        with:
-          target: editor
-      - uses: myplugin/run
-        with:
-          command: npm test
-      - uses: myplugin/notify
-        with:
-          message: "CI build complete"
-          webhook_url: ${{env.SLACK_WEBHOOK}}
+tasks:
+  build: [{ uses: ue/build, with: { target: editor } }]
+  ci:
+    - uses: task/build
+    - uses: myplugin/run
+      with:
+        command: npm test
+    - uses: myplugin/notify
+      with:
+        message: "CI build complete"
+        webhook_url: ${{ env.SLACK_WEBHOOK }}
 ```
 
 ## Step 5: Test the Plugin
 ```bash
-bolt go build:ci --dry-run
+bolt run ci --dry-run
 ```
 
 Expected output:
@@ -122,8 +114,8 @@ Expected output:
 
 Run without `--dry-run` to execute for real:
 
- ```bash
-bolt go build:ci
+```bash
+bolt run ci
 ```
 
 ## Complete Plugin Example
@@ -136,7 +128,7 @@ const plugin: BoltPlugin = {
   namespace: "deploy",
   handlers: {
     "to-s3": async (params, ctx) => {
-      const { bucket, region = params;
+      const { bucket, region } = params;
 
       ctx.logger.info(`Deploying to S3`);
       ctx.logger.info(`Bucket: ${bucket}`);
@@ -191,14 +183,23 @@ const plugin: BoltPlugin = {
 export default plugin;
 ```
 
-## Testing Loc Plugin
+## Testing the Plugin
 ```bash
 # Install dependencies
 cd .bolt/plugins/deploy
 bun install @aws-sdk/client-s3 @slack/web-api
+```
 
-# Test the plugin
-bolt go deploy --bucket=my-bucket --region=us-east-1 --dry-run
+Add a task that calls the handler, then run it. Params passed on the command line
+override the step's `with:` values:
+
+```yaml
+tasks:
+  ship: [{ uses: deploy/to-s3, with: { bucket: my-bucket, region: us-east-1 } }]
+```
+
+```bash
+bolt run ship --bucket=my-bucket --region=us-east-1 --dry-run
 ```
 
 ## See Also

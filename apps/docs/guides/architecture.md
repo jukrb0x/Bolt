@@ -2,133 +2,107 @@
 title: "Architecture"
 ---
 
-Understanding Bolt's internal architecture and execution flow.
+A concise, user-facing tour of how Bolt is put together and how a command flows through it. For the full engineering reference, see the internal architecture doc.
 
 ## Repository Layout
 
 ```
 src/
-├── main.ts               # CLI entry point, command registration
-├── version.ts            # VERSION constant (stamped at release time)
-├── config.ts             # Zod schema, types, loadConfig, checkConfig
+├── main.ts               # CLI entry — citty command tree
+├── index.ts              # Library public API (run, createContext, loadConfig)
+├── api.ts                # High-level run() implementation
+├── config.ts             # Zod schema, loadConfig (+ bolt.local.yaml merge), checkConfig
 ├── discover.ts           # Upward bolt.yaml search
-├── runner.ts             # Core execution engine
-├── go.ts                 # parseGoArgs, resolveOps, sortByPipeline
+├── runner.ts             # Core execution engine (runTask / runFlow)
 ├── interpolate.ts        # ${{ }} template engine
 ├── logger.ts             # Logger (console + optional file sink)
-├── notify.ts             # Notifier, WeCom, Telegram providers
-├── plugin.ts             # BoltPlugin / BoltPluginContext interfaces
-├── plugin-api.ts         # Re-export surface → bolt.d.ts generation entry
-├── plugin-registry.ts    # PluginRegistry class, buildRegistry()
-├── plugins/
-│   ├── ue.ts             # Built-in "ue" plugin (14 handlers)
-│   ├── fs.ts             # Built-in "fs" plugin (4 handlers)
-│   └── json.ts           # Built-in "json" plugin (2 handlers)
-├── init/
-│   ├── index.tsx         # bolt init command (interactive setup)
-│   ├── InitApp.tsx       # React-based init UI
-│   └── generator.ts      # Config generation from answers
-└── commands/
-    ├── run.ts            # bolt run
-    ├── list.ts           # bolt list
-    ├── info.ts           # bolt info
-    ├── go.ts             # bolt go
-    ├── check.ts          # bolt check
-    ├── version.ts        # bolt version
-    ├── update.ts         # bolt self-update
-    ├── help.tsx          # bolt help (interactive help)
-    ├── config.ts         # bolt config
-    ├── inspect.ts        # bolt inspect
-    ├── plugin.ts         # bolt plugin (parent)
-    ├── plugin-list.ts    # bolt plugin list
-    └── plugin-new.ts     # bolt plugin new
+├── notify.ts             # Notifier: WeCom, Telegram providers
+├── plugin.ts             # BoltPlugin / BoltPluginContext + @param metadata
+├── plugin-registry.ts    # PluginRegistry, buildRegistry() (scope resolution)
+├── ai-context.ts         # generateAiContext() → .bolt/ai-context.md
+├── plugins/              # Built-ins: ue, ue-ini, git, svn, fs, json, path-guard
+├── commands/             # citty subcommands; init.ts scaffolds config
+└── tests/                # Bun test suite (co-located)
 ```
 
 ## Command Tree
 
 ```
 bolt
-├── run <action>
-├── list
-├── info
-├── go <ops...>
-├── check
-├── version
-├── self-update
-├── init [location]
-├── config
-├── help [topic]
-├── inspect <op|action>
-└── plugin
-    ├── list
-    └── new <name>
+├── run <name...>          # run tasks (typed order) or a single flow
+├── list                   # list tasks and flows
+├── info                   # project + VCS summary
+├── check                  # validate bolt.yaml (+ bolt.local.yaml)
+├── config                 # open bolt.yaml in $EDITOR
+├── init                   # scaffold bolt.yaml + bolt.local.yaml
+├── inspect <name...>      # show resolved steps without executing
+├── plugin
+│   ├── list               # active plugins + handlers
+│   └── new <name>         # scaffold a plugin
+├── ai                     # generate .bolt/ai-context.md
+├── self-update            # update to latest release
+└── version                # print version
 ```
 
-Commands are registered in `main.ts` using citty's `subCommands` map. `citty` handles `--help`, `--version`, and argument routing.
+Commands are registered in `main.ts` via citty's `subCommands`. citty handles `--help`, `--version`, and argument routing. All commands produce plain terminal output — the interactive `help` TUI and `init` wizard were removed in v2.
 
 ## Execution Flow
 
 ```
 CLI args
   └── citty routes to command
-        └── findConfig(cwd)       # walk up to find bolt.yaml
-              └── loadConfig()    # parse YAML + Zod validate
+        └── discover(cwd)          # walk up to find bolt.yaml
+              └── loadConfig()      # parse bolt.yaml + merge bolt.local.yaml + Zod
                     └── Runner
-                          ├── run(action)     # named action
-                          └── runOps(ops)     # go pipeline
+                          ├── runTask(name)   # one task (steps in order)
+                          └── runFlow(name)   # ordered tasks, fail-fast (+ continue_on_fail)
                                 └── execStep()
-                                      ├── shell()         # step.run
-                                      └── dispatch()      # step.uses
-                                            ├── ops/<op>  # recursive
-                                            ├── ./path    # local file
+                                      ├── shell()          # step.run
+                                      └── dispatch()       # step.uses
+                                            ├── task/<name> # recursive composition
+                                            ├── ./path      # local file
                                             └── ns/handler → PluginRegistry
 ```
 
+`bolt run a b c` calls `runTask` for each name in the typed order. `bolt run <flow>` calls `runFlow`, which iterates the flow's tasks fail-fast, honoring `continue_on_fail`.
+
+## Config Split Loader
+
+`loadConfig` reads two files and merges them:
+
+- `bolt.yaml` — the committed shared contract: project identity, `targets`, `tasks`, `flows`. No machine paths.
+- `bolt.local.yaml` — per-machine paths (`engine_path`, `project_path`, `uproject`, `use_tortoise`), gitignored.
+
+The loader merges them into the runtime `project.engine_repo` / `project_repo` / `uproject` shape. A missing or invalid `bolt.local.yaml` is a loud error, not a silent fallback.
+
+## Plugin Scopes (resolution priority)
+
+Later scopes override earlier ones for the same namespace:
+
+1. Built-in (compiled into bolt) — lowest
+2. User — `~/.bolt/plugins/<name>/`
+3. Project auto — `.bolt/plugins/<name>/`
+4. Project explicit — declared in `bolt.yaml` `plugins:` — highest
+
 ## Key Design Decisions
 
-### Params Merge Order
-`opParams` (CLI) always wins over `yamlParams` (`with:` in YAML): `{ ...yamlParams, ...opParams }`. Consistent across all dispatch paths.
+**Params merge order:** CLI run params always win over YAML `with:` params (`{ ...yamlParams, ...params }`), consistent across all dispatch paths, and exposed as `${{ params.x }}` in interpolation.
 
-### Reserved Namespace
-The `ops/` namespace is reserved. Handled inline in `dispatch()` before the plugin registry is consulted — cannot be overridden by a plugin.
+**`task/` composition:** `uses: task/<name>` runs another task inline, sharing the cycle-detection set; handled in `dispatch()` before the plugin registry.
 
-### Per-Runner Registry
-Each `Runner` lazily initializes its own registry on first `uses:` dispatch. Commands that only need it for display (e.g. `plugin list`) call `buildRegistry()` directly.
+**Registry is per-Runner:** each `Runner` lazily builds its own registry on first `uses:` dispatch. Display-only paths (e.g. `plugin list`) call `buildRegistry()` directly.
 
-### Type Generation
-`dts-bundle-generator` compiles `plugin-api.ts` into a clean, self-contained `bolt.d.ts`. The public API is minimal (BoltPlugin, BoltPluginContext, BoltLogger, Project, RepoConfig) — internal plugins use full types from `plugin.ts`.
-
-### Notification Flags
-`on_start`/`on_complete`/`on_failure` are parsed by the schema but currently unused — all events fire unconditionally. Reserved for future filtering.
-
-## Configuration Loading
-
-Bolt reads `bolt.yaml` by walking up the directory tree from `cwd`. The first file found is used.
-
-```
-/current/working/dir/bolt.yaml     # Found first, used
-/current/working/bolt.yaml         # Not checked
-/current/bolt.yaml                 # Not checked
-```
-
-This allows running Bolt from subdirectories while maintaining a single configuration file at the project root.
+**Runtime abstraction:** `runtime/` selects Bun (native `Bun.spawn`) or Node (`child_process`) so the library runs on both; the CLI stays Bun-only.
 
 ## Logging
 
-All operations are logged to both console and a log file:
+Every run is logged to both the console and a file under `.bolt/logs/`:
 
 ```
 <project>/.bolt/logs/bolt_2024-01-15T10-30-00.log
 ```
 
-Log files contain:
-- Timestamp
-- Bolt version
-- Configuration path
-- Ops/actions executed
-- Step outputs
-- Timing information
-- Errors and warnings
+Logs capture the timestamp, Bolt version, config path, tasks/flows executed, step output, timing, and any errors.
 
 ## See Also
 - [Plugin System](./plugin-system.md) - How plugins work

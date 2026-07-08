@@ -13,21 +13,25 @@ bun add boltstack
 ```
 
 ## High-Level API
-```typescript
-import { run, go, createContext } from "boltstack";
 
-// Run a named action
+The public entry point is `run(taskName, opts)`, which runs a named **task** (via `runTask`). Params are applied to every step and override the step's `with:` values.
+
+```typescript
+import { run, createContext } from "boltstack";
+
+// Run a named task
 await run("build", {
   configPath: "./bolt.yaml",
-  dryRun: false
+  dryRun: false,
 });
 
-// Run ops through the pipeline
-await go(["update", "build", "start"], {
-  configPath: "./bolt.yaml"
+// Run a task with params (override `with:` values, same as --key=value)
+await run("build", {
+  configPath: "./bolt.yaml",
+  params: { target: "client", config: "shipping" },
 });
 
-// Create context for direct plugin calls
+// Create a context for direct plugin calls (see below)
 const ctx = createContext({
   project: {
     name: "MyGame",
@@ -39,7 +43,22 @@ const ctx = createContext({
 });
 ```
 
+> **v2 change:** `go()`, `Action`, and `GoPipeline` are removed. Use `run(taskName, { params })` for tasks. To run a flow, use the `Runner` (see [Core Internals](#core-internals)).
+
+### `run(taskName, opts)`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `config` | `BoltConfig` | Pre-loaded config (mutually exclusive with `configPath`) |
+| `configPath` | `string` | Path to `bolt.yaml` |
+| `cwd` | `string` | Working directory for config discovery |
+| `dryRun` | `boolean` | Skip actual execution |
+| `params` | `Record<string, string>` | Params applied to every step (override `with:`) |
+| `logger` | `Logger` | Custom logger |
+| `runtime` | `Runtime` | Custom runtime |
+
 ## Direct Plugin Access
+
 ```typescript
 import { git, fs, ue } from "boltstack/plugins";
 import { createContext } from "boltstack";
@@ -55,13 +74,13 @@ const ctx = createContext({
 
 // Call plugin handlers directly
 await git.handlers.pull({ path: "C:/UnrealEngine" }, ctx);
-await fs.handlers.copy({
-  src: "C:/src/file.txt",
-  dst: "C:/dest/file.txt"
-}, ctx);
+await fs.handlers.copy({ src: "C:/src/file.txt", dst: "C:/dest/file.txt" }, ctx);
 ```
 
 ## Core Internals
+
+The `Runner` exposes `runTask` (a task) and `runFlow` (a flow). `run(name, params?)` is a back-compat alias for `runTask`.
+
 ```typescript
 import { Runner, Logger, createRuntime } from "boltstack/core";
 import { loadConfig } from "boltstack";
@@ -71,30 +90,52 @@ const logger = new Logger();
 const runtime = createRuntime(); // Auto-detects Bun vs Node.js
 
 const runner = new Runner(config, { logger, runtime });
-await runner.run("build");
+
+await runner.runTask("build", { target: "client" });  // a task, with params
+await runner.runFlow("daily");                          // a flow (fail-fast)
 ```
 
+> `loadConfig` reads `bolt.yaml` **and** merges the sibling `bolt.local.yaml`; a missing/invalid local file throws. Use `checkConfig` to validate both without throwing.
+
+## Public Exports
+
+From `boltstack`:
+
+| Export | Kind | Description |
+|--------|------|-------------|
+| `run` | function | Run a task by name |
+| `createContext` | function | Build a `BoltPluginContext` for direct handler calls |
+| `loadConfig` | function | Load + merge `bolt.yaml` and `bolt.local.yaml` |
+| `checkConfig` | function | Validate config, returning errors (never throws) |
+| `PluginBase`, `handler` | class / decorator | Author class-based plugins |
+| `RunOptions`, `CreateContextOptions` | type | Option shapes |
+| `BoltConfig`, `Project`, `RepoConfig`, `Target`, `Flow`, `Step` | type | Config types |
+| `BoltPlugin`, `BoltPluginHandler`, `BoltPluginContext`, `BoltLogger` | type | Plugin types |
+
 ## Subpath Exports
+
 | Export | Description |
-|-------|-------------|
-| `boltstack` | High-level API (run, go, createContext, loadConfig) |
-| `boltstack/plugins` | Built-in plugins (git, svn, ue, fs, json) |
-| `boltstack/core` | Core internals (Runner, Logger, createRuntime) |
+|--------|-------------|
+| `boltstack` | High-level API + config + plugin types (`run`, `createContext`, `loadConfig`, `checkConfig`) |
+| `boltstack/plugins` | Built-in plugins (`git`, `svn`, `ue`, `fs`, `json`) |
+| `boltstack/core` | Core internals (`Runner`, `Logger`, `buildRegistry`, `createRuntime`) |
 
 ## Runtime Compatibility
-The library uses a runtime abstraction layer:
-- **Bun**: Uses native APIs (Bun.spawn, Bun.YAML)
-- **Node.js**: Uses child_process and yaml package
 
-The CLI remains Bun-only for optimal performance, but the library works everywhere.
+The library uses a runtime abstraction layer:
+- **Bun**: uses native APIs (`Bun.spawn`, `Bun.YAML`)
+- **Node.js**: uses `child_process` and the `yaml` package
+
+The CLI is Bun-only for optimal performance, but the library works everywhere.
 
 ## TypeScript Support
-The library includes TypeScript definitions for all public APIs.
+
+The library ships TypeScript definitions for all public APIs.
 
 ```typescript
 import type { BoltPlugin, BoltPluginContext, BoltLogger } from "boltstack";
 ```
 
 ## See Also
-- [Getting Started](/guides/getting-started.md) - Introduction to Bolt
-- [Plugin API](./plugin-api.md) - Creating custom handlers
+- [Plugin API](./plugin-api.md) — creating custom handlers
+- [Config Schema](./config-schema.md) — configuration types

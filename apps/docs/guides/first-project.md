@@ -20,69 +20,59 @@ cd /path/to/your/ue/project
 bolt init
 ```
 
-## Step 2: Answer Questions
+`bolt init` is non-interactive. It scaffolds **two** files and auto-detects a single `.uproject` in the directory. Pass `--force` to overwrite existing files.
 
-Bolt will ask a series of questions about your setup:
+| File | Committed? | Contents |
+|------|-----------|----------|
+| `bolt.yaml` | Yes (shared contract) | Project identity, targets, tasks, flows |
+| `bolt.local.yaml` | No (gitignored) | Per-machine paths: engine/project/uproject |
 
-| Question | Description |
-|----------|-------------|
-| Project name | The name for your project |
-| Engine repository path | Path to Unreal Engine source |
-| Engine VCS | `git` or `svn` |
-| Engine branch | Git branch (if using git) |
-| Project repository path | Path to your project |
-| Project VCS | `git` or `svn` |
-| UProject file | Path to `.uproject` file |
-| Use TortoiseSVN | Whether to use TortoiseSVN for SVN operations |
+## Step 2: Review bolt.yaml
 
-## Step 3: Review Configuration
-
-After answering questions, Bolt generates a `bolt.yaml` file. Review the generated configuration:
+`bolt.yaml` is the team-shared contract. It holds project identity and the tasks/flows everyone runs — but **no machine paths**.
 
 ```yaml
 project:
   name: MyGame
-  engine_repo:
-    path: C:/UnrealEngine
+  engine:                    # repo identity only — no path here
     vcs: git
     branch: main
-  project_repo:
-    path: C:/Projects/MyGame
+  project:
     vcs: svn
-  uproject: C:/Projects/MyGame/MyGame.uproject
 
 targets:
   editor:
     kind: editor
     config: development
 
-ops:
-  update:
-    default:
-      - uses: ue/update-git
-    - uses: ue/update-svn
-  build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-  start:
-    default:
-      - uses: ue/start
-        with:
-          target: editor
+tasks:
+  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build:   [{ uses: ue/build, with: { target: editor } }]
+  start:   [{ uses: ue/start }]
 
-go-pipeline:
-  order:
-    - kill
-    - update
-    - build
-    - start
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]
 ```
 
-## Step 4: Customize
+## Step 3: Edit bolt.local.yaml paths
 
-Edit `bolt.yaml` to customize for your workflow:
+`bolt.local.yaml` holds the paths that differ per machine. It is gitignored, so each teammate sets their own. Relative paths resolve against the directory containing `bolt.yaml`.
+
+```yaml
+engine_path:  D:/UE                                  # local Unreal Engine root
+project_path: D:/Games/MyGame                        # local project working copy
+uproject:     D:/Games/MyGame/MyGame.uproject        # path to the .uproject file
+use_tortoise: true                                   # use TortoiseSVN for SVN ops
+```
+
+If `bolt.local.yaml` is missing or invalid, Bolt fails loudly and tells you to copy `bolt.local.example.yaml` or run `bolt init`.
+
+## Step 4: Customize the contract
+
+Edit `bolt.yaml` to add targets, tasks, and flows:
 
 ```yaml
 # Add a new target
@@ -92,52 +82,43 @@ targets:
     name: MyClient
     config: shipping
 
-# Add a variant to the build op
-ops:
-  build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-    ci:
-      - uses: ue/build
-        with:
-          target: editor
-      - uses: ue/build
-        with:
-          target: client
+# Add a task that composes others and appends a shell step
+tasks:
+  build:      [{ uses: ue/build, with: { target: editor } }]
+  build-both: [{ uses: task/build }, { uses: ue/build, with: { target: client } }]
 
-# Add an action
-actions:
-  package-game:
-    - uses: ue/package-game
-      with:
-        target: game
-        output: ./Builds
+# Add a flow (fail-fast; list tasks that may fail in continue_on_fail)
+flows:
+  reset:
+    description: Kill, update, regenerate, rebuild
+    steps: [kill, update, genproj, build]
+    continue_on_fail: [kill]    # kill may fail (nothing running) without aborting
 ```
 
 ## Step 5: Run Your Workflow
 
-Now you can run your entire workflow with a single command
+Preview first, then run for real:
 
 ```bash
-bolt go update build start
+bolt run daily --dry-run    # preview the flow's steps
+bolt run daily              # run the flow
 ```
 
 Common variations:
+
 ```bash
-# Use a specific variant
-bolt go update:git build start
+# Run tasks ad-hoc, in the exact order you type
+bolt run update build start
 
-# Pass inline parameters
-bolt go build --config=debug
+# Pass a param to the whole run (overrides the step's with:)
+bolt run build --target=client
 
-# Preview without executing
-bolt go update build --dry-run
+# Pass a build configuration
+bolt run build --config=debug
 ```
 
 ## What's Next?
 
-- [CLI Reference](/cli/) - Complete command documentation
+- [Daily Workflow](/guides/daily-workflow.md) - Real-world tasks, flows, and params
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
-- [Daily Workflow Tutorial](/guides/daily-workflow.md) - Real-world example
+- [CLI Reference](/cli/) - Complete command documentation

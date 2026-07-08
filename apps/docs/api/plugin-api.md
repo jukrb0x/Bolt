@@ -55,27 +55,36 @@ The BoltPluginContext provides access to configuration, logging, and execution s
 ```typescript
 interface BoltPluginContext {
   cfg: BoltConfig;
+  configDir: string;
   dryRun: boolean;
   logger: BoltLogger;
+  runtime: Runtime;
 }
 ```
 
 ### cfg
-The full parsed bolt.yaml configuration.
+The merged runtime configuration (`bolt.yaml` + `bolt.local.yaml`).
 
 ```typescript
 cfg: {
   project: {
     name: "MyGame";
-    ue_path: "C:/UnrealEngine";
-    project_path: "C:/Projects/MyGame";
-    // ... other project fields
+    engine_repo:  { path: "C:/UnrealEngine", vcs: "git" };
+    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" };
+    uproject: "C:/Projects/MyGame/MyGame.uproject";
+    // ... other merged project fields
   };
   targets: { /* ... */ };
-  ops: { /* ... */ };
-  actions: { /* ... */ };
+  tasks: { /* ... */ };
+  flows: { /* ... */ };
 }
 ```
+
+### configDir
+Directory containing `bolt.yaml`. Use it to resolve relative paths.
+
+### runtime
+Runtime abstraction (`spawn`/`spawnSync`/`shell`/`parseYaml`) that works on both Bun and Node.js.
 
 ### dryRun
 True if `--dry-run` was passed. Use to skip actual execution.
@@ -97,39 +106,41 @@ interface BoltLogger {
   warn(msg: string): void;
   error(msg: string): void;
   debug(msg: string): void;
+  cmd(msg: string): void;
 }
 ```
 
 ## Complete Example
 ```typescript
-import type { BoltPlugin } from "bolt";
+import type { BoltPlugin } from "boltstack";
 
 const plugin: BoltPlugin = {
   namespace: "deploy",
   handlers: {
     to_s3: async (params, ctx) => {
-    const { bucket, region } = params;
+      const { bucket, region } = params;
 
-    ctx.logger.info(`Deploying to S3 bucket: ${bucket}`);
-    ctx.logger.info(`Region: ${region}`);
+      ctx.logger.info(`Deploying to S3 bucket: ${bucket}`);
+      ctx.logger.info(`Region: ${region}`);
 
-    if (ctx.dryRun) {
-      ctx.logger.info("[dry-run] skipping upload");
-      return;
-    }
+      if (ctx.dryRun) {
+        ctx.logger.info("[dry-run] skipping upload");
+        return;
+      }
 
-    const { project } = ctx.cfg;
-    ctx.logger.info(`Project: ${project.name}`);
+      const { project } = ctx.cfg;
+      ctx.logger.info(`Project: ${project.name}`);
 
-    // Upload to S3...
-  },
+      // Upload to S3...
+    },
 
     notify: async (params, ctx) => {
-    const { message, params as any } } = params;
+      const { message } = params;
 
-    ctx.logger.info(`Sending notification: ${message}`);
+      ctx.logger.info(`Sending notification: ${message}`);
 
-    // Send notification...
+      // Send notification...
+    },
   },
 };
 
@@ -138,16 +149,15 @@ export default plugin;
 
 ## Using in bolt.yaml
 ```yaml
-ops:
+tasks:
   deploy:
-    default:
-      - uses: deploy/to_s3
-        with:
-          bucket: my-game-builds
-          region: us-east-1
-      - uses: deploy/notify
-        with:
-          message: "Deploy complete!"
+    - uses: deploy/to_s3
+      with:
+        bucket: my-game-builds
+        region: us-east-1
+    - uses: deploy/notify
+      with:
+        message: "Deploy complete!"
 ```
 
 ## Type Package
@@ -158,7 +168,7 @@ Plugin types are available via the `boltstack` npm package:
 bun add -d boltstack
 ```
 
-This provides `declare module "bolt"` for type resolution in your editor.
+This provides the type declarations for `boltstack` and `boltstack/plugins` for editor autocompletion.
 
 ## See Also
 - [Plugin System](/guides/plugin-system.md) - How plugins work
