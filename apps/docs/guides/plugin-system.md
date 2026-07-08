@@ -6,15 +6,14 @@ Bolt's handler system is fully extensible. A plugin is a TypeScript module that 
 
 ## Overview
 
-Handlers are invoked by `uses:` steps in ops and actions:
+Handlers are invoked by `uses:` steps in tasks:
 
 ```yaml
-ops:
+tasks:
   deploy:
-    default:
-      - uses: myplugin/run
-        with:
-          env: staging
+    - uses: myplugin/run
+      with:
+        env: staging
 ```
 
 ## Plugin Scopes
@@ -66,7 +65,7 @@ const plugin: BoltPlugin = {
       }
 
       const { project } = ctx.cfg;
-      ctx.logger.info(`Project: ${project.name} at ${project.project_path}`);
+      ctx.logger.info(`Project: ${project.name} at ${project.project_repo.path}`);
     },
   },
 };
@@ -103,7 +102,7 @@ type BoltPluginHandler = (
 
 `params` contains:
 - Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation)
-- Overridden by any CLI-level params (`--key=val` passed to `bolt go` or `bolt run`)
+- Overridden by any CLI-level params (`--key=val` passed to `bolt run`)
 
 ### BoltPluginContext
 

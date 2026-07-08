@@ -48,7 +48,7 @@ import { createRuntime } from "boltstack/core";
 const runtime = createRuntime();
 
 // Spawn a process (works in both Bun and Node.js)
-const result = await runtime.spawn("git", ["status"], {
+const result = await runtime.spawn(["git", "status"], {
   cwd: "/path/to/repo",
 });
 

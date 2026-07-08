@@ -13,72 +13,90 @@ Common issues and solutions for Bolt.
 **Cause**: Bolt couldn't find a `bolt.yaml` file in the directory tree.
 
 **Solution**:
-1. Create a `bolt.yaml` in your project root
-2. Navigate to a directory containing `bolt.yaml`
-3. Use `bolt init` to generate a config file
+1. `cd` into your project root (or any subdirectory of it)
+2. Bolt walks *up* from the current directory looking for `bolt.yaml`
+3. If the project isn't set up yet, run `bolt init`
 
 ```bash
 cd /path/to/project
 bolt init
 ```
 
-### Unknown target
+### bolt.local.yaml missing or invalid
 
-**Error**: `Unknown target: foo`
+**Error**: `bolt.local.yaml missing or invalid — copy bolt.local.example.yaml or run bolt init`
 
-**Cause**: Referenced target not defined in `targets:` section.
+**Cause**: `bolt.local.yaml` holds your per-machine paths and is gitignored, so a fresh clone won't have one. Bolt fails loudly rather than guessing paths.
 
-**Solution**: Add the target to your configuration
+**Solution**: Create it and set your paths.
+
+```bash
+cp bolt.local.example.yaml bolt.local.yaml   # then edit engine_path/project_path/uproject
+# or
+bolt init                                     # scaffolds it for you
+```
 
 ```yaml
-targets:
-  foo:
-    kind: editor
-    config: development
+# bolt.local.yaml
+engine_path:  D:/UE
+project_path: D:/Games/MyGame
+uproject:     D:/Games/MyGame/MyGame.uproject
+use_tortoise: true
+```
+
+### Unknown task or flow
+
+**Error**: `Unknown task: foo` or `Unknown flow: foo`
+
+**Cause**: The name you passed to `bolt run` isn't defined in this project's `bolt.yaml`.
+
+**Solution**: List what's available.
+
+```bash
+bolt list                 # all tasks and flows
+bolt inspect <name...>    # show the resolved steps for a task or flow
 ```
 
 ### Handler not found
 
-**Error**: `Handler not found: myplugin/deploy`
+**Error**: `Unknown op "deploy" in plugin "myplugin"` or `Unknown plugin namespace: "myplugin"`
 
-**Cause**: Plugin not loaded or namespace/handler doesn't exist.
+**Cause**: Plugin not loaded, or the namespace/handler name is wrong.
 
 **Solution**:
-1. Check plugin is installed: `bolt plugin list`
-2. Verify namespace and handler name
-3. Check plugin path in `plugins:` section
+1. Check the plugin is active: `bolt plugin list`
+2. Verify the `ns/handler` name in your step's `uses:`
+3. For explicit plugins, check the path in the `plugins:` section
 
 ```bash
 bolt plugin list
-# Should show: myplugin/deploy
+# Should show: myplugin → deploy
 ```
 
 ### Command failed
 
-**Error**: `Command failed with exit code 1`
+**Error**: `Command failed (exit 1): <cmd>`
 
-**Cause**: Shell command returned non-zero exit code.
+**Cause**: A `run:` shell step returned a non-zero exit code.
 
 **Solution**:
-1. Run with `--dry-run` to preview
-2. Check command output for errors
-3. Use `continue-on-error: true` for non-critical commands
+1. Preview with `--dry-run` to see the exact command
+2. Check the command output for errors
+3. Add `continue-on-error: true` to the step if the failure is acceptable
 
 ```bash
-bolt go build --dry-run
-# Check output for errors
+bolt run daily --dry-run
 ```
 
-### Timeout exceeded
+### Build timed out
 
-**Error**: `Operation timed out after 6 hours`
+**Error**: `Build timed out after 6h`
 
-**Cause**: Operation took longer than configured timeout.
+**Cause**: The run exceeded the configured `timeout_hours`.
 
 **Solution**:
-1. Increase `timeout_hours` in config
-2. Optimize long-running operation
-3. Split into smaller ops
+1. Increase `timeout_hours` in `bolt.yaml`
+2. Optimize the long-running task
 
 ```yaml
 timeout_hours: 12  # Increase from 6 to 12
@@ -88,35 +106,38 @@ timeout_hours: 12  # Increase from 6 to 12
 
 **Error**: `svn: E155015: Conflict...` or `git: merge conflict`
 
-**Cause**: Version control conflicts.
+**Cause**: Version control conflicts in the engine or project working copy.
 
-**Solution**:
-1. Resolve conflicts manually
-2. Use `ue/svn_cleanup` or `ue/svn_revert`
-3. Reset working copy
+**Solution**: Resolve them, then re-run. Bolt ships handlers for the common SVN
+cases (both honor `use_tortoise` from `bolt.local.yaml`):
 
-```bash
-# SVN cleanup
-bolt run svn-cleanup
-
-# SVN revert
-bolt run svn-revert
-
-# Git reset (manual)
-cd engine
-git reset --hard
+```yaml
+tasks:
+  svn-fix: [{ uses: ue/svn_cleanup }, { uses: ue/svn_revert }]
 ```
 
-### Zero-byte DLL Errors
+```bash
+bolt run svn-fix     # ue/svn_cleanup then ue/svn_revert
+```
 
-**Error**: Linker errors due to zero-byte DLL files
+For git conflicts in the engine working copy, resolve with your git tooling
+(e.g. `git reset --hard` in the engine repo), then re-run.
 
-**Cause**: Corrupted DLL files in Binaries directories.
+### Zero-byte DLL / Linker Errors
 
-**Solution**: Use `ue/fix_dll` handler to remove zero-byte DLLs
+**Error**: Linker errors caused by zero-byte DLL files in `Binaries/`
+
+**Cause**: Corrupted zero-byte DLL files, often from an interrupted build.
+
+**Solution**: The `ue/fix_dll` handler removes zero-byte DLLs; then rebuild.
+
+```yaml
+tasks:
+  fix-dll: [{ uses: ue/fix_dll }]
+```
 
 ```bash
-bolt run fix-dll
+bolt run fix-dll build     # clean the bad DLLs, then rebuild
 ```
 
 ## Configuration Issues
@@ -125,44 +146,41 @@ bolt run fix-dll
 
 **Error**: `YAML syntax error at line 15`
 
-**Cause**: Malformed YAML in bolt.yaml.
+**Cause**: Malformed YAML in `bolt.yaml` or `bolt.local.yaml`.
 
 **Solution**:
-1. Use `bolt check` to validate
-2. Fix YAML syntax (indentation, quotes)
-3. Use a YAML validator
+1. Run `bolt check` to validate
+2. Fix indentation and quoting
 
 ```bash
 bolt check
-# Shows: bolt.yaml:15:5 → Expected mapping, got sequence
 ```
 
 ### Missing Required Fields
 
 **Error**: `Missing required field: project.name`
 
-**Cause**: Required field not specified.
+**Cause**: A required field is absent.
 
-**Solution**: Add missing field to configuration
+**Solution**: Add the missing field.
 
 ```yaml
 project:
   name: MyGame  # Add this
-  # ... other fields
 ```
 
 ### Invalid Target Kind
 
 **Error**: `Invalid target kind: foo`
 
-**Cause**: Target kind must be one of: supported values.
+**Cause**: The target `kind` is not a supported value.
 
-**Solution**: Use valid target kind
+**Solution**: Use a valid kind.
 
 ```yaml
 targets:
   mytarget:
-    kind: editor  # editor | program | game | client | server
+    kind: editor   # e.g. editor | program
 ```
 
 ## Performance Issues
@@ -172,40 +190,30 @@ targets:
 **Cause**: Large projects, slow networks, many steps.
 
 **Solution**:
-1. Use `--dry-run` to verify plan
-2. Optimize long-running steps
-3. Use `continue-on-error` for non-critical steps
+1. Use `--dry-run` to verify the plan first
+2. Split large tasks into smaller composable tasks
+3. Add `continue-on-error` to non-critical `run:` steps
 
 ```bash
-bolt go build --dry-run
+bolt run daily --dry-run
 ```
-
-### Memory Issues
-
-**Cause**: Large output from commands.
-
-**Solution**:
-1. Redirect output to file
-2. Use `silent: true` for verbose commands
-3. Process in smaller batches
 
 ## Getting Help
 
-### Debug Mode
-Run with additional logging:
+### Preview a run
 
 ```bash
-bolt go build --dry-run
+bolt run daily --dry-run
 ```
 
 ### Check Logs
 Execution logs are stored in `.bolt/logs/`:
 
 ```bash
-# View latest log
+# View the latest log
 cat .bolt/logs/bolt_2024-01-15T10-30-00.log
 
-# Or use tail -f
+# Or follow it live
 tail -f .bolt/logs/bolt_*.log
 ```
 
@@ -220,4 +228,4 @@ If you encounter a bug:
 
 ## See Also
 - [bolt check](/cli/check.md) - Validate bolt.yaml
-- [Error Handling](/guides/error-handling.md) - Best practices for errors
+- [Error Handling](/guides/error-handling.md) - Fail-fast, continue_on_fail, continue-on-error

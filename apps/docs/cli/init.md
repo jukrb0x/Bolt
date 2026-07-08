@@ -2,107 +2,71 @@
 title: "bolt init"
 ---
 
-Initialize a new bolt.yaml with interactive Q&A.
+Scaffold `bolt.yaml` (shared) + `bolt.local.yaml` (per-machine) in the current directory.
 
 ## Usage
 
 ```bash
-bolt init [location] [options]
+bolt init [--force]
 ```
 
 ## Description
 
-Creates a new `bolt.yaml` configuration file through an interactive question-and-answer process. The command asks about your project structure (UE path, project path, version control) and generates a config with sensible defaults.
+`bolt init` writes two starter files into the current directory:
 
-## Arguments
+- **`bolt.yaml`** — the shared, committed contract (project identity, targets,
+  tasks, flows). No machine paths.
+- **`bolt.local.yaml`** — per-machine paths (`engine_path`, `project_path`,
+  `uproject`), gitignored.
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `[location]` | Current directory | `.` for CWD, or folder name to create |
+It is **non-interactive**: no question-and-answer wizard and no remote-template
+fetching. Each file is written only if it does not already exist; existing files
+are skipped unless you pass `--force`.
+
+When writing `bolt.local.yaml`, `init` scans the current directory (and one level
+down) for a single `.uproject`. If exactly one is found, its path is filled in
+automatically; otherwise the path is left as a `CHANGE_ME` placeholder for you to edit.
 
 ## Options
 
 | Flag | Alias | Default | Description |
 |------|-------|---------|-------------|
-| `--template <path>` | `-t` | Built-in template | Path to template YAML file |
-| `--remote <url>` | `-r` | - | URL to remote template |
-| `--yes` | `-y` | `false` | Skip Q&A, use defaults |
+| `--force` | `-f` | `false` | Overwrite `bolt.yaml` / `bolt.local.yaml` if they already exist |
 
 ## Examples
 
 ```bash
-# Interactive setup in current directory
+# Scaffold both files (skips any that already exist)
 bolt init
 
-# Interactive setup in current directory (explicit)
-bolt init .
-
-# Create a new project folder and initialize
-bolt init MyGame
-
-# Use a custom template
-bolt init --template ./templates/team-bolt.yaml
-
-# Use a remote template
-bolt init --remote https://example.com/bolt-template.yaml
-
-# Non-interactive mode with defaults
-bolt init --yes
-bolt init MyGame -y
+# Overwrite existing files
+bolt init --force
+bolt init -f
 ```
 
-## Template System
+## Output
 
-Templates can include an `_init` section to define custom questions:
+```
+✓ wrote bolt.yaml
+✓ wrote bolt.local.yaml (detected MyProject.uproject)
 
-```yaml
-_init:
-  project_name:
-    prompt: "Project name"
-    default: "my-project"
-
-  engine_vcs:
-    prompt: "Engine VCS"
-    type: select
-    options: [git, svn]
-    default: git
-
-  engine_branch:
-    prompt: "Engine branch"
-    default: main
-    condition: "engine_vcs == 'git'"
+Edit bolt.local.yaml paths, then run: bolt check
 ```
 
-Question properties:
-- `prompt`: Question text shown to user
-- `type`: `text` | `select` | `confirm`
-- `default`: Default value
-- `options`: Array of options (for select type)
-- `required`: Whether answer is required
-- `condition`: Expression to show conditionally
+If a file already exists and `--force` was not given:
 
-Reference answers in your template using the `_init` prefix. For a question named `project_name`, use `${{ _init.project_name }}` in your YAML.
-
-Example template:
-```yaml
-# Use interpolation with _init prefix
-project:
-  name: "${{ _init.project_name }}"
-
-_init:
-  project_name:
-    prompt: "Project name"
-    default: "my-project"
+```
+• skipped bolt.yaml (exists; use --force)
 ```
 
-After running `bolt init` and answering "MyGame":
-```yaml
-project:
-  name: "MyGame"
-```
+## Next Steps
+
+1. Edit the paths in `bolt.local.yaml` for your machine (the `engine_path` is
+   always a placeholder you must set).
+2. Run [`bolt check`](./check.md) to validate both files.
 
 ## See Also
 
 - [Getting Started](/guides/getting-started) - Quick start guide
-- [First Project](/guides/first-project) - Detailed walkthrough
+- [bolt check](./check.md) - Validate bolt.yaml and bolt.local.yaml
 - [bolt.yaml Reference](/guides/bolt-yaml) - Configuration schema

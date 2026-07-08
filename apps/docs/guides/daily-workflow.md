@@ -2,68 +2,90 @@
 title: "Daily Workflow"
 ---
 
-A real-world end-to-end example of using Bolt for daily UE development.
+A real-world guide to driving daily UE development with `bolt run`.
 
-## The Scenario
+## The One Verb: `bolt run`
 
-You're starting your morning. You need to:
-1. Update engine source (git)
-2. Update project source (svn)
-3. Build the editor
-4. Start the editor
-5. Run automation tests
-6. Package the game
-7. Deploy the build
+Everything runs through `bolt run`. You give it either a list of task names or a single flow name.
 
-```
+- **Ad-hoc tasks** — `bolt run <task> <task> ...` runs the named tasks in the **exact order you type**. There is no hidden reordering.
+- **Flows** — `bolt run <flow>` runs a predefined, ordered goal.
 
-## Step 1: Update Engine
+## Ad-hoc Ordered Tasks
+
+Chain tasks for a quick morning sync-build-launch:
+
 ```bash
-bolt go update
+bolt run update build start
 ```
 
-Bolt runs the `update` op with both variants:
+That runs the `update`, `build`, then `start` tasks, in that order. Each is a named list of steps in `bolt.yaml`:
+
 ```yaml
-ops:
-  update:
-    git:
-      - uses: ue/update-git
-    svn:
-      - uses: ue/update-svn
+tasks:
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build:  [{ uses: ue/build, with: { target: editor } }]
+  start:  [{ uses: ue/start }]
 ```
 
-## Step 2: Build
+## Goal Flows
+
+For a repeatable goal, define a flow and run it by name:
+
 ```bash
-bolt go build
+bolt run daily
 ```
 
-This runs:
-1. `ue/build` handler with `target: editor`
-2. Compiles editor C++ game binaries
-3. Generates project files (if needed)
-4. Runs UBT automation tests
+```yaml
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]
+  reset:
+    description: Kill, update, regenerate, rebuild
+    steps: [kill, update, genproj, build]
+    continue_on_fail: [kill]
+```
 
-5. Launch the editor
+`bolt run daily` runs `update → build → start`. `bolt run reset` runs `kill → update → genproj → build`.
 
-## Step 3: Run Automation Tests
+## Params
+
+Pass `--key=value` to apply a parameter to the **whole run**. Params override the step's `with:` values and are available in interpolation as `${{ params.key }}`.
+
 ```bash
-bolt go build:ci
+# Build a different target
+bolt run build --target=client
+
+# Choose a build configuration
+bolt run build --config=debug
+
+# Params apply to every matching step across the run
+bolt run update build --target=client
 ```
 
-This runs:
-1. Build the editor
-2. Run automation tests
-3. Package the game
-4. Deploy
+## Preview with --dry-run
 
-## Step 4: Package the Game
+Always preview destructive or long runs first. `--dry-run` prints the resolved steps without executing them:
+
 ```bash
-bolt run package-game
+bolt run daily --dry-run
+bolt run update build --dry-run
 ```
 
-This runs the `ue/package-game` handler which:
-- Copies the built game to the output directory
-- Creates a zip archive for distribution
+## Fail-Fast and `continue_on_fail`
+
+Flows are **fail-fast**: the first failing task aborts the flow and nothing after it runs. To let a specific task fail without aborting, list it in the flow's `continue_on_fail` allowlist.
+
+In the `daily` flow above:
+- If `update` or `build` fails, the flow aborts immediately — `start` never runs.
+- `start` is in `continue_on_fail`, so if launching the editor fails, Bolt logs a warning and the flow still completes.
+
+In the `reset` flow:
+- `kill` is in `continue_on_fail` because it may fail when nothing is running — that failure is expected and does not abort the flow.
+
+> Note: `continue_on_fail` (per-flow, underscore) is an allowlist of *task names*. It is different from `continue-on-error` (per-step, hyphen), which lets a single step inside a task fail. See [Error Handling](./error-handling.md).
 
 ## Configuring Notifications
 
@@ -72,196 +94,79 @@ Notifications are configured in `bolt.yaml`:
 ```yaml
 notifications:
   on_complete: true
+  on_failure: true
   providers:
     - type: telegram
-      bot_token: ${{env.TELEGRAM_BOT_TOKEN}}
-      chat_id: ${{env.TELEGRAM_CHAT_ID}}
-```
-
-## Step 5: Deploy
-```bash
-bolt run deploy
-```
-
-This runs a `deploy` action which:
-```yaml
-actions:
-  deploy:
-    steps:
-      - uses: ue/package-game
-        with:
-          target: game
-          output: ./Builds
-      - uses: fs/copy
-        with:
-          src: ./Builds
-          dst: //artifacts/builds/v{{env.BUILD_NUMBER}}
-      - run: |
-        # Deploy script
-        silent: false
-      - uses: telegram/notify
-        with:
-          message: "Build deployed!"
+      bot_token: ${{ env.TELEGRAM_BOT_TOKEN }}
+      chat_id: ${{ env.TELEGRAM_CHAT_ID }}
 ```
 
 ## Configuration Summary
 
 ```yaml
-# bolt.yaml
+# bolt.yaml — shared, committed contract
 project:
   name: MyGame
-  engine_repo:
-    path: ./engine
+  engine:
     vcs: git
-  project_repo:
-    path: ./project
+    branch: main
+  project:
     vcs: svn
-  uproject: ./project/MyGame.uproject
 
 targets:
   editor:
     kind: editor
     config: development
-  game:
-    kind: game
-    config: shipping
-    name: MyGame
-
   client:
-    kind: client
+    kind: program
+    name: MyClient
     config: shipping
-    name: MyGame
 
-  server:
-    kind: server
-    config: shipping
-    name: MyGameServer
+tasks:
+  kill:    [{ uses: ue/kill }]
+  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  genproj: [{ uses: ue/generate_project }]
+  build:   [{ uses: ue/build, with: { target: editor } }]
+  start:   [{ uses: ue/start }]
 
-ops:
-  update:
-    git:
-      - uses: ue/update-git
-    svn:
-      - uses: ue/update-svn
-    full:
-      - uses: ue/update-git
-      - uses: ue/update-svn
-  build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-    editor:
-      - uses: ue/build
-        with:
-          target: editor
-      - uses: ue/start
-        with:
-          target: editor
-    game:
-      - uses: ue/build
-        with:
-          target: game
-      - uses: ue/package-game
-        with:
-          target: game
-          output: ./Builds
-  start:
-    default:
-      - uses: ue/start
-        with:
-          target: editor
-
-  kill:
-    default:
-      - uses: ue/kill
-
-  clean:
-    default:
-      - uses: fs/delete
-        with:
-          path: ./Saved
-      - uses: fs/delete
-        with:
-          path: ./Intermediate
-      - uses: fs/delete
-        with:
-          path: ./Binaries
-      - uses: fs/delete
-        with:
-          path: ./Build
-
-      - uses: fs/delete
-        with:
-          path: ./DerivedDataCache
-      - uses: fs/delete
-        with:
-          path: ./.bolt/logs
-
-go-pipeline:
-  order:
-    - kill
-    - update
-    - build
-    - start
-  fail_stops:
-    - build
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]
+  reset:
+    description: Kill, update, regenerate, rebuild
+    steps: [kill, update, genproj, build]
+    continue_on_fail: [kill]
 ```
+
+Machine paths live separately in `bolt.local.yaml` (gitignored) — see [Project Structure](/guides/project-structure.md).
 
 ## Tips
 
-### Use Variants for Different Scs
+### Preview before you run
 
 ```bash
-# Quick update and build
-bolt go update build
-
-# Use full variant for update
-bolt go update:full build
-
-# CI build with editor target
-bolt go build:editor
-# Clean build and start fresh
-bolt go build kill start
+bolt run daily --dry-run
 ```
 
-### Use --dry-run to preview
+### Inspect what a name resolves to
+
 ```bash
-bolt go update build --dry-run
+bolt inspect daily        # show the resolved steps for a flow or task
+bolt list                 # list all tasks and flows
 ```
 
-### Use notifications for long-running ops
-```yaml
-notifications:
-  on_complete: true
-  on_failure: true
-  providers:
-    - type: telegram
-      bot_token: "${TELEGRAM_BOT_TOKEN}"
-      chat_id: "${TELEGRAM_CHAT_ID}"
-```
+### Use continue_on_fail for non-critical tasks
 
-### Configure fail_stops for critical ops
 ```yaml
-go-pipeline:
-  fail_stops:
-    - build    # Stop everything if build fails
-    - start     # Continue even if start fails
-```
-
-### Use continue-on-error for non-critical steps
-```yaml
-ops:
-  clean:
-    default:
-      - uses: fs/delete
-        with:
-          path: ./Saved
-        continue-on-error: true  # Don't fail if clean fails
-      - uses: fs/delete
-        with:
-          path: ./Intermediate
+flows:
+  daily:
+    steps: [update, build, start]
+    continue_on_fail: [start]   # a failed launch won't abort the flow
 ```
 
 ## See Also
-- [bolt.yaml Reference](/guides/bolt-yaml.md) - [Project Structure](/guides/project-structure.md) - Best practices for team collaboration
+- [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
+- [Error Handling](/guides/error-handling.md) - Fail-fast, continue_on_fail, continue-on-error
+- [Project Structure](/guides/project-structure.md) - Config split and layout

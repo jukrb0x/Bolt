@@ -7,7 +7,7 @@ Your daily Unreal Engine workflow, automated.
 Bolt is a CLI tool that turns repetitive UE tasks — updating source control, rebuilding the editor, launching the game, filling DDC — into single commands you can chain, script, and share with your team.
 
 ```
-bolt go update build start
+bolt run update build start
 ```
 
 Stop running Build.bat by hand. Stop context-switching between TortoiseSVN, the editor, and a dozen batch scripts. Define your workflow once in `bolt.yaml`, run it anywhere.
@@ -32,170 +32,183 @@ bolt self-update
 
 ## Quick Start
 
-After installing, initialize your project with the interactive setup:
+After installing, scaffold config in your project:
 
 ```bash
 cd /path/to/your/ue/project
 bolt init
 ```
 
-This will:
-1. Ask about your project structure (UE path, project path, version control)
-2. Generate a `bolt.yaml` config file with sensible defaults
-3. Set up common ops (update, build, start, kill)
-4. Configure your go pipeline
+`bolt init` writes two files:
 
-The generated config is fully customizable - edit `bolt.yaml` to add custom ops, actions, or plugins.
+1. `bolt.yaml` — the shared, committed contract (project identity, tasks, flows). No machine paths.
+2. `bolt.local.yaml` — per-machine paths (engine/project/uproject), gitignored. `bolt init` tries to auto-detect your `.uproject`.
+
+Edit the paths in `bolt.local.yaml`, then run:
+
+```bash
+bolt run daily --dry-run     # preview
+bolt run daily               # go
+```
 
 ## How It Works
 
-Define your project once:
+Bolt has two building blocks:
+
+- A **task** is a named list of steps (the only building block).
+- A **flow** is an ordered set of tasks. Flows are **fail-fast**: the first failing task aborts the flow, unless it is listed in `continue_on_fail`.
+
+Everything runs through one verb, `bolt run`. Pass task names to run them in the order you type, or a single flow name to run a predefined goal. What you type is what runs — there is no hidden reordering.
 
 ```yaml
-# bolt.yaml
+# bolt.yaml — shared contract, committed (no machine paths)
 project:
   name: MyGame
-  engine_repo:
-    path: C:/UnrealEngine
-    vcs: git
-    branch: main
-  project_repo:
-    path: C:/Projects/MyGame
-    vcs: svn
-  uproject: C:/Projects/MyGame/MyGame.uproject
+  engine: { vcs: git, branch: main }
+  project: { vcs: svn }
+
+tasks:
+  kill:    [{ uses: ue/kill }]
+  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build:   [{ uses: ue/build, with: { target: editor } }]
+  start:   [{ uses: ue/start }]
+
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]    # update/build failures abort; start may fail
 ```
 
-Then run any combination of ops in one command:
+```yaml
+# bolt.local.yaml — per-machine paths, gitignored
+engine_path:  C:/UnrealEngine
+project_path: C:/Projects/MyGame
+uproject:     C:/Projects/MyGame/MyGame.uproject
+use_tortoise: true
+```
+
+Then run any combination in one command:
 
 ```
-bolt go kill update build start      # full reset and rebuild
-bolt go build                        # just rebuild the editor
-bolt go update:svn build --config=debug   # SVN update then debug build
-bolt go build start --config=shipping    # shipping build and launch
+bolt run kill update build start     # ad-hoc: tasks in the typed order
+bolt run build                       # just rebuild the editor
+bolt run build --config=debug        # params replace the old variants
+bolt run daily                       # run the predefined flow
 ```
-
-Bolt runs them in the right order, stops on critical failures, and keeps going through non-critical ones.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `bolt go <ops...>` | Run one or more ops in pipeline order |
-| `bolt run <action>` | Run a named action from bolt.yaml |
-| `bolt list` | List all available ops and actions |
+| `bolt run <names...>` | Run tasks in the typed order, or a single flow |
+| `bolt list` | List all tasks and flows |
+| `bolt inspect <names...>` | Show the resolved steps for a task or flow |
 | `bolt info` | Show project and VCS status |
-| `bolt check` | Validate bolt.yaml |
+| `bolt check` | Validate `bolt.yaml` and `bolt.local.yaml` |
+| `bolt init` | Scaffold `bolt.yaml` + `bolt.local.yaml` |
+| `bolt config` | Open the current `bolt.yaml` in `$EDITOR` |
+| `bolt ai` | Generate `.bolt/ai-context.md` for LLM agents |
 | `bolt version` | Print version |
 | `bolt self-update` | Update to the latest release |
 | `bolt plugin list` | List active plugins and their handlers |
 | `bolt plugin new <name>` | Scaffold a new plugin |
 
-## bolt.yaml
+## Configuration
 
-### Project
+Config is split in two: a shared `bolt.yaml` you commit, and a per-machine `bolt.local.yaml` you gitignore. Bolt merges them at load, so plugin handlers see one unified project.
+
+### bolt.yaml (shared, committed)
 
 ```yaml
 project:
   name: MyGame
-  engine_repo:
-    path: C:/UnrealEngine
-    vcs: git                   # git | svn
-    url: ""                    # optional: remote URL
-    branch: main               # optional: for git repos
-  project_repo:
-    path: C:/Projects/MyGame
-    vcs: svn                   # git | svn
-    url: ""                    # optional: remote URL
-    branch: main               # optional: for git repos
-  uproject: C:/Projects/MyGame/MyGame.uproject
-  use_tortoise: true           # optional: true | false | auto-detect
-```
+  engine:                    # repo identity only — path lives in bolt.local.yaml
+    vcs: git                 # git | svn
+    url: ""                  # optional: remote URL
+    branch: main             # optional: for git repos
+  project:
+    vcs: svn                 # git | svn
+    url: ""                  # optional: remote URL
 
-### Targets
-
-```yaml
 targets:
   editor:
-    kind: editor               # editor | program | game | client | server
-    config: development        # development | debug | shipping | test
+    kind: editor             # editor | program | game | client | server
+    config: development      # development | debug | shipping | test
   client:
     kind: program
     name: MyClient
     config: shipping
+
+tasks:
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build:  [{ uses: ue/build, with: { target: editor } }]
+  start:  [{ uses: ue/start }]
+
+flows:
+  daily:
+    steps: [update, build, start]
+    continue_on_fail: [start]
+
+timeout_hours: 6             # optional: abort a run that exceeds this
 ```
 
-### Ops
-
-Ops are named, reusable steps invoked by `bolt go`. Each op can have named variants:
+### bolt.local.yaml (per-machine, gitignored)
 
 ```yaml
-ops:
+engine_path:  C:/UnrealEngine                       # local UE root
+project_path: C:/Projects/MyGame                    # local project working copy
+uproject:     C:/Projects/MyGame/MyGame.uproject    # .uproject file
+use_tortoise: true                                  # optional: TortoiseSVN/Proc for SVN
+```
+
+Relative paths in `bolt.local.yaml` resolve against the directory containing `bolt.yaml`.
+
+### Tasks
+
+A task is a named list of steps. Each step either invokes a plugin handler (`uses: ns/handler`), composes another task (`uses: task/<name>`), or runs a shell command (`run:`):
+
+```yaml
+tasks:
   build:
-    default:
-      - uses: ue/build
-        with:
-          target: editor
-    editor:
-      - uses: ue/build
-        with:
-          target: editor
-    program:
-      - uses: ue/build
-        with:
-          target: client
+    - uses: ue/build
+      with:
+        target: editor
+  reset:
+    - uses: ue/kill
+      continue-on-error: true    # per-step: don't fail the run if this errors
+    - uses: task/update          # compose another task inline
+    - uses: task/build
+  notify:
+    - run: echo "done at ${{ env.TIME }}"
 ```
 
-Select a variant at runtime:
+Run tasks ad-hoc, in the order you type. `--key=value` params apply to the whole run and override `with:` values:
 
 ```
-bolt go build:program
-bolt go --build=program
+bolt run reset build start
+bolt run build --target=client --config=shipping
+bolt run update build --dry-run
 ```
 
-### Go Pipeline
+### Flows
 
-Controls execution order and failure behaviour:
+A flow is a named, ordered goal composed of tasks. Flows are fail-fast — the first failing task aborts the run — unless a task is listed in `continue_on_fail`:
 
 ```yaml
-go-pipeline:
-  order:
-    - kill
-    - update
-    - build
-    - start
-  fail_stops:
-    - build      # stop the run if build fails; other ops continue on failure
-```
-
-`bolt go` always respects the pipeline order regardless of argument order:
-
-```
-bolt go start build    # executes build first, then start
-```
-
-### Actions
-
-Named profiles for `bolt run` — composable, with dependency support:
-
-```yaml
-actions:
-  full_reset:
-    steps:
-      - uses: ue/kill
-        continue-on-error: true
-      - uses: ops/update
-      - uses: ops/build
-
-  daily_check:
-    depends:
-      - full_reset
-    steps:
-      - uses: ops/start
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]    # update/build abort; start may fail
+  reset:
+    steps: [kill, update, genproj, build]
+    continue_on_fail: [kill]     # kill may fail (nothing running) without aborting
 ```
 
 ```
-bolt run full_reset
-bolt run daily_check    # runs full_reset first, then starts
+bolt run daily
+bolt run reset --dry-run
 ```
 
 ### Notifications
@@ -215,12 +228,6 @@ notifications:
       chat_id: "-100..."
 ```
 
-### Timeout
-
-```yaml
-timeout_hours: 6
-```
-
 ## Built-in Handlers
 
 | Handler | Description |
@@ -230,16 +237,16 @@ timeout_hours: 6
 | `ue/build_program` | Build a standalone program target |
 | `ue/start` | Launch UE editor or a built binary |
 | `ue/kill` | Kill all running UE processes |
-| `ue/update-git` | Pull latest from git |
-| `ue/update-svn` | Update SVN working copy |
+| `ue/update_engine` | Update the engine repo (git/svn) |
+| `ue/update_project` | Update the project repo (git/svn) |
+| `ue/setup` | Run the engine `Setup.bat` |
 | `ue/svn_cleanup` | Run SVN cleanup (TortoiseSVN-aware) |
 | `ue/svn_revert` | Revert SVN changes |
 | `ue/generate_project` | Regenerate project files |
 | `ue/fillddc` | Fill Derived Data Cache |
 | `ue/fix_dll` | Remove zero-byte DLLs causing linker errors |
 | `ue/info` | Print project and VCS info |
-| `fs/copy`, `fs/move`, `fs/delete`, `fs/mkdir` | File system operations |
-| `json/set`, `json/merge` | JSON file manipulation |
+| `ue/ini_set`, `ue/ini_get`, `ue/ini_remove`, `ue/ini_override`, `ue/ini_read_all` | Edit UE `.ini` config |
 
 ## Plugins
 
@@ -272,15 +279,14 @@ const plugin: BoltPlugin = {
 export default plugin;
 ```
 
-Use it in bolt.yaml:
+Use it in a task:
 
 ```yaml
-ops:
+tasks:
   deploy:
-    default:
-      - uses: myplugin/deploy
-        with:
-          env: staging
+    - uses: myplugin/deploy
+      with:
+        env: staging
 ```
 
 ### Plugin scopes
@@ -319,17 +325,13 @@ bun add boltstack
 ### High-Level API
 
 ```typescript
-import { run, go, createContext } from "boltstack";
+import { run, createContext } from "boltstack";
 
-// Run a named action
+// Run a named task; params apply to every step
 await run("build", {
   configPath: "./bolt.yaml",
-  dryRun: false
-});
-
-// Run ops through the pipeline
-await go(["update", "build", "start"], {
-  configPath: "./bolt.yaml"
+  params: { target: "client" },
+  dryRun: false,
 });
 
 // Create context for direct plugin calls
@@ -347,7 +349,7 @@ const ctx = createContext({
 ### Direct Plugin Access
 
 ```typescript
-import { git, fs, ue } from "boltstack/plugins";
+import { ue, fs } from "boltstack/plugins";
 import { createContext } from "boltstack";
 
 const ctx = createContext({
@@ -359,12 +361,7 @@ const ctx = createContext({
   },
 });
 
-// Call plugin handlers directly
-await git.handlers.pull({ path: "C:/UnrealEngine" }, ctx);
-await fs.handlers.copy({
-  src: "C:/src/file.txt",
-  dst: "C:/dest/file.txt"
-}, ctx);
+await ue.handlers.build({ target: "editor" }, ctx);
 ```
 
 ### Core Internals
@@ -373,19 +370,18 @@ await fs.handlers.copy({
 import { Runner, Logger, createRuntime } from "boltstack/core";
 import { loadConfig } from "boltstack";
 
-const config = await loadConfig("./bolt.yaml");
-const logger = new Logger();
-const runtime = createRuntime(); // Auto-detects Bun vs Node.js
+const config = await loadConfig("./bolt.yaml", createRuntime());
+const runner = new Runner(config, { logger: new Logger() });
 
-const runner = new Runner(config, { logger, runtime });
-await runner.run("build");
+await runner.runTask("build", {});   // run a task
+await runner.runFlow("daily");        // run a flow
 ```
 
 ### Subpath Exports
 
-- `boltstack` - High-level API (run, go, createContext, loadConfig)
-- `boltstack/plugins` - Built-in plugins (git, svn, ue, fs, json)
-- `boltstack/core` - Core internals (Runner, Logger, createRuntime)
+- `boltstack` — High-level API (run, createContext, loadConfig, checkConfig)
+- `boltstack/plugins` — Built-in plugins (git, svn, ue, fs, json)
+- `boltstack/core` — Core internals (Runner, Logger, createRuntime)
 
 ### Runtime Compatibility
 
@@ -397,15 +393,13 @@ CLI remains Bun-only for optimal performance, but the library works everywhere.
 
 ## Documentation
 
-📚 Full documentation at [PLACEHOLDER]
+Full documentation lives in `apps/docs` (Mintlify):
 
 - **Guide**: Getting started, installation, first project
 - **How It Works**: Architecture, plugin system, runtime
-- **CLI Reference**: All 13 commands documented
+- **CLI Reference**: Every command documented
 - **API Reference**: Plugin API, config schema, built-in handlers, library usage
-- **Tutorials**: Daily workflow, plugin development
-- **Best Practices**: Project structure, error handling
-- **Reference**: bolt.yaml schema, interpolation, troubleshooting
+- **Configuration**: bolt.yaml schema, interpolation, troubleshooting
 
 ## Development
 
@@ -414,7 +408,7 @@ Requires [Bun](https://bun.sh).
 ```bash
 bun install
 bun run dev          # run from source
-bun test             # run tests (requires .env.local with UE_PATH)
+bun test             # run tests (requires bolt.local.yaml with local paths)
 bun run build:types  # regenerate bolt.d.ts
 bun run release:dry  # preview the release process
 ```

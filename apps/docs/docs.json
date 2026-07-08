@@ -80,16 +80,14 @@
             "group": "CLI Reference",
             "pages": [
               "cli/index",
-              "cli/go",
               "cli/run",
               "cli/list",
               "cli/info",
+              "cli/inspect",
               "cli/check",
               "cli/init",
               "cli/config",
               "cli/plugin",
-              "cli/inspect",
-              "cli/help",
               "cli/version",
               "cli/self-update"
             ]
