@@ -71,6 +71,7 @@ tasks:
   kill:    [{ uses: ue/kill }]
   update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
   build:   [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build }]
   start:   [{ uses: ue/start }]
 
 flows:
@@ -94,6 +95,7 @@ Then run any combination in one command:
 bolt run kill update build start     # ad-hoc: tasks in the typed order
 bolt run build                       # just rebuild the editor
 bolt run build --config=debug        # params replace the old variants
+bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 bolt run daily                       # run the predefined flow
 ```
 
@@ -134,7 +136,7 @@ project:
 targets:
   editor:
     kind: editor             # editor | program | game | client | server
-    config: development      # development | debug | shipping | test
+    config: development      # development | debug | debuggame | shipping | test
   client:
     kind: program
     name: MyClient
@@ -143,6 +145,7 @@ targets:
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   build:  [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build }]
   start:  [{ uses: ue/start }]
 
 flows:
@@ -166,7 +169,7 @@ Relative paths in `bolt.local.yaml` resolve against the directory containing `bo
 
 ### Tasks
 
-A task is a named list of steps. Each step either invokes a plugin handler (`uses: ns/handler`), composes another task (`uses: task/<name>`), or runs a shell command (`run:`):
+A task is a named list of steps. Its three explicit execution keys are `uses` for a plugin/local action, `call` for a reusable task, and `run` for a shell command:
 
 ```yaml
 tasks:
@@ -177,17 +180,20 @@ tasks:
   reset:
     - uses: ue/kill
       continue-on-error: true    # per-step: don't fail the run if this errors
-    - uses: task/update          # compose another task inline
-    - uses: task/build
+    - call: update               # reuse another task inline
+    - call: build
   notify:
     - run: echo "done at ${{ env.TIME }}"
 ```
+
+This is an intentional v2 break: legacy `uses: task/name` steps are rejected. Replace them with `call: name`; `uses` is reserved for plugin/local actions.
 
 Run tasks ad-hoc, in the order you type. `--key=value` params apply to the whole run and override `with:` values:
 
 ```
 bolt run reset build start
 bolt run build --target=client --config=shipping
+bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 bolt run update build --dry-run
 ```
 
@@ -227,6 +233,8 @@ notifications:
       bot_token: "123:ABC"
       chat_id: "-100..."
 ```
+
+For a multi-task invocation, the start notification is sent once. It shows the top-level task list and each recursively owned `call`, plugin/local action, and shell command.
 
 ## Built-in Handlers
 

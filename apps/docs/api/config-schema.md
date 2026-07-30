@@ -77,7 +77,7 @@ targets:
 |-------|------|----------|---------|-------------|
 | `kind` | string | yes | — | `editor` \| `program` \| `game` \| `client` \| `server` |
 | `name` | string | no | — | Binary name (for program/game/server) |
-| `config` | string | no | `development` | `development` \| `debug` \| `shipping` \| `test` |
+| `config` | string | no | `development` | `development` \| `debug` \| `debuggame` \| `shipping` \| `test` |
 
 ## tasks
 
@@ -89,8 +89,8 @@ tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   build:  [{ uses: ue/build, with: { target: editor } }]
   start:  [{ uses: ue/start }]
-  # compose another task inline (cycle-detected):
-  reset:  [{ uses: task/kill }, { uses: task/update }, { uses: task/build }]
+  # reuse other tasks inline (cycle-detected):
+  reset:  [{ call: kill }, { call: update }, { call: build }]
   # run a shell command:
   clean:  [{ run: "rm -rf ./Intermediate" }]
 ```
@@ -99,8 +99,9 @@ tasks:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `uses` | string | one of `uses`/`run` | `ns/handler` (plugin handler) or `task/<name>` (compose another task inline) |
-| `run` | string | one of `uses`/`run` | Shell command (`${{ }}` interpolated) |
+| `uses` | string | one of `uses`/`call`/`run` | Plugin handler (`ns/handler`) or local action (`./path` or `../path`) |
+| `call` | string | one of `uses`/`call`/`run` | Reusable task name (resolved recursively; cycle-detected) |
+| `run` | string | one of `uses`/`call`/`run` | Shell command (`${{ }}` interpolated) |
 | `with` | map (string→string) | no | Params forwarded to the handler (interpolated) |
 | `continue-on-error` | boolean | no | Continue if this step fails (default: `false`) |
 
@@ -187,6 +188,8 @@ notifications:
 | `on_complete` | boolean | `true` | Notify when the whole run completes |
 | `providers` | array | `[]` | Notification providers |
 
+A run emits one start notification. Multi-task runs show the top-level task list and the recursively owned `call`, plugin/local action, and shell nodes.
+
 ### Provider Types
 
 | Type | Required Fields | Optional |
@@ -239,7 +242,7 @@ These merged fields are what plugin handlers and interpolation see — e.g. `${{
 
 ## Migration from v1
 
-`ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` (compose via `uses: task/<name>`) and `flows`. `bolt go`/`bolt help` are gone — use `bolt run`.
+`ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` and `flows`; reuse a task with `call: <name>`. The legacy `uses: task/name` form is rejected; replace it with `call: name`. `bolt go`/`bolt help` are gone — use `bolt run`.
 
 ## See Also
 - [bolt.yaml Guide](/guides/bolt-yaml.md) — annotated walkthrough and the config split

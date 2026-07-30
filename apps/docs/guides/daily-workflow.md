@@ -61,6 +61,9 @@ bolt run build --target=client
 # Choose a build configuration
 bolt run build --config=debug
 
+# Unreal DebugGame (aliases: dbggame, DebugGame)
+bolt run build --config=debuggame
+
 # Params apply to every matching step across the run
 bolt run update build --target=client
 ```
@@ -100,6 +103,8 @@ notifications:
       bot_token: ${{ env.TELEGRAM_BOT_TOKEN }}
       chat_id: ${{ env.TELEGRAM_CHAT_ID }}
 ```
+
+A multi-task invocation sends one start notification. It lists the top-level tasks and their recursively owned `call`, plugin/local action, and shell nodes.
 
 ## Configuration Summary
 

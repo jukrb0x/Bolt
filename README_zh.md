@@ -73,6 +73,7 @@ tasks:
   kill:    [{ uses: ue/kill }]
   update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
   build:   [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build }]
   start:   [{ uses: ue/start }]
 
 flows:
@@ -96,6 +97,7 @@ use_tortoise: true
 bolt run kill update build start     # 临时：按输入顺序运行任务
 bolt run build                       # 仅重新构建编辑器
 bolt run build --config=debug        # 参数取代旧的变体（variant）
+bolt run build_editor --config=debuggame # 别名：dbggame、DebugGame
 bolt run daily                       # 运行预定义 flow
 ```
 
@@ -136,7 +138,7 @@ project:
 targets:
   editor:
     kind: editor             # editor | program | game | client | server
-    config: development      # development | debug | shipping | test
+    config: development      # development | debug | debuggame | shipping | test
   client:
     kind: program
     name: MyClient
@@ -145,6 +147,7 @@ targets:
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   build:  [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build }]
   start:  [{ uses: ue/start }]
 
 flows:
@@ -168,7 +171,7 @@ use_tortoise: true                                  # 可选：SVN 操作使用 
 
 ### 任务 (Tasks)
 
-task 是一个命名的步骤列表。每个步骤要么调用插件处理器（`uses: ns/handler`），要么组合另一个 task（`uses: task/<name>`），要么运行 shell 命令（`run:`）：
+task 是一个命名的步骤列表。三个执行键含义明确：`uses` 调用插件/本地 action，`call` 复用 task，`run` 执行 shell 命令：
 
 ```yaml
 tasks:
@@ -179,17 +182,20 @@ tasks:
   reset:
     - uses: ue/kill
       continue-on-error: true    # 步骤级：出错不中止整个运行
-    - uses: task/update          # 内联组合另一个 task
-    - uses: task/build
+    - call: update               # 内联复用另一个 task
+    - call: build
   notify:
     - run: echo "done at ${{ env.TIME }}"
 ```
+
+这是有意的 v2 破坏性变更：旧的 `uses: task/name` 会被拒绝。请改为 `call: name`；`uses` 只表示插件/本地 action。
 
 按输入顺序临时运行任务。`--key=value` 参数作用于整个运行，并覆盖 `with:` 的值：
 
 ```
 bolt run reset build start
 bolt run build --target=client --config=shipping
+bolt run build_editor --config=debuggame # 别名：dbggame、DebugGame
 bolt run update build --dry-run
 ```
 
@@ -229,6 +235,8 @@ notifications:
       bot_token: "123:ABC"
       chat_id: "-100..."
 ```
+
+多 task 调用只发送一次开始通知；其中显示顶层 task 列表，以及每个 task 递归拥有的 `call`、插件/本地 action 和 shell 命令。
 
 ## 内置处理器
 

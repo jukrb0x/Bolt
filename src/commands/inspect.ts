@@ -1,7 +1,8 @@
 import { defineCommand } from "citty";
 import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
-import { makeCtx, walkSteps, collectSections, type PlanSection } from "../inspect-utils";
+import { formatPlanNodes } from "../inspect-utils";
+import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
 import { parseRunArgs } from "./run";
 
 export default defineCommand({
@@ -30,25 +31,20 @@ export default defineCommand({
 
     console.log(`Config: ${configPath}`);
     console.log();
-    const ctx = makeCtx(cfg);
 
-    for (const name of names) {
-      let sections: PlanSection[];
-      try {
-        sections = collectSections(name, cfg);
-      } catch (e: any) {
-        console.error(`[ERROR] ${e.message}`);
-        process.exit(1);
-      }
+    const request: PlanRequest =
+      names.length === 1 && cfg.flows[names[0]]
+        ? { kind: "flow", name: names[0], params }
+        : { kind: "tasks", names, params };
+    const result = resolveRunPlan(cfg, request);
+    if (!result.ok) {
+      console.error(`[ERROR] ${formatPlanErrors(result.errors)}`);
+      process.exit(1);
+    }
 
-      console.log(`>> ${name}`);
-      const counter = { n: 1 };
-      for (const section of sections) {
-        if (sections.length > 1) console.log(`  [${section.label}]`);
-        for (const line of walkSteps(section.steps, cfg, ctx, params, counter)) {
-          console.log(line);
-        }
-      }
+    for (const task of result.plan.tasks) {
+      console.log(`>> ${task.name}`);
+      for (const line of formatPlanNodes(task.nodes, 1)) console.log(line);
       console.log();
     }
   },

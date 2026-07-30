@@ -131,7 +131,7 @@ Machine paths belong in `bolt.local.yaml`. This keeps the committed contract por
 Ship `bolt.local.example.yaml` so new teammates can copy it to `bolt.local.yaml` and fill in their paths (or just run `bolt init`).
 
 ### 3. Compose tasks instead of duplicating
-Use `uses: task/<name>` to build larger tasks from smaller ones, and define goals as flows.
+Use `call: <name>` to build larger tasks from smaller ones, and define goals as flows. `uses` is reserved for plugin/local actions; `run` is reserved for shell commands.
 
 ### 4. Use environment variables for secrets
 Reference secrets via interpolation instead of hardcoding them.

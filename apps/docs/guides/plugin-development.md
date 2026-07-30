@@ -84,13 +84,13 @@ export default plugin;
 ```
 
 ## Step 4: Use in bolt.yaml
-Add a task that uses your handlers (composing the built-in `build` task with `task/`):
+Add a task that uses your handlers and reuses the built-in `build` task with `call`:
 
 ```yaml
 tasks:
   build: [{ uses: ue/build, with: { target: editor } }]
   ci:
-    - uses: task/build
+    - call: build
     - uses: myplugin/run
       with:
         command: npm test

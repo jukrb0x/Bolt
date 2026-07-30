@@ -82,10 +82,10 @@ targets:
     name: MyClient
     config: shipping
 
-# Add a task that composes others and appends a shell step
+# Add a task that reuses another task and appends a plugin action
 tasks:
   build:      [{ uses: ue/build, with: { target: editor } }]
-  build-both: [{ uses: task/build }, { uses: ue/build, with: { target: client } }]
+  build-both: [{ call: build }, { uses: ue/build, with: { target: client } }]
 
 # Add a flow (fail-fast; list tasks that may fail in continue_on_fail)
 flows:
@@ -115,6 +115,7 @@ bolt run build --target=client
 
 # Pass a build configuration
 bolt run build --config=debug
+bolt run build --config=debuggame   # aliases: dbggame, DebugGame
 ```
 
 ## What's Next?
