@@ -301,7 +301,10 @@ test("update-engine with engine_repo.vcs=svn calls svn update", async () => {
   const logged2: string[] = [];
   const fakeCfg = {
     ...testCfg,
-    project: { ...testCfg.project, engine_repo: { ...testCfg.project.engine_repo, vcs: "svn" as const } },
+    project: {
+      ...testCfg.project,
+      engine_repo: { ...testCfg.project.engine_repo, vcs: "svn" as const },
+    },
   };
   const ctx2 = {
     cfg: fakeCfg,
@@ -319,7 +322,10 @@ test("update-project with project_repo.vcs=git calls git pull", async () => {
   const logged2: string[] = [];
   const fakeCfg = {
     ...testCfg,
-    project: { ...testCfg.project, project_repo: { ...testCfg.project.project_repo, vcs: "git" as const } },
+    project: {
+      ...testCfg.project,
+      project_repo: { ...testCfg.project.project_repo, vcs: "git" as const },
+    },
   };
   const ctx2 = {
     cfg: fakeCfg,

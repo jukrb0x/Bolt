@@ -210,13 +210,17 @@ function loadLocalConfig(localPath: string, rt: Runtime): LocalConfig {
   try {
     raw = readFileSync(localPath, "utf8");
   } catch {
-    throw new Error(`${LOCAL_FILENAME} missing or invalid (not found at ${localPath}) — ${LOCAL_HINT}`);
+    throw new Error(
+      `${LOCAL_FILENAME} missing or invalid (not found at ${localPath}) — ${LOCAL_HINT}`,
+    );
   }
   let parsed: unknown;
   try {
     parsed = rt.parseYaml(raw);
   } catch (e: any) {
-    throw new Error(`${LOCAL_FILENAME} missing or invalid (YAML parse error: ${e.message}) — ${LOCAL_HINT}`);
+    throw new Error(
+      `${LOCAL_FILENAME} missing or invalid (YAML parse error: ${e.message}) — ${LOCAL_HINT}`,
+    );
   }
   const result = LocalConfigSchema.safeParse(parsed);
   if (!result.success) {

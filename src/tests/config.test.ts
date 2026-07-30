@@ -172,12 +172,7 @@ test("preserves extra string fields on project for interpolation", async () => {
 });
 
 test("engine identity vcs defaults to git when omitted", async () => {
-  const shared = [
-    "project:",
-    "  name: Defaults",
-    "  engine: {}",
-    "  project: {}",
-  ].join("\n");
+  const shared = ["project:", "  name: Defaults", "  engine: {}", "  project: {}"].join("\n");
   const dir = makeConfigDir(shared, LOCAL_YAML);
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
   expect(cfg.project.engine_repo.vcs).toBe("git");
@@ -213,12 +208,16 @@ test("notifications config parses wecom and telegram providers", async () => {
 
 test("throws when bolt.local.yaml is missing", async () => {
   const dir = makeConfigDir(SHARED_YAML); // no local file
-  expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow(/bolt\.local\.yaml missing or invalid/);
+  expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow(
+    /bolt\.local\.yaml missing or invalid/,
+  );
 });
 
 test("throws when bolt.local.yaml is missing required fields", async () => {
   const dir = makeConfigDir(SHARED_YAML, "engine_path: ./engine"); // no project_path/uproject
-  expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow(/bolt\.local\.yaml missing or invalid/);
+  expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow(
+    /bolt\.local\.yaml missing or invalid/,
+  );
 });
 
 test("throws on invalid bolt.yaml (missing project)", async () => {
