@@ -14,6 +14,12 @@ import path from "path";
 import { existsSync } from "fs";
 import { Notifier, type BuildContext } from "./notify";
 
+type UsesStep = Extract<Step, { uses: string }>;
+
+function isUsesStep(step: Step): step is UsesStep {
+  return "uses" in step && step.uses !== undefined;
+}
+
 interface RunnerOptions {
   dryRun?: boolean;
   onStep?: (cmd: string) => void;
@@ -39,7 +45,7 @@ export class Runner {
     if (logger) {
       const onOutput = (text: string) => logger.writeRaw(text);
       const injectOpts = (o?: SpawnOptions) =>
-        o ? (o.onOutput ??= onOutput, o) : { onOutput };
+        o ? ((o.onOutput ??= onOutput), o) : { onOutput };
       this.runtime = {
         spawn: (cmd, o) => base.spawn(cmd, injectOpts(o)),
         spawnSync: (cmd, o) => base.spawnSync(cmd, injectOpts(o)),
@@ -218,9 +224,15 @@ export class Runner {
   ): Promise<void> {
     const steps = this.cfg.tasks[name];
     if (!steps) throw new Error(`Unknown task: ${name}`);
-    if (visited.has(name)) throw new Error(`Dependency cycle detected at: ${name}`);
+    if (visited.has(name)) {
+      throw new Error(`Task call cycle: ${[...visited, name].join(" -> ")}`);
+    }
     visited.add(name);
-    for (const step of steps) await this.execStep(step, params, visited);
+    try {
+      for (const step of steps) await this.execStep(step, params, visited);
+    } finally {
+      visited.delete(name);
+    }
   }
 
   private async execStep(
@@ -235,7 +247,7 @@ export class Runner {
       params,
     };
 
-    if (step.run) {
+    if ("run" in step && step.run !== undefined) {
       const cmd = interpolate(step.run, ctx);
       this.opts.onStep?.(cmd);
       this.opts.logger?.step_detail(`run: ${cmd}`);
@@ -243,9 +255,19 @@ export class Runner {
       return;
     }
 
-    if (step.uses) {
+    if ("call" in step && step.call !== undefined) {
+      const callParams = Object.fromEntries(
+        Object.entries(step.with ?? {}).map(([key, value]) => [key, interpolate(value, ctx)]),
+      );
+      const mergedParams = { ...callParams, ...params };
+      this.opts.onStep?.(`call:${step.call}`);
+      await this.execTask(step.call, mergedParams, visited);
+      return;
+    }
+
+    if (isUsesStep(step)) {
       this.opts.onStep?.(step.uses);
-      await this.dispatch(step, ctx, params, visited);
+      await this.dispatch(step, ctx, params);
       return;
     }
   }
@@ -258,10 +280,9 @@ export class Runner {
   }
 
   private async dispatch(
-    step: Step,
+    step: UsesStep,
     ctx: InterpolateCtx,
     params: Record<string, string>,
-    visited: Set<string>,
   ): Promise<void> {
     const uses = step.uses ?? "";
 
@@ -287,12 +308,6 @@ export class Runner {
       Object.entries(step.with ?? {}).map(([k, v]) => [k, interpolate(v, ctx)]),
     );
     const mergedParams = { ...yamlParams, ...params };
-
-    // task/<name> → compose another task inline, sharing the cycle-detection set.
-    if (ns === "task") {
-      await this.execTask(op, mergedParams, visited);
-      return;
-    }
 
     const paramStr = Object.entries(mergedParams)
       .map(([k, v]) => `${k}=${v}`)
