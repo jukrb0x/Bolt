@@ -37,52 +37,56 @@ test("runTask throws on unknown task", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// task/ composition + cycle detection
+// call composition + cycle detection
 // ---------------------------------------------------------------------------
 
-test("task/ composition runs the composed task's steps in order", async () => {
+test("call executes a task inline without mutating its definition", async () => {
   const ran: string[] = [];
   const composed: BoltConfig = {
     ...testCfg,
     tasks: {
-      inner: [{ run: "echo inner1" }, { run: "echo inner2" }],
-      outer: [{ run: "echo before" }, { uses: "task/inner" }, { run: "echo after" }],
+      inner: [{ run: "echo ${{ params.mode }}" }],
+      outer: [{ call: "inner", with: { mode: "debug" } }],
     },
   };
   const runner = new Runner(composed, { dryRun: true, onStep: (s) => ran.push(s) });
   await runner.runTask("outer");
-  // onStep also fires with the `uses` string for the composition step itself.
-  expect(ran).toEqual(["echo before", "task/inner", "echo inner1", "echo inner2", "echo after"]);
+  expect(ran).toContain("echo debug");
+  expect(composed.tasks.inner).toEqual([{ run: "echo ${{ params.mode }}" }]);
 });
 
-test("task/ composition throws on unknown composed task", async () => {
+test("call throws on an unknown called task", async () => {
   const composed: BoltConfig = {
     ...testCfg,
-    tasks: { outer: [{ uses: "task/missing" }] },
+    tasks: { outer: [{ call: "missing" }] },
   };
   const runner = new Runner(composed, { dryRun: true });
   expect(runner.runTask("outer")).rejects.toThrow("Unknown task: missing");
 });
 
-test("detects direct dependency cycles", async () => {
-  const cyclic: BoltConfig = {
-    ...testCfg,
-    tasks: { x: [{ uses: "task/x" }] },
-  };
-  const runner = new Runner(cyclic, { dryRun: true });
-  expect(runner.runTask("x")).rejects.toThrow("Dependency cycle detected at: x");
-});
-
-test("detects indirect dependency cycles", async () => {
+test("call reports the complete cycle path", async () => {
   const cyclic: BoltConfig = {
     ...testCfg,
     tasks: {
-      x: [{ uses: "task/y" }],
-      y: [{ uses: "task/x" }],
+      a: [{ call: "b" }],
+      b: [{ call: "a" }],
     },
   };
-  const runner = new Runner(cyclic, { dryRun: true });
-  expect(runner.runTask("x")).rejects.toThrow("Dependency cycle detected");
+  await expect(new Runner(cyclic, { dryRun: true }).runTask("a")).rejects.toThrow("a -> b -> a");
+});
+
+test("call permits a completed task to run again", async () => {
+  const ran: string[] = [];
+  const composed: BoltConfig = {
+    ...testCfg,
+    tasks: {
+      inner: [{ run: "echo inner" }],
+      outer: [{ call: "inner" }, { call: "inner" }],
+    },
+  };
+  const runner = new Runner(composed, { dryRun: true, onStep: (step) => ran.push(step) });
+  await runner.runTask("outer");
+  expect(ran).toEqual(["call:inner", "echo inner", "call:inner", "echo inner"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -100,13 +104,13 @@ test("params are exposed as ${{ params.x }} in run steps", async () => {
   expect(ran).toEqual(["echo hello"]);
 });
 
-test("params flow through task/ composition and win over with:", async () => {
+test("params flow through call and win over with:", async () => {
   const ran: string[] = [];
   const paramCfg: BoltConfig = {
     ...testCfg,
     tasks: {
       inner: [{ run: "echo ${{ params.x }}" }],
-      outer: [{ uses: "task/inner", with: { x: "fromWith" } }],
+      outer: [{ call: "inner", with: { x: "fromWith" } }],
     },
   };
   const echoes = () => ran.filter((s) => s.startsWith("echo"));
@@ -174,7 +178,7 @@ const flowCfg: BoltConfig = {
   tasks: {
     ok1: [{ run: "echo ok1" }],
     ok2: [{ run: "echo ok2" }],
-    boom: [{ uses: "task/__missing__" }], // throws "Unknown task: __missing__"
+    boom: [{ call: "__missing__" }], // throws "Unknown task: __missing__"
   },
   flows: {
     happy: { steps: ["ok1", "ok2"], continue_on_fail: [] },

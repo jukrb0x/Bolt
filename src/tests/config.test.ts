@@ -114,9 +114,38 @@ test("parses tasks as step arrays", async () => {
   const dir = makeConfigDir(SHARED_YAML, LOCAL_YAML);
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
   expect(cfg.tasks.update).toHaveLength(2);
-  expect(cfg.tasks.build[0].uses).toBe("ue/build");
-  expect(cfg.tasks.build[0].with?.target).toBe("editor");
-  expect(cfg.tasks.kill[0].uses).toBe("ue/kill");
+  expect(cfg.tasks.build[0]).toMatchObject({ uses: "ue/build", with: { target: "editor" } });
+  expect(cfg.tasks.kill[0]).toMatchObject({ uses: "ue/kill" });
+});
+
+test("parses call steps", async () => {
+  const shared = SHARED_YAML.replace(
+    "  start: [{ uses: ue/start }]",
+    "  start: [{ uses: ue/start }]\n  inner: [{ run: echo inner }]\n  outer: [{ call: inner }]",
+  );
+  const dir = makeConfigDir(shared, LOCAL_YAML);
+  const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
+  expect(cfg.tasks.outer[0]).toEqual({ call: "inner" });
+});
+
+test("rejects steps with multiple execution fields", async () => {
+  const shared = SHARED_YAML.replace(
+    "  start: [{ uses: ue/start }]",
+    "  start: [{ uses: ue/start }]\n  broken: [{ uses: ue/build, call: build }]",
+  );
+  const dir = makeConfigDir(shared, LOCAL_YAML);
+  await expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow();
+});
+
+test("rejects legacy task references with a migration hint", async () => {
+  const shared = SHARED_YAML.replace(
+    "  start: [{ uses: ue/start }]",
+    "  start: [{ uses: ue/start }]\n  legacy: [{ uses: task/build }]",
+  );
+  const dir = makeConfigDir(shared, LOCAL_YAML);
+  await expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow(
+    'replace with "call: build"',
+  );
 });
 
 test("parses flows with steps and continue_on_fail", async () => {

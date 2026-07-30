@@ -18,12 +18,38 @@ export type TargetKind = z.infer<typeof TargetKindSchema>;
 export type VcsType = z.infer<typeof VcsTypeSchema>;
 
 // --- Core Schemas ---
-const StepSchema = z.object({
-  uses: z.string().optional(),
-  run: z.string().optional(),
+const StepOptionsSchema = z.object({
   with: z.record(z.string()).optional(),
   "continue-on-error": z.boolean().optional(),
 });
+
+const UsesStepSchema = StepOptionsSchema.extend({
+  uses: z.string().superRefine((value, ctx) => {
+    if (!value.startsWith("task/")) return;
+    const name = value.slice("task/".length);
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `legacy task reference "${value}"; replace with "call: ${name}"`,
+    });
+  }),
+  call: z.never().optional(),
+  run: z.never().optional(),
+});
+
+const CallStepSchema = StepOptionsSchema.extend({
+  call: z.string().min(1),
+  uses: z.never().optional(),
+  run: z.never().optional(),
+});
+
+const RunStepSchema = z.object({
+  run: z.string().min(1),
+  "continue-on-error": z.boolean().optional(),
+  uses: z.never().optional(),
+  call: z.never().optional(),
+});
+
+const StepSchema = z.union([UsesStepSchema, CallStepSchema, RunStepSchema]);
 export type Step = z.infer<typeof StepSchema>;
 
 /** A task is a named list of steps (was: ops + actions). */
@@ -206,7 +232,14 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
   const rt = runtime ?? createRuntime();
   const raw = readFileSync(filepath, "utf8");
   const parsed = rt.parseYaml(raw);
-  const shared = BoltConfigSchema.parse(parsed);
+  const sharedResult = BoltConfigSchema.safeParse(parsed);
+  if (!sharedResult.success) {
+    const detail = sharedResult.error.issues
+      .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+      .join("; ");
+    throw new Error(`bolt.yaml invalid (${detail})`);
+  }
+  const shared = sharedResult.data;
 
   // Resolve relative paths against the directory containing bolt.yaml
   const configDir = path.dirname(path.resolve(filepath));
