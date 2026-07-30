@@ -9,6 +9,7 @@ export type PlanNode =
 export interface PlannedTask {
   name: string;
   nodes: PlanNode[];
+  continueOnFailure: boolean;
 }
 
 export interface RunPlan {
@@ -35,6 +36,7 @@ export function formatPlanErrors(errors: PlanError[]): string {
 export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResult {
   let names: string[];
   let planName: string | undefined;
+  let continueOnFail = new Set<string>();
   if (request.kind === "flow") {
     const flow = cfg.flows[request.name];
     if (!flow) {
@@ -45,6 +47,7 @@ export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResul
     }
     names = flow.steps;
     planName = request.name;
+    continueOnFail = new Set(flow.continue_on_fail);
   } else {
     names = request.names;
   }
@@ -106,7 +109,11 @@ export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResul
   for (const [index, name] of names.entries()) {
     const resolved = resolveTask(name, request.params, [], `tasks[${index}]`);
     if (!resolved.ok) return resolved;
-    tasks.push({ name, nodes: resolved.nodes });
+    tasks.push({
+      name,
+      nodes: resolved.nodes,
+      continueOnFailure: continueOnFail.has(name),
+    });
   }
 
   return {
