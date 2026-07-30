@@ -41,6 +41,24 @@ test("build: params.config overrides target config", async () => {
   expect(cmd).toContain(`-Target="ShaderCompileWorker Win64 Development -Quiet"`);
 });
 
+test.each(["debuggame", "dbggame", "DebugGame"])(
+  "build editor renders %s as DebugGame",
+  async (config) => {
+    const ctx = makeCtx();
+    await uePlugin.handlers["build"]({ target: "editor", config }, ctx);
+    const cmd = ctx.logged.find((line) => line.includes("Build.bat")) ?? "";
+    expect(cmd).toContain(`-Target="${PROJECT_NAME}Editor Win64 DebugGame"`);
+  },
+);
+
+test("build rejects unknown config before shell execution", async () => {
+  const ctx = makeCtx();
+  await expect(
+    uePlugin.handlers["build"]({ target: "editor", config: "profile" }, ctx),
+  ).rejects.toThrow('Unknown build configuration "profile"');
+  expect(ctx.logged.some((line) => line.includes("Build.bat"))).toBe(false);
+});
+
 test("build with unknown target falls back to raw program build", async () => {
   const ctx = makeCtx();
   await uePlugin.handlers["build"]({ target: "CustomProgram" }, ctx);

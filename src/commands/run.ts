@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { normalizeBuildConfig } from "../build-config";
 import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
 import { Runner } from "../runner";
@@ -11,9 +12,6 @@ import pkg from "../../package.json";
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
-
-/** Shorthand aliases for the `config` (build configuration) param. */
-const CONFIG_SHORTCUTS: Record<string, string> = { dev: "development", dbg: "debug" };
 
 export interface ParsedRun {
   /** Positional task/flow names, in the order typed. */
@@ -45,7 +43,8 @@ export function parseRunArgs(rawArgs: string[]): ParsedRun {
       const k = inner.slice(0, eq);
       const v = inner.slice(eq + 1);
       if (k === "dry-run") continue;
-      params[k] = k === "config" ? (CONFIG_SHORTCUTS[v.toLowerCase()] ?? v) : v;
+      const normalized = k === "config" ? normalizeBuildConfig(v) : undefined;
+      params[k] = normalized?.ok ? normalized.value : v;
       continue;
     }
     if (arg.startsWith("-")) continue; // ignore other short flags

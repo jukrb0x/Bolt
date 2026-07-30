@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { readFileSync } from "fs";
 import path from "path";
+import { BuildConfigSchema } from "./build-config";
 import { createRuntime, type Runtime } from "./runtime";
+
+export type { BuildConfig } from "./build-config";
 
 // ============================================================================
 // Schemas (single source of truth) + Derived Types
@@ -9,11 +12,9 @@ import { createRuntime, type Runtime } from "./runtime";
 
 // --- Enums ---
 const TargetKindSchema = z.enum(["editor", "program", "game", "client", "server"]);
-const BuildConfigSchema = z.enum(["development", "debug", "shipping", "test"]);
 const VcsTypeSchema = z.enum(["git", "svn"]);
 
 export type TargetKind = z.infer<typeof TargetKindSchema>;
-export type BuildConfig = z.infer<typeof BuildConfigSchema>;
 export type VcsType = z.infer<typeof VcsTypeSchema>;
 
 // --- Core Schemas ---

@@ -41,6 +41,12 @@ describe("parseRunArgs", () => {
     expect(parseRunArgs(["build", "--config=dbg"]).params).toEqual({ config: "debug" });
     expect(parseRunArgs(["build", "--config=shipping"]).params).toEqual({ config: "shipping" });
   });
+
+  test("normalizes DebugGame CLI aliases", () => {
+    expect(parseRunArgs(["build", "--config=debuggame"]).params.config).toBe("debuggame");
+    expect(parseRunArgs(["build", "--config=dbggame"]).params.config).toBe("debuggame");
+    expect(parseRunArgs(["build", "--config=DebugGame"]).params.config).toBe("debuggame");
+  });
 });
 
 // ---------------------------------------------------------------------------

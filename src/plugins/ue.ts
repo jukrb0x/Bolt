@@ -6,12 +6,15 @@ import { run, execRaw as exec } from "./helpers";
 import gitPlugin from "./git";
 import svnPlugin from "./svn";
 import * as ueIni from "./ue-ini";
+import { normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
 
 /** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
 const w = (p: string) => p.replace(/\//g, "\\");
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function requireUnrealBuildConfig(input: string): string {
+  const result = normalizeBuildConfig(input);
+  if (!result.ok) throw new Error(result.message);
+  return toUnrealBuildConfig(result.value);
 }
 
 /** Extract project name from .uproject file path (filename without extension) */
@@ -55,12 +58,12 @@ class UEPlugin extends PluginBase {
     }
 
     const uePath = ctx.cfg.project.engine_repo.path;
-    const buildType = capitalize(params.config ?? "development");
     const platform = params.platform ?? "Win64";
     const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
 
     // "engine" is a reserved target that builds the engine from source
     if (targetName === "engine") {
+      const buildType = requireUnrealBuildConfig(params.config ?? "development");
       await this.setup({ force: "true" }, ctx);
       const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
       ctx.logger.cmd(genCmd);
@@ -77,7 +80,7 @@ class UEPlugin extends PluginBase {
 
     if (target) {
       // Known target from cfg.targets
-      const effectiveConfig = capitalize((params.config as string | undefined) ?? target.config);
+      const effectiveConfig = requireUnrealBuildConfig(params.config ?? target.config);
       const projectName = getProjectName(projFile);
       const targetBin =
         target.kind === "editor"
@@ -90,6 +93,7 @@ class UEPlugin extends PluginBase {
       await run(cmd, ctx);
     } else {
       // Raw program target name (not in cfg.targets)
+      const buildType = requireUnrealBuildConfig(params.config ?? "development");
       const cmd = `${buildBat} ${targetName} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
       await run(cmd, ctx);
     }
