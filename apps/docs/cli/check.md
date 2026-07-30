@@ -59,6 +59,8 @@ bolt.yaml: /path/to/bolt.yaml
   bolt.local.yaml                     missing — copy bolt.local.example.yaml or run bolt init
 ```
 
+Legacy task composition is intentionally rejected in v2. Replace `uses: task/name` with `call: name`; `uses` is reserved for plugin/local actions.
+
 Output on a schema error:
 ```
 bolt.yaml: /path/to/bolt.yaml

@@ -17,7 +17,7 @@ Why split? The shared contract stays identical for the whole team, while each ma
 
 ## Model in one minute
 
-- A **task** is a named list of steps — the only building block. A step is a plugin call (`uses: ns/handler`), a composed task (`uses: task/<name>`), or a shell command (`run: ...`).
+- A **task** is a named list of steps — the only building block. Step keys are strict: `uses` invokes a plugin/local action, `call` reuses a task, and `run` executes a shell command.
 - A **flow** is a named, ordered set of tasks. Fail-fast: the first failing task aborts the flow unless it's in `continue_on_fail`.
 - One verb: `bolt run`. Multiple task names run in the order you type; a single flow name runs that flow. `--key=value` passes params (override `with:`); `--dry-run` previews.
 
@@ -42,19 +42,20 @@ project:
 targets:
   editor:
     kind: editor             # editor | program | game | client | server
-    config: development      # development | debug | shipping | test
+    config: development      # development | debug | debuggame | shipping | test
   client:
     kind: program
     name: MyClient
     config: shipping
 
 # tasks: the only building block — a task is a named list of steps.
-# Steps: `uses: ns/handler` (plugin), `uses: task/<name>` (compose), or `run: <shell>`.
+# Steps: `uses` = plugin/local action, `call` = reusable task, `run` = shell command.
 tasks:
   kill:    [{ uses: ue/kill }]
   update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
   genproj: [{ uses: ue/generate_project }]
   build:   [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build, with: { config: debuggame } }]
   start:   [{ uses: ue/start }]
 
 # flows: named, ordered goals. Fail-fast unless a task is in continue_on_fail.
@@ -124,12 +125,15 @@ bolt run build start                 # ad-hoc: run tasks in the typed order
 bolt run daily                       # goal: run a flow
 bolt run build --target=client       # params override with:
 bolt run build --config=debug        # build configuration param
+bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 bolt run reset --dry-run             # preview without executing
 ```
 
 ## Migration from v1
 
-`ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` (compose via `uses: task/<name>`) and `flows`; replace `bolt go`/`bolt help` with `bolt run`. Machine paths that used to sit under `project` (e.g. `engine_repo.path`) now live in `bolt.local.yaml`.
+`ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` and `flows`; reuse tasks with `call: <name>`. The legacy `uses: task/name` form is rejected and must be changed to `call: name`. Replace `bolt go`/`bolt help` with `bolt run`. Machine paths that used to sit under `project` (e.g. `engine_repo.path`) now live in `bolt.local.yaml`.
+
+Multi-task start notifications are sent once per invocation and show the top-level task list plus recursively owned actions.
 
 ## See Also
 - [Config Schema](/api/config-schema.md) — full field reference and defaults

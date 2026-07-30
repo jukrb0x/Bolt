@@ -21,10 +21,10 @@ exactly what `bolt run` would execute. It never runs anything. Useful for:
 
 Resolution mirrors `bolt run`:
 
-- A **task** resolves to a single section of numbered steps.
-- A **flow** resolves to one section **per task** in the flow, in listed order,
-  each labeled with its task name.
-- `uses: task/<name>` composition is expanded inline (cycle-detected).
+- A **task** resolves to one top-level task tree.
+- A **flow** resolves to one top-level task tree per flow task, in listed order.
+- `call: <name>` keeps the reusable task visible and nests its owned nodes
+  (cycle-detected).
 - Trailing `--key=value` params shallow-override each step's `with:` values
   (params win), exactly as they would at run time.
 
@@ -38,7 +38,7 @@ Resolution mirrors `bolt run`:
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `<name...>` | Yes | One or more task or flow names |
+| `<name...>` | Yes | One or more task names, or one flow name |
 
 ## Examples
 
@@ -54,32 +54,44 @@ bolt inspect update build
 
 # See how a param changes the resolved steps
 bolt inspect build --target=client
+
+# Keep reusable-task ownership visible
+bolt inspect build_editor --config=debuggame
 ```
 
 ## Output
 
-For a task, a single numbered list of steps:
+For a task, a single task tree:
 
 ```
 Config: /path/to/bolt.yaml
 
 >> build
-  1  uses: ue/build  target=editor
+  uses: ue/build  target=editor
 ```
 
-For a flow, one labeled section per task, numbered continuously:
+A task call remains visible as an ownership boundary:
+
+```
+>> build_editor
+  call: build
+    uses: ue/build  target=editor  config=debuggame
+```
+
+For a flow, one tree per top-level task:
 
 ```
 Config: /path/to/bolt.yaml
 
->> daily
-  [update]
-  1  uses: ue/update_engine
-  2  uses: ue/update_project
-  [build]
-  3  uses: ue/build  target=editor
-  [start]
-  4  uses: ue/start
+>> update
+  uses: ue/update_engine
+  uses: ue/update_project
+
+>> build
+  uses: ue/build  target=editor
+
+>> start
+  uses: ue/start
 ```
 
 ## See Also

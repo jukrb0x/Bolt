@@ -14,7 +14,7 @@ Build a target from the `targets:` map (or a raw program target name).
 | Param | Required | Description |
 |------|----------|-------------|
 | `target` | yes | Key from `bolt.yaml` `targets:` map, a raw program target name, or the reserved `engine` |
-| `config` | no | Override target's config (`development` \| `debug` \| `shipping` \| `test`) |
+| `config` | no | Override target's config (`development` \| `debug` \| `debuggame` \| `shipping` \| `test`) |
 | `platform` | no | Target platform (default: `Win64`) |
 
 For `kind: editor`: invokes `Build.bat` with `-Target="<ProjectName>Editor <platform> <config>" -Target="ShaderCompileWorker <platform> Development -Quiet" -Project="<uproject>" -WaitMutex`.
@@ -22,6 +22,8 @@ For `kind: editor`: invokes `Build.bat` with `-Target="<ProjectName>Editor <plat
 For other known targets: `Build.bat <name> <platform> <config> -Project="<uproject>" -WaitMutex`.
 
 For a raw (unlisted) target name: `Build.bat <target> <platform> <config> -project="<uproject>" -WaitMutex -FromMsBuild`.
+
+`debuggame`, `dbggame`, and `DebugGame` normalize to `debuggame` and are passed to Unreal as `DebugGame`.
 
 `target: engine` is reserved and builds the engine from source (see `ue/build_engine`).
 

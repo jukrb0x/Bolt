@@ -37,10 +37,11 @@ bolt run build --target=client      # override the build target
 bolt run build --config=debug       # override the build configuration
 ```
 
-**Config shorthand** for the `config` param: `dev` → `development`, `dbg` → `debug`.
+**Config shorthand** for the `config` param: `dev` → `development`, `dbg` → `debug`, and `dbggame`/`DebugGame` → `debuggame`.
 
 ```bash
 bolt run build --config=dev          # resolves to development
+bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 ```
 
 ## Options
@@ -77,15 +78,16 @@ bolt run update build --dry-run
 
 ## Defining Tasks and Flows
 
-Tasks and flows live in `bolt.yaml`. A step is a plugin handler (`uses: ns/handler`),
-another task composed inline (`uses: task/<name>`, cycle-detected), or a shell
-command (`run: "<shell>"`).
+Tasks and flows live in `bolt.yaml`. The three execution keys are `uses` for a
+plugin/local action, `call` for a reusable task (cycle-detected), and `run` for a
+shell command.
 
 ```yaml
 tasks:
   kill:    [{ uses: ue/kill }]
   update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
   build:   [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build, with: { config: debuggame } }]
   start:   [{ uses: ue/start }]
 
 flows:
@@ -102,8 +104,12 @@ flows:
 <Note>
 **Migrating from v1?** `bolt go`, ops, and variants are gone. Replace
 `bolt go update build` with `bolt run update build`, and replace op variants
-(`build:client`) with params (`--target=client`).
+(`build:client`) with params (`--target=client`). Legacy `uses: task/name` is
+rejected; replace it with `call: name`.
 </Note>
+
+Multi-task start notifications are sent once per invocation. They show the
+top-level task list and each recursively owned action.
 
 ## See Also
 

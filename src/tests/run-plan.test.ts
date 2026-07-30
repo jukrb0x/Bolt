@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import { generateAiContext } from "../ai-context";
 import type { BoltConfig } from "../config";
+import { formatPlanNodes } from "../inspect-utils";
+import { PluginRegistry } from "../plugin-registry";
 import { formatPlanErrors, resolveRunPlan } from "../run-plan";
 import { testCfg } from "./env";
 
@@ -132,4 +135,42 @@ test("formats structured plan errors", () => {
       { path: "tasks[1]", message: "second" },
     ]),
   ).toBe("tasks[0]: first\ntasks[1]: second");
+});
+
+test("formats nested call ownership for inspect", () => {
+  const result = resolveRunPlan(cfg, {
+    kind: "tasks",
+    names: ["build_editor"],
+    params: { config: "debuggame" },
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const lines = formatPlanNodes(result.plan.tasks[0].nodes);
+  expect(lines).toEqual(["call: build", "  uses: ue/build  target=editor  config=debuggame"]);
+});
+
+test("AI context recursively describes explicit task calls", () => {
+  const context = generateAiContext(cfg, import.meta.path, new PluginRegistry());
+
+  expect(context).toContain("| build_editor | `bolt run build_editor` | ue/build |");
+  expect(context).toContain("`uses`: plugin/local action");
+  expect(context).toContain("`call`: reusable task");
+  expect(context).toContain("`run`: shell command");
+  expect(context).toContain("`--config=debuggame` (aliases: `dbggame`, `DebugGame`)");
+  expect(context).toContain(
+    "Start notifications show the top-level task list and recursively owned actions once per invocation.",
+  );
+});
+
+test("AI context protects against malformed in-memory call cycles", () => {
+  const cycleCfg: BoltConfig = {
+    ...cfg,
+    tasks: {
+      first: [{ call: "second" }],
+      second: [{ call: "first" }],
+    },
+  };
+
+  const context = generateAiContext(cycleCfg, import.meta.path, new PluginRegistry());
+  expect(context).toContain("call:first (cycle)");
 });

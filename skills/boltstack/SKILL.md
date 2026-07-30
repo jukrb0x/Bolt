@@ -93,6 +93,10 @@ The loaded `ai-context.md` contains the **complete command reference** for this 
 - One verb, `bolt run`: pass task names to run them in the order you type, or a
   single flow name to run a predefined flow. What you type is what runs — there
   is no hidden reordering.
+- Step keys are strict: `uses` invokes a plugin/local action, `call` reuses a task,
+  and `run` executes a shell command.
+- One start notification per invocation shows top-level tasks and their recursively
+  owned actions.
 
 ## Config split
 
@@ -108,6 +112,7 @@ bolt run update build start         # tasks: run in the typed order
 bolt run daily                      # flow: run a predefined goal
 bolt run build --target=client      # params (replace old variants)
 bolt run build --config=debug       # build configuration param
+bolt run build --config=debuggame   # aliases: dbggame, DebugGame
 bolt run update build --dry-run     # preview without executing
 ```
 
@@ -146,6 +151,7 @@ Check `ai-context.md` for the exact task name — it varies per project. Typical
 
 **Build with a specific config or target:**
 - `bolt run build --config=debug`
+- `bolt run build --config=debuggame` (`dbggame` and `DebugGame` are aliases)
 - `bolt run build --target=client`
 
 ## Errors

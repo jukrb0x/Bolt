@@ -22,7 +22,7 @@ src/
 ├── plugin-api.ts         # Public re-export surface → bolt.d.ts entry
 ├── plugin-registry.ts    # PluginRegistry, buildRegistry() (scope resolution)
 ├── ai-context.ts         # generateAiContext() → .bolt/ai-context.md
-├── inspect-utils.ts      # Step resolution for `bolt inspect`
+├── inspect-utils.ts      # Resolved-plan formatting for `bolt inspect`
 ├── version.ts            # VERSION constant (stamped at release time)
 ├── virtual-module.ts     # In-memory module loading for plugins
 ├── core/index.ts         # Library barrel: Runner, Logger, createRuntime
@@ -62,15 +62,13 @@ CLI args
   └── citty routes to command
         └── discover(cwd)          # walk up to find bolt.yaml
               └── loadConfig()      # parse bolt.yaml + merge bolt.local.yaml + Zod
-                    └── Runner
-                          ├── runTask(name)   # one task (steps in order)
-                          └── runFlow(name)   # ordered tasks, fail-fast (+ continue_on_fail)
-                                └── execStep()
-                                      ├── shell()          # step.run
-                                      └── dispatch()       # step.uses
-                                            ├── task/<name> # recursive composition
-                                            ├── ./path      # local file
-                                            └── ns/handler → PluginRegistry
+                    └── resolveRunPlan()      # resolve tasks/calls/params once
+                          └── Runner.executePlan()
+                                ├── call      # recursively owned task nodes
+                                ├── run       # shell command
+                                └── uses
+                                      ├── ./path      # local action
+                                      └── ns/handler → PluginRegistry
 ```
 
 ## Plugin scopes (resolution priority)
@@ -88,8 +86,13 @@ Later scopes override earlier ones for the same namespace:
 `{ ...yamlParams, ...params }`. Consistent across all dispatch paths, and params
 are also exposed as `${{ params.x }}` in interpolation.
 
-**`task/` composition:** `uses: task/<name>` runs another task inline, sharing the
-cycle-detection set; handled in `dispatch()` before the plugin registry.
+**Strict step union:** `uses` means a plugin/local action, `call` means a reusable
+task, and `run` means a shell command. `resolveRunPlan()` expands calls with cycle
+protection before execution, inspection, or notification formatting.
+
+**One plan per invocation:** execution, `bolt inspect`, and the single start
+notification consume the same resolved task tree. Multi-task notifications show
+the top-level task list and recursively owned nodes.
 
 **Config split:** `bolt.yaml` is the committed shared contract (identity, tasks,
 flows, targets); `bolt.local.yaml` holds per-machine paths (gitignored). `loadConfig`

@@ -48,14 +48,15 @@ targets:
     config: shipping
 
 # tasks: the only building block. A task is a named list of steps.
-# Steps use `uses: ns/handler` (plugin), `uses: task/<name>` (compose another
-# task), or `run: <shell>`. Compose and parameterize freely.
+# Step keys are strict: `uses` invokes a plugin/local action, `call` reuses a
+# task, and `run` executes a shell command. Compose and parameterize freely.
 tasks:
   kill:    [{ uses: ue/kill }]
   update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
   genproj: [{ uses: ue/generate_project }]
   setup:   [{ uses: ue/setup }]
   build:   [{ uses: ue/build, with: { target: editor } }]
+  build_editor: [{ call: build, with: { config: debuggame } }]
   fillddc: [{ uses: ue/fillddc }]
   start:   [{ uses: ue/start }]
 
@@ -76,4 +77,5 @@ flows:
 #   bolt run build start                 # ad-hoc: run tasks in typed order
 #   bolt run daily                       # goal: run a flow
 #   bolt run build --target=client       # params replace variants
+#   bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 #   bolt run reset --dry-run

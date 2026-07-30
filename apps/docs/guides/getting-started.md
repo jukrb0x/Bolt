@@ -18,7 +18,7 @@ Bolt is a build and workflow automation tool for Unreal Engine projects. It prov
 
 Bolt has two building blocks and one verb:
 
-- **Task** — a named list of steps. A step is `uses: <ns>/<handler>` (a plugin handler), `uses: task/<name>` (compose another task), or `run: "<shell>"`.
+- **Task** — a named list of steps. `uses` invokes a plugin/local action, `call` reuses a task, and `run` executes a shell command.
 - **Flow** — a named, ordered set of tasks with a `continue_on_fail` allowlist. Flows are fail-fast: the first failing task aborts the flow unless it is listed in `continue_on_fail`.
 - **`bolt run`** — the single verb. Pass task names to run them in the order you type, or a single flow name to run a predefined goal.
 
@@ -87,6 +87,8 @@ use_tortoise: true
 ```
 
 Run `bolt run build` to compile the editor. Pass `bolt run build --target=client` to build a different target — params override the step's `with:` values.
+
+For Unreal DebugGame, run `bolt run build --config=debuggame`; `dbggame` and `DebugGame` are accepted aliases.
 
 ## Why Bolt?
 

@@ -5,12 +5,18 @@ import type { PluginRegistry } from "./plugin-registry";
 import { getParamMap } from "./plugin";
 
 /** Describe a single step using the plugin's describe() if available. */
-function describeStep(step: Step, registry: PluginRegistry): string {
-  if (step.run) return step.run;
+function describeStep(
+  step: Step,
+  cfg: BoltConfig,
+  registry: PluginRegistry,
+  stack: string[],
+): string {
+  if ("run" in step && step.run !== undefined) return step.run;
+  if ("call" in step && step.call !== undefined) {
+    if (stack.includes(step.call)) return `call:${step.call} (cycle)`;
+    return describeTask(step.call, cfg, registry, stack) || `call:${step.call}`;
+  }
   if (!step.uses) return "?";
-
-  // task/<name> composition — show as-is
-  if (step.uses.startsWith("task/")) return step.uses;
 
   // Plugin call: "namespace/handler"
   const slash = step.uses.indexOf("/");
@@ -29,27 +35,26 @@ function describeStep(step: Step, registry: PluginRegistry): string {
 
   const paramMap = getParamMap(plugin as any, handler);
   if (paramMap && paramMap.size > 0) {
-    const paramDescs = [...paramMap.entries()].map(([name, meta]) => `${name}: ${meta.description}`);
+    const paramDescs = [...paramMap.entries()].map(
+      ([name, meta]) => `${name}: ${meta.description}`,
+    );
     return `${step.uses} (${paramDescs.join(", ")})`;
   }
 
   return step.uses;
 }
 
-/** Describe a task by describing its steps (resolving task/ composition one level). */
-function describeTask(name: string, cfg: BoltConfig, registry: PluginRegistry): string {
+/** Describe a task recursively, preserving an explicit marker for invalid calls and cycles. */
+function describeTask(
+  name: string,
+  cfg: BoltConfig,
+  registry: PluginRegistry,
+  stack: string[] = [],
+): string {
   const steps = cfg.tasks[name];
   if (!steps || steps.length === 0) return "";
-  return steps
-    .map((step) => {
-      if (step.uses?.startsWith("task/")) {
-        const inner = step.uses.slice("task/".length);
-        const innerSteps = cfg.tasks[inner];
-        if (innerSteps) return innerSteps.map((s) => describeStep(s, registry)).join(" → ");
-      }
-      return describeStep(step, registry);
-    })
-    .join(" → ");
+  const nextStack = [...stack, name];
+  return steps.map((step) => describeStep(step, cfg, registry, nextStack)).join(" → ");
 }
 
 export function generateAiContext(
@@ -74,6 +79,9 @@ export function generateAiContext(
   lines.push(`Model: a **task** is a named list of steps; a **flow** is an ordered set of`);
   lines.push(`tasks with a fail policy. \`bolt run <task...>\` runs tasks in the order given;`);
   lines.push(`\`bolt run <flow>\` runs a predefined flow.`);
+  lines.push(
+    `Step keys: \`uses\`: plugin/local action; \`call\`: reusable task; \`run\`: shell command.`,
+  );
   lines.push(``);
 
   // --- Quick reference table ---
@@ -93,8 +101,12 @@ export function generateAiContext(
   // --- Tasks detail ---
   lines.push(`## Tasks (\`bolt run <task...>\`)`);
   lines.push(``);
-  lines.push(`Named step sequences. Chain multiple in typed order: \`bolt run update build start\`.`);
-  lines.push(`Pass params with \`--key=value\` (applies to the whole run, e.g. \`--target=client\`).`);
+  lines.push(
+    `Named step sequences. Chain multiple in typed order: \`bolt run update build start\`.`,
+  );
+  lines.push(
+    `Pass params with \`--key=value\` (applies to the whole run, e.g. \`--target=client\`).`,
+  );
   lines.push(``);
 
   for (const name of Object.keys(cfg.tasks)) {
@@ -111,7 +123,9 @@ export function generateAiContext(
     lines.push(``);
 
     for (const [name, flow] of Object.entries(cfg.flows)) {
-      const cont = flow.continue_on_fail.length ? ` (continue_on_fail: ${flow.continue_on_fail.join(", ")})` : "";
+      const cont = flow.continue_on_fail.length
+        ? ` (continue_on_fail: ${flow.continue_on_fail.join(", ")})`
+        : "";
       const desc = flow.description ? `${flow.description} — ` : "";
       lines.push(`- **${name}**${cont}: ${desc}${flow.steps.join(" → ")}`);
     }
@@ -133,7 +147,17 @@ export function generateAiContext(
   lines.push(`## Flags`);
   lines.push(``);
   lines.push(`- \`--dry-run\` — preview steps without executing`);
-  lines.push(`- \`--key=value\` — pass parameters to the run (e.g. \`--target=client --config=debug\`)`);
+  lines.push(
+    `- \`--key=value\` — pass parameters to the run (e.g. \`--target=client --config=debug\`)`,
+  );
+  lines.push(`- \`--config=debuggame\` (aliases: \`dbggame\`, \`DebugGame\`) — Unreal DebugGame`);
+  lines.push(``);
+
+  lines.push(`## Notifications`);
+  lines.push(``);
+  lines.push(
+    `Start notifications show the top-level task list and recursively owned actions once per invocation.`,
+  );
   lines.push(``);
 
   // --- Introspection ---

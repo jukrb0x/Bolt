@@ -53,18 +53,16 @@ CLI args
   └── citty routes to command
         └── discover(cwd)          # walk up to find bolt.yaml
               └── loadConfig()      # parse bolt.yaml + merge bolt.local.yaml + Zod
-                    └── Runner
-                          ├── runTask(name)   # one task (steps in order)
-                          └── runFlow(name)   # ordered tasks, fail-fast (+ continue_on_fail)
-                                └── execStep()
-                                      ├── shell()          # step.run
-                                      └── dispatch()       # step.uses
-                                            ├── task/<name> # recursive composition
-                                            ├── ./path      # local file
-                                            └── ns/handler → PluginRegistry
+                    └── resolveRunPlan()      # resolve tasks/calls/params once
+                          └── Runner.executePlan()
+                                ├── call      # recursively owned task nodes
+                                ├── run       # shell command
+                                └── uses
+                                      ├── ./path      # local action
+                                      └── ns/handler → PluginRegistry
 ```
 
-`bolt run a b c` calls `runTask` for each name in the typed order. `bolt run <flow>` calls `runFlow`, which iterates the flow's tasks fail-fast, honoring `continue_on_fail`.
+`bolt run a b c` resolves all named tasks into one plan in typed order. `bolt run <flow>` resolves the flow into the same structure, embedding its `continue_on_fail` policy. Execution and the one start notification consume that plan.
 
 ## Config Split Loader
 
@@ -88,7 +86,9 @@ Later scopes override earlier ones for the same namespace:
 
 **Params merge order:** CLI run params always win over YAML `with:` params (`{ ...yamlParams, ...params }`), consistent across all dispatch paths, and exposed as `${{ params.x }}` in interpolation.
 
-**`task/` composition:** `uses: task/<name>` runs another task inline, sharing the cycle-detection set; handled in `dispatch()` before the plugin registry.
+**Strict step union:** `uses` means a plugin/local action, `call` means a reusable task, and `run` means a shell command. `resolveRunPlan()` expands calls with cycle protection before execution or inspection.
+
+**One plan per invocation:** multi-task start notifications show the top-level task list and recursively owned nodes once per invocation.
 
 **Registry is per-Runner:** each `Runner` lazily builds its own registry on first `uses:` dispatch. Display-only paths (e.g. `plugin list`) call `buildRegistry()` directly.
 
