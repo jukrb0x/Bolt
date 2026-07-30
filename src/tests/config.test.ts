@@ -100,6 +100,16 @@ test("loads targets", async () => {
   expect(cfg.targets.client.name).toBe("MyClient");
 });
 
+test("normalizes target DebugGame config", async () => {
+  const shared = SHARED_YAML.replace(
+    "editor: { kind: editor, config: debug }",
+    "editor: { kind: editor, config: DebugGame }",
+  );
+  const dir = makeConfigDir(shared, LOCAL_YAML);
+  const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
+  expect(cfg.targets.editor.config).toBe("debuggame");
+});
+
 test("parses tasks as step arrays", async () => {
   const dir = makeConfigDir(SHARED_YAML, LOCAL_YAML);
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
