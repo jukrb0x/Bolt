@@ -1,4 +1,5 @@
 import type { NotificationsConfig, NotifyProviderCfg, BuildContext } from "./config";
+import type { PlanNode, RunPlan } from "./run-plan";
 
 export type { BuildContext };
 
@@ -6,7 +7,7 @@ export interface NotifyEvent {
   kind: "start" | "op_complete" | "op_failure" | "complete";
   ctx: BuildContext;
   // start
-  ops?: string[];
+  plan?: RunPlan;
   // op_complete
   opName?: string;
   opDuration?: number; // ms
@@ -24,11 +25,19 @@ export interface NotifyProvider {
 export class Notifier {
   constructor(
     private providers: NotifyProvider[],
-    private flags: Pick<NotificationsConfig, "on_start" | "on_op_complete" | "on_failure" | "on_complete">,
+    private flags: Pick<
+      NotificationsConfig,
+      "on_start" | "on_op_complete" | "on_failure" | "on_complete"
+    >,
   ) {}
 
   static fromConfig(cfg: NotificationsConfig | undefined): Notifier {
-    const defaultFlags = { on_start: false, on_op_complete: false, on_failure: false, on_complete: false };
+    const defaultFlags = {
+      on_start: false,
+      on_op_complete: false,
+      on_failure: false,
+      on_complete: false,
+    };
     if (!cfg) return new Notifier([], defaultFlags);
     const providers = cfg.providers.map((p) => {
       if (p.type === "wecom") return new WeComProvider(p);
@@ -79,6 +88,20 @@ function escapeMdV2(s: string): string {
   return s.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
 }
 
+function planRows(plan: RunPlan): Array<{ depth: number; label: string }> {
+  const walk = (nodes: PlanNode[], depth: number): Array<{ depth: number; label: string }> =>
+    nodes.flatMap((node) =>
+      node.kind === "call"
+        ? [{ depth, label: `${node.name} (task)` }, ...walk(node.nodes, depth + 1)]
+        : [{ depth, label: node.kind === "uses" ? node.ref : `run: ${node.command}` }],
+    );
+
+  return plan.tasks.flatMap((task, index) => [
+    { depth: 0, label: `${index + 1}. ${task.name}` },
+    ...walk(task.nodes, 1),
+  ]);
+}
+
 // ─── WeCom ────────────────────────────────────────────────────────────────────
 
 type WeComCfg = Extract<NotifyProviderCfg, { type: "wecom" }>;
@@ -98,8 +121,14 @@ export class WeComProvider implements NotifyProvider {
 
     if (event.kind === "start") {
       const planLabel = ctx.mode === "run" ? "Action" : "Plan";
-      const plan = (event.ops ?? []).map((op, i) => `> ${i + 1}. ${op}`).join("\n");
-      return `## [Bolt] ${tag} Started\n${header}\n**Time:** ${now}\n**${planLabel}:**\n${plan}`;
+      const rows = event.plan
+        ? planRows(event.plan)
+            .map(({ depth, label }) =>
+              depth === 0 ? `> ${label}` : `> ${"  ".repeat(depth - 1)}└─ ${label}`,
+            )
+            .join("\n")
+        : "";
+      return `## [Bolt] ${tag} Started\n${header}\n**Time:** ${now}\n**${planLabel}:**\n${rows}`;
     }
 
     if (event.kind === "op_complete") {
@@ -155,8 +184,16 @@ export class TelegramProvider implements NotifyProvider {
 
     if (event.kind === "start") {
       const planLabel = ctx.mode === "run" ? "Action" : "Plan";
-      const plan = (event.ops ?? []).map((op, i) => `  ${i + 1}\\. ${escapeMdV2(op)}`).join("\n");
-      return `*\\[bolt\\] ${tag} Started*\n${header}\n*${planLabel}:*\n${plan}`;
+      const rows = event.plan
+        ? planRows(event.plan)
+            .map(({ depth, label }) =>
+              depth === 0
+                ? `  ${escapeMdV2(label)}`
+                : `${"  ".repeat(depth + 1)}└─ ${escapeMdV2(label)}`,
+            )
+            .join("\n")
+        : "";
+      return `*\\[bolt\\] ${tag} Started*\n${header}\n*${planLabel}:*\n${rows}`;
     }
 
     if (event.kind === "op_complete") {
@@ -172,7 +209,10 @@ export class TelegramProvider implements NotifyProvider {
     // complete
     const allOk = (event.results ?? []).every((r) => r.ok);
     const rows = (event.results ?? [])
-      .map((r) => `  ${r.ok ? "✅" : "❌"} ${escapeMdV2(r.op)} \\(${escapeMdV2(formatDuration(r.duration))}\\)`)
+      .map(
+        (r) =>
+          `  ${r.ok ? "✅" : "❌"} ${escapeMdV2(r.op)} \\(${escapeMdV2(formatDuration(r.duration))}\\)`,
+      )
       .join("\n");
     const total = escapeMdV2(formatDuration(event.duration ?? 0));
     return `*\\[bolt\\] ${allOk ? `✅ ${tag} Complete` : `❌ ${tag} Failed`}*\n${header}\n*Total:* ${total}\n*Results:*\n${rows}`;

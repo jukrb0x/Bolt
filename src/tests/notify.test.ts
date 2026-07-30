@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Notifier, WeComProvider, TelegramProvider } from "../notify";
 import type { BuildContext } from "../notify";
+import type { RunPlan } from "../run-plan";
 
 const ctx: BuildContext = {
   buildId: "20260303_142035",
@@ -10,44 +11,126 @@ const ctx: BuildContext = {
   startTime: new Date("2026-03-03T14:20:35").getTime(),
 };
 
+const plan: RunPlan = {
+  kind: "tasks",
+  tasks: [
+    {
+      name: "update",
+      continueOnFailure: false,
+      nodes: [
+        { kind: "uses", ref: "ue/update_engine", params: {} },
+        { kind: "uses", ref: "ue/update_project", params: {} },
+      ],
+    },
+    {
+      name: "build_editor",
+      continueOnFailure: false,
+      nodes: [
+        {
+          kind: "call",
+          name: "build",
+          nodes: [
+            {
+              kind: "uses",
+              ref: "ue/build",
+              params: { target: "editor", config: "debuggame" },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 // ─── Notifier flag gating ─────────────────────────────────────────────────────
 
 test("Notifier does not fire start event when on_start=false", async () => {
   let calls = 0;
-  const p = { send: async () => { calls++; } };
-  const notifier = new (Notifier as any)([p], { on_start: false, on_op_complete: true, on_failure: true, on_complete: true });
-  await notifier.fire({ kind: "start", ctx, ops: ["build"] });
+  const p = {
+    send: async () => {
+      calls++;
+    },
+  };
+  const notifier = new (Notifier as any)([p], {
+    on_start: false,
+    on_op_complete: true,
+    on_failure: true,
+    on_complete: true,
+  });
+  await notifier.fire({ kind: "start", ctx, plan });
   expect(calls).toBe(0);
 });
 
 test("Notifier fires start event when on_start=true", async () => {
   let calls = 0;
-  const p = { send: async () => { calls++; } };
-  const notifier = new (Notifier as any)([p], { on_start: true, on_op_complete: false, on_failure: false, on_complete: false });
-  await notifier.fire({ kind: "start", ctx, ops: ["build"] });
+  const p = {
+    send: async () => {
+      calls++;
+    },
+  };
+  const notifier = new (Notifier as any)([p], {
+    on_start: true,
+    on_op_complete: false,
+    on_failure: false,
+    on_complete: false,
+  });
+  await notifier.fire({ kind: "start", ctx, plan });
   expect(calls).toBe(1);
 });
 
 test("Notifier does not fire op_complete when on_op_complete=false", async () => {
   let calls = 0;
-  const p = { send: async () => { calls++; } };
-  const notifier = new (Notifier as any)([p], { on_start: true, on_op_complete: false, on_failure: true, on_complete: true });
+  const p = {
+    send: async () => {
+      calls++;
+    },
+  };
+  const notifier = new (Notifier as any)([p], {
+    on_start: true,
+    on_op_complete: false,
+    on_failure: true,
+    on_complete: true,
+  });
   await notifier.fire({ kind: "op_complete", ctx, opName: "build", opDuration: 1000 });
   expect(calls).toBe(0);
 });
 
 test("Notifier does not fire op_failure when on_failure=false", async () => {
   let calls = 0;
-  const p = { send: async () => { calls++; } };
-  const notifier = new (Notifier as any)([p], { on_start: true, on_op_complete: true, on_failure: false, on_complete: true });
-  await notifier.fire({ kind: "op_failure", ctx, opName: "build", opDuration: 1000, error: "oops" });
+  const p = {
+    send: async () => {
+      calls++;
+    },
+  };
+  const notifier = new (Notifier as any)([p], {
+    on_start: true,
+    on_op_complete: true,
+    on_failure: false,
+    on_complete: true,
+  });
+  await notifier.fire({
+    kind: "op_failure",
+    ctx,
+    opName: "build",
+    opDuration: 1000,
+    error: "oops",
+  });
   expect(calls).toBe(0);
 });
 
 test("Notifier does not throw when a provider fails", async () => {
-  const bad = { send: async () => { throw new Error("network down"); } };
-  const notifier = new (Notifier as any)([bad], { on_start: true, on_op_complete: true, on_failure: true, on_complete: true });
-  await notifier.fire({ kind: "start", ctx, ops: [] });
+  const bad = {
+    send: async () => {
+      throw new Error("network down");
+    },
+  };
+  const notifier = new (Notifier as any)([bad], {
+    on_start: true,
+    on_op_complete: true,
+    on_failure: true,
+    on_complete: true,
+  });
+  await notifier.fire({ kind: "start", ctx, plan });
   // must not throw
 });
 
@@ -55,26 +138,34 @@ test("Notifier.fromConfig returns empty notifier when cfg is undefined", async (
   let calls = 0;
   const notifier = Notifier.fromConfig(undefined);
   // fire anything — no providers, nothing should happen
-  await notifier.fire({ kind: "start", ctx, ops: [] });
+  await notifier.fire({ kind: "start", ctx, plan });
   expect(calls).toBe(0);
 });
 
 // ─── WeComProvider formatting ─────────────────────────────────────────────────
 
-test("WeComProvider start message contains project name, branch, build ID, and all op names", () => {
+test("start messages contain the A+B task and action tree", () => {
   const p = new WeComProvider({ type: "wecom", webhook_url: "https://example.com" });
-  const payload = p.buildPayload({ kind: "start", ctx, ops: ["update", "build", "start"] });
+  const payload = p.buildPayload({ kind: "start", ctx, plan });
   expect(payload.msgtype).toBe("markdown");
-  const c = payload.markdown.content;
-  expect(c).toContain("MyGame");
-  expect(c).toContain("main");
-  expect(c).toContain("20260303_142035");
-  expect(c).toContain("update");
-  expect(c).toContain("build");
-  expect(c).toContain("start");
-  // numbered list format
-  expect(c).toContain("1. update");
-  expect(c).toContain("2. build");
+  const wecomText = payload.markdown.content;
+  const telegramText = new TelegramProvider({
+    type: "telegram",
+    bot_token: "x",
+    chat_id: "y",
+  }).buildText({ kind: "start", ctx, plan });
+
+  for (const rawText of [wecomText, telegramText]) {
+    const text = rawText.replaceAll("\\", "");
+    expect(text).toContain("MyGame");
+    expect(text).toContain("main");
+    expect(text).toContain("20260303_142035");
+    expect(text).toContain("1. update");
+    expect(text).toContain("ue/update_engine");
+    expect(text).toContain("2. build_editor");
+    expect(text).toContain("build (task)");
+    expect(text).toContain("ue/build");
+  }
 });
 
 test("WeComProvider op_complete message contains op name and formatted duration", () => {
@@ -88,7 +179,13 @@ test("WeComProvider op_complete message contains op name and formatted duration"
 
 test("WeComProvider op_failure message contains op name, error, and warning color", () => {
   const p = new WeComProvider({ type: "wecom", webhook_url: "https://example.com" });
-  const payload = p.buildPayload({ kind: "op_failure", ctx, opName: "build", opDuration: 5000, error: "exit 1" });
+  const payload = p.buildPayload({
+    kind: "op_failure",
+    ctx,
+    opName: "build",
+    opDuration: 5000,
+    error: "exit 1",
+  });
   const c = payload.markdown.content;
   expect(c).toContain("build");
   expect(c).toContain("exit 1");
@@ -120,7 +217,7 @@ test("WeComProvider complete message shows total duration, per-op results and fo
 
 test("TelegramProvider start message contains project and all op names", () => {
   const p = new TelegramProvider({ type: "telegram", bot_token: "123:ABC", chat_id: "-100" });
-  const text = p.buildText({ kind: "start", ctx, ops: ["update", "build"] });
+  const text = p.buildText({ kind: "start", ctx, plan });
   expect(text).toContain("MyGame");
   expect(text).toContain("update");
   expect(text).toContain("build");
