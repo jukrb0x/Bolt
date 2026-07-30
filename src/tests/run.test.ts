@@ -3,6 +3,8 @@ import { Runner } from "../runner";
 import { testCfg } from "./env";
 import type { BoltConfig } from "../config";
 import { parseRunArgs, dispatchRun } from "../commands/run";
+import { formatPlanNodes } from "../inspect-utils";
+import { resolveRunPlan } from "../run-plan";
 
 // A v2 config with a couple of tasks + a flow for resolution tests.
 const cfg: BoltConfig = {
@@ -77,7 +79,9 @@ test("(c) params from --k=v reach the task", async () => {
 
 test("(d) an unknown name errors and lists available tasks/flows", async () => {
   const runner = new Runner(cfg, { dryRun: true });
-  await expect(dispatchRun(runner, cfg, ["nope"], {})).rejects.toThrow('Unknown task or flow: "nope"');
+  await expect(dispatchRun(runner, cfg, ["nope"], {})).rejects.toThrow(
+    'Unknown task or flow: "nope"',
+  );
 });
 
 test("a multi-name list containing a flow name errors (flow only runs solo)", async () => {
@@ -91,4 +95,26 @@ test("a multi-name list containing a flow name errors (flow only runs solo)", as
 test("empty name list errors", async () => {
   const runner = new Runner(cfg, { dryRun: true });
   await expect(dispatchRun(runner, cfg, [], {})).rejects.toThrow("No task or flow specified");
+});
+
+test("formats a resolved call tree with effective CLI params", () => {
+  const planCfg: BoltConfig = {
+    ...cfg,
+    tasks: {
+      build: [{ uses: "ue/build", with: { target: "editor", config: "development" } }],
+      build_editor: [{ call: "build", with: { config: "debuggame" } }],
+    },
+  };
+  const result = resolveRunPlan(planCfg, {
+    kind: "tasks",
+    names: ["build_editor"],
+    params: { config: "shipping" },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(formatPlanNodes(result.plan.tasks[0].nodes)).toEqual([
+    "call: build",
+    "  uses: ue/build  target=editor  config=shipping",
+  ]);
 });
