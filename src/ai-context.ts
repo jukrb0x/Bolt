@@ -1,34 +1,26 @@
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
-import type { BoltConfig, Step } from "./config";
+import type { BoltConfig } from "./config";
 import type { PluginRegistry } from "./plugin-registry";
 import { getParamMap } from "./plugin";
+import { resolveRunPlan, type PlanNode } from "./run-plan";
 
-/** Describe a single step using the plugin's describe() if available. */
-function describeStep(
-  step: Step,
-  cfg: BoltConfig,
+/** Describe a resolved plugin/local action using the plugin's describe() if available. */
+function describeUses(
+  ref: string,
+  params: Record<string, string>,
   registry: PluginRegistry,
-  stack: string[],
 ): string {
-  if ("run" in step && step.run !== undefined) return step.run;
-  if ("call" in step && step.call !== undefined) {
-    if (stack.includes(step.call)) return `call:${step.call} (cycle)`;
-    return describeTask(step.call, cfg, registry, stack) || `call:${step.call}`;
-  }
-  if (!step.uses) return "?";
-
   // Plugin call: "namespace/handler"
-  const slash = step.uses.indexOf("/");
-  if (slash === -1) return step.uses;
+  const slash = ref.indexOf("/");
+  if (slash === -1) return ref;
 
-  const ns = step.uses.slice(0, slash);
-  const handler = step.uses.slice(slash + 1);
+  const ns = ref.slice(0, slash);
+  const handler = ref.slice(slash + 1);
   const plugin = registry.get(ns);
-  if (!plugin) return step.uses;
+  if (!plugin) return ref;
 
   if (plugin.describe) {
-    const params = step.with ?? {};
     const desc = plugin.describe(handler, params);
     if (desc) return desc;
   }
@@ -38,29 +30,51 @@ function describeStep(
     const paramDescs = [...paramMap.entries()].map(
       ([name, meta]) => `${name}: ${meta.description}`,
     );
-    return `${step.uses} (${paramDescs.join(", ")})`;
+    return `${ref} (${paramDescs.join(", ")})`;
   }
 
-  return step.uses;
+  return ref;
 }
 
-/** Describe a task recursively, preserving an explicit marker for invalid calls and cycles. */
+function describePlanNodes(nodes: PlanNode[], registry: PluginRegistry): string {
+  return nodes
+    .map((node) => {
+      if (node.kind === "run") return node.command;
+      if (node.kind === "uses") return describeUses(node.ref, node.params, registry);
+      return describePlanNodes(node.nodes, registry) || `call:${node.name}`;
+    })
+    .join(" → ");
+}
+
+function describeInvalidPlan(messages: string[]): string {
+  for (const message of messages) {
+    if (message.startsWith("Task call cycle: ")) {
+      const name = message.slice("Task call cycle: ".length).split(" -> ").at(-1);
+      return `call:${name ?? "?"} (cycle)`;
+    }
+    const unknown = message.match(/^Unknown task: "(.+)"$/);
+    if (unknown) return `call:${unknown[1]}`;
+  }
+  return messages.join("; ");
+}
+
+/** Describe a task from the same effective plan used for execution and inspection. */
 function describeTask(
   name: string,
   cfg: BoltConfig,
   registry: PluginRegistry,
-  stack: string[] = [],
+  params: Record<string, string>,
 ): string {
-  const steps = cfg.tasks[name];
-  if (!steps || steps.length === 0) return "";
-  const nextStack = [...stack, name];
-  return steps.map((step) => describeStep(step, cfg, registry, nextStack)).join(" → ");
+  const result = resolveRunPlan(cfg, { kind: "tasks", names: [name], params });
+  if (!result.ok) return describeInvalidPlan(result.errors.map((error) => error.message));
+  return describePlanNodes(result.plan.tasks[0]?.nodes ?? [], registry);
 }
 
 export function generateAiContext(
   cfg: BoltConfig,
   configPath: string,
   registry: PluginRegistry,
+  params: Record<string, string> = {},
 ): string {
   const yamlRaw = readFileSync(configPath, "utf8");
   const hash = createHash("sha256").update(yamlRaw).digest("hex").slice(0, 16);
@@ -91,7 +105,7 @@ export function generateAiContext(
   lines.push(`|------|---------|-------|`);
 
   for (const name of Object.keys(cfg.tasks)) {
-    lines.push(`| ${name} | \`bolt run ${name}\` | ${describeTask(name, cfg, registry)} |`);
+    lines.push(`| ${name} | \`bolt run ${name}\` | ${describeTask(name, cfg, registry, params)} |`);
   }
   for (const [name, flow] of Object.entries(cfg.flows)) {
     lines.push(`| ${name} (flow) | \`bolt run ${name}\` | ${flow.steps.join(" → ")} |`);
@@ -110,7 +124,9 @@ export function generateAiContext(
   lines.push(``);
 
   for (const name of Object.keys(cfg.tasks)) {
-    lines.push(`- **${name}** — \`bolt run ${name}\` — ${describeTask(name, cfg, registry)}`);
+    lines.push(
+      `- **${name}** — \`bolt run ${name}\` — ${describeTask(name, cfg, registry, params)}`,
+    );
   }
   lines.push(``);
 

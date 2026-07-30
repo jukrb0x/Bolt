@@ -102,7 +102,7 @@ tasks:
 | `uses` | string | one of `uses`/`call`/`run` | Plugin handler (`ns/handler`) or local action (`./path` or `../path`) |
 | `call` | string | one of `uses`/`call`/`run` | Reusable task name (resolved recursively; cycle-detected) |
 | `run` | string | one of `uses`/`call`/`run` | Shell command (`${{ }}` interpolated) |
-| `with` | map (string→string) | no | Params forwarded to the handler (interpolated) |
+| `with` | map (string→string) | no | Params forwarded to the plugin/local action or called task (interpolated) |
 | `continue-on-error` | boolean | no | Continue if this step fails (default: `false`) |
 
 > Note the hyphen: steps use **`continue-on-error`**; flows use **`continue_on_fail`** (underscore).

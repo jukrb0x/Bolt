@@ -162,6 +162,43 @@ test("AI context recursively describes explicit task calls", () => {
   );
 });
 
+test("AI task descriptions use resolved effective params through calls", () => {
+  const paramCfg: BoltConfig = {
+    ...cfg,
+    tasks: {
+      leaf: [
+        {
+          uses: "fake/show",
+          with: { target: "editor", config: "development" },
+        },
+      ],
+      wrapper: [
+        {
+          call: "leaf",
+          with: { config: "${{ params.requested }}" },
+        },
+      ],
+    },
+  };
+  const registry = new PluginRegistry();
+  registry.register({
+    namespace: "fake",
+    handlers: { show: async () => {} },
+    describe: (_handler, params) => `${params.target}:${params.config}`,
+  });
+
+  const callContext = generateAiContext(paramCfg, import.meta.path, registry, {
+    requested: "debuggame",
+  });
+  expect(callContext).toContain("| wrapper | `bolt run wrapper` | editor:debuggame |");
+
+  const invocationContext = generateAiContext(paramCfg, import.meta.path, registry, {
+    requested: "debuggame",
+    config: "shipping",
+  });
+  expect(invocationContext).toContain("| wrapper | `bolt run wrapper` | editor:shipping |");
+});
+
 test("AI context protects against malformed in-memory call cycles", () => {
   const cycleCfg: BoltConfig = {
     ...cfg,
