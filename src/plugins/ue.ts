@@ -83,9 +83,7 @@ class UEPlugin extends PluginBase {
       const effectiveConfig = requireUnrealBuildConfig(params.config ?? target.config);
       const projectName = getProjectName(projFile);
       const targetBin =
-        target.kind === "editor"
-          ? `${projectName}Editor`
-          : (target.name ?? targetName);
+        target.kind === "editor" ? `${projectName}Editor` : (target.name ?? targetName);
       const cmd =
         target.kind === "editor"
           ? `${buildBat} -Target="${targetBin} ${platform} ${effectiveConfig}" -Target="ShaderCompileWorker ${platform} Development -Quiet" -Project="${projFile}" -WaitMutex`
@@ -236,7 +234,14 @@ class UEPlugin extends PluginBase {
 
   @handler("Set INI ${file} [${section}] ${key}")
   async ini_set(params: Record<string, string>, ctx: BoltPluginContext) {
-    const { file, section, key, value, "value-list": valueList, "insert-front": insertFront } = params;
+    const {
+      file,
+      section,
+      key,
+      value,
+      "value-list": valueList,
+      "insert-front": insertFront,
+    } = params;
     const projectPath = ctx.cfg.project.project_repo.path;
     const projFile = path.join(projectPath, file);
 

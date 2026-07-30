@@ -1,9 +1,7 @@
 import { z } from "zod";
 
 export type BuildConfig = "development" | "debug" | "debuggame" | "shipping" | "test";
-export type BuildConfigResult =
-  | { ok: true; value: BuildConfig }
-  | { ok: false; message: string };
+export type BuildConfigResult = { ok: true; value: BuildConfig } | { ok: false; message: string };
 
 const ALIASES: Record<string, BuildConfig> = {
   development: "development",

@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type BuildConfig,
   BuildConfigSchema,
   normalizeBuildConfig,
   toUnrealBuildConfig,
 } from "../build-config";
 
 describe("normalizeBuildConfig", () => {
-  test.each([
+  test.each<[string, BuildConfig]>([
     ["development", "development"],
     ["dev", "development"],
     ["debug", "debug"],
