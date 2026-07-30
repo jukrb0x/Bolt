@@ -57,7 +57,7 @@ export function parseRunArgs(rawArgs: string[]): ParsedRun {
 /**
  * Resolve + execute parsed names against a Runner (spec D3 resolution):
  * - exactly one name that is a flow → `runFlow`
- * - otherwise every name must be a task → `runTask` in listed order (params applied to each)
+ * - otherwise every name must be a task → one `runTasks` call in listed order
  *
  * Throws (never exits) so callers/tests own the process lifecycle.
  */
@@ -72,7 +72,7 @@ export async function dispatchRun(
   }
 
   if (names.length === 1 && cfg.flows[names[0]]) {
-    await runner.runFlow(names[0]);
+    await runner.runFlow(names[0], params);
     return;
   }
 
@@ -86,9 +86,7 @@ export async function dispatchRun(
     );
   }
 
-  for (const name of names) {
-    await runner.runTask(name, params);
-  }
+  await runner.runTasks(names, params);
 }
 
 export default defineCommand({

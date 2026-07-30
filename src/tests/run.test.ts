@@ -62,11 +62,42 @@ test("(a) multiple tasks run in typed order", async () => {
   expect(ran).toEqual(["echo b", "echo a"]);
 });
 
+test("multiple tasks dispatched by the CLI share one notification lifecycle", async () => {
+  const events: import("../notify").NotifyEvent[] = [];
+  const { Notifier } = await import("../notify");
+  const notifier = new Notifier([{ send: async (event) => void events.push(event) }], {
+    on_start: true,
+    on_op_complete: true,
+    on_failure: true,
+    on_complete: true,
+  });
+  const runner = new Runner(cfg, { dryRun: true, notifier });
+
+  await dispatchRun(runner, cfg, ["b", "a"], {});
+
+  expect(events.filter((event) => event.kind === "start")).toHaveLength(1);
+  expect(events.filter((event) => event.kind === "complete")).toHaveLength(1);
+});
+
 test("(b) a single flow name runs the flow", async () => {
   const ran: string[] = [];
   const runner = new Runner(cfg, { dryRun: true, onStep: (s) => ran.push(s) });
   await dispatchRun(runner, cfg, ["daily"], {});
   expect(ran).toEqual(["echo a", "echo b"]);
+});
+
+test("flow dispatch forwards CLI params to every planned task", async () => {
+  const ran: string[] = [];
+  const flowParamCfg: BoltConfig = {
+    ...cfg,
+    tasks: { greet: [{ run: "echo ${{ params.msg }}" }] },
+    flows: { greeting: { steps: ["greet"], continue_on_fail: [] } },
+  };
+  const runner = new Runner(flowParamCfg, { dryRun: true, onStep: (step) => ran.push(step) });
+
+  await dispatchRun(runner, flowParamCfg, ["greeting"], { msg: "hello" });
+
+  expect(ran).toEqual(["echo hello"]);
 });
 
 test("(c) params from --k=v reach the task", async () => {

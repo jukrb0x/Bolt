@@ -33,7 +33,7 @@ test("run() is an alias for runTask", async () => {
 
 test("runTask throws on unknown task", async () => {
   const runner = new Runner(cfg, { dryRun: true });
-  expect(runner.runTask("nope")).rejects.toThrow("Unknown task: nope");
+  expect(runner.runTask("nope")).rejects.toThrow('Unknown task: "nope"');
 });
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ test("call throws on an unknown called task", async () => {
     tasks: { outer: [{ call: "missing" }] },
   };
   const runner = new Runner(composed, { dryRun: true });
-  expect(runner.runTask("outer")).rejects.toThrow("Unknown task: missing");
+  expect(runner.runTask("outer")).rejects.toThrow('Unknown task: "missing"');
 });
 
 test("call reports the complete cycle path", async () => {
@@ -191,7 +191,7 @@ const flowCfg: BoltConfig = {
   tasks: {
     ok1: [{ run: "echo ok1" }],
     ok2: [{ run: "echo ok2" }],
-    boom: [{ call: "__missing__" }], // throws "Unknown task: __missing__"
+    boom: [{ uses: "missing/run" }],
   },
   flows: {
     happy: { steps: ["ok1", "ok2"], continue_on_fail: [] },
@@ -209,13 +209,13 @@ test("runFlow runs tasks in listed order", async () => {
 
 test("runFlow throws on unknown flow", async () => {
   const runner = new Runner(flowCfg, { dryRun: true });
-  expect(runner.runFlow("nope")).rejects.toThrow("Unknown flow: nope");
+  expect(runner.runFlow("nope")).rejects.toThrow('Unknown flow: "nope"');
 });
 
 test("runFlow aborts by default (fail-fast) when a task fails", async () => {
   const ran: string[] = [];
   const runner = new Runner(flowCfg, { dryRun: true, onStep: (s) => ran.push(s) });
-  await expect(runner.runFlow("stops")).rejects.toThrow("Unknown task: __missing__");
+  await expect(runner.runFlow("stops")).rejects.toThrow('Unknown plugin namespace: "missing"');
   // ok1 ran, boom was attempted, ok2 never ran.
   expect(ran).toContain("echo ok1");
   expect(ran).not.toContain("echo ok2");
@@ -276,10 +276,12 @@ test("runFlow does not timeout when timeout_hours is undefined", async () => {
 // ---------------------------------------------------------------------------
 
 function fakeNotifier(events: NotifyEvent[]): Notifier {
-  return new Notifier(
-    [{ send: async (e: NotifyEvent) => void events.push(e) }],
-    { on_start: true, on_op_complete: true, on_failure: true, on_complete: true },
-  );
+  return new Notifier([{ send: async (e: NotifyEvent) => void events.push(e) }], {
+    on_start: true,
+    on_op_complete: true,
+    on_failure: true,
+    on_complete: true,
+  });
 }
 
 test("runTask fires start and complete notifications", async () => {
@@ -303,4 +305,72 @@ test("runFlow fires op_failure notification on task error", async () => {
   const runner = new Runner(flowCfg, { dryRun: true, notifier: fakeNotifier(events) });
   await runner.runFlow("stops").catch(() => {});
   expect(events.some((e) => e.kind === "op_failure" && e.opName === "boom")).toBe(true);
+});
+
+test("runTasks sends one A+B start and one complete event", async () => {
+  const events: NotifyEvent[] = [];
+  const planCfg: BoltConfig = {
+    ...testCfg,
+    tasks: {
+      update: [{ uses: "ue/update_engine" }, { uses: "ue/update_project" }],
+      build: [{ uses: "ue/build", with: { target: "editor" } }],
+      build_editor: [{ call: "build", with: { config: "debuggame" } }],
+    },
+  };
+  const runner = new Runner(planCfg, {
+    dryRun: true,
+    notifier: fakeNotifier(events),
+  });
+
+  await runner.runTasks(["update", "build_editor"], { config: "debuggame" });
+
+  const starts = events.filter((event) => event.kind === "start");
+  const completes = events.filter((event) => event.kind === "complete");
+  expect(starts).toHaveLength(1);
+  expect(completes).toHaveLength(1);
+  expect(starts[0].plan?.tasks.map((task) => task.name)).toEqual(["update", "build_editor"]);
+  expect(completes[0].results?.map((result) => result.op)).toEqual(["update", "build_editor"]);
+});
+
+test("runTasks fails fast with one partial final summary", async () => {
+  const events: NotifyEvent[] = [];
+  const ran: string[] = [];
+  const failing: BoltConfig = {
+    ...testCfg,
+    tasks: {
+      first: [{ run: "echo first" }],
+      boom: [{ uses: "missing/run" }],
+      later: [{ run: "echo later" }],
+    },
+  };
+  const runner = new Runner(failing, {
+    dryRun: true,
+    notifier: fakeNotifier(events),
+    onStep: (step) => ran.push(step),
+  });
+
+  await expect(runner.runTasks(["first", "boom", "later"])).rejects.toThrow(
+    'Unknown plugin namespace: "missing"',
+  );
+
+  expect(events.filter((event) => event.kind === "start")).toHaveLength(1);
+  expect(events.filter((event) => event.kind === "op_failure")).toHaveLength(1);
+  const complete = events.find((event) => event.kind === "complete");
+  expect(complete?.results?.map((result) => result.op)).toEqual(["first", "boom"]);
+  expect(ran).not.toContain("echo later");
+});
+
+test("planning errors do not start a notification lifecycle", async () => {
+  const events: NotifyEvent[] = [];
+  const invalid: BoltConfig = {
+    ...testCfg,
+    tasks: { outer: [{ call: "missing" }] },
+  };
+  const runner = new Runner(invalid, {
+    dryRun: true,
+    notifier: fakeNotifier(events),
+  });
+
+  await expect(runner.runTask("outer")).rejects.toThrow('Unknown task: "missing"');
+  expect(events).toEqual([]);
 });
