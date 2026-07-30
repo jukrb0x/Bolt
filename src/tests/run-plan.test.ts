@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BoltConfig } from "../config";
-import { resolveRunPlan } from "../run-plan";
+import { formatPlanErrors, resolveRunPlan } from "../run-plan";
 import { testCfg } from "./env";
 
 const cfg: BoltConfig = {
@@ -10,7 +10,7 @@ const cfg: BoltConfig = {
     build: [{ uses: "ue/build", with: { target: "editor", config: "development" } }],
     build_editor: [{ call: "build", with: { config: "debuggame" } }],
   },
-  flows: { daily: { steps: ["update", "build_editor"], continue_on_fail: [] } },
+  flows: { daily: { steps: ["update", "build_editor"], continue_on_fail: ["build_editor"] } },
 };
 
 test("resolves A+B task hierarchy in typed order", () => {
@@ -47,10 +47,89 @@ test("resolves effective params through a call", () => {
   });
 });
 
+test("materializes flow continuation policy in planned tasks", () => {
+  const result = resolveRunPlan(cfg, { kind: "flow", name: "daily", params: {} });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(
+    result.plan.tasks.map(({ name, continueOnFailure }) => ({ name, continueOnFailure })),
+  ).toEqual([
+    { name: "update", continueOnFailure: false },
+    { name: "build_editor", continueOnFailure: true },
+  ]);
+});
+
+test("keeps ad-hoc task plans fail-fast", () => {
+  const result = resolveRunPlan(cfg, {
+    kind: "tasks",
+    names: ["build_editor"],
+    params: {},
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.plan.tasks[0].continueOnFailure).toBe(false);
+});
+
 test("returns structured errors without a partial plan", () => {
   const result = resolveRunPlan(cfg, { kind: "tasks", names: ["missing"], params: {} });
   expect(result).toEqual({
     ok: false,
     errors: [{ path: "tasks[0]", message: 'Unknown task: "missing"' }],
   });
+});
+
+test("resolves interpolated run nodes with failure policy", () => {
+  const runCfg: BoltConfig = {
+    ...cfg,
+    tasks: {
+      script: [{ run: "echo ${{ params.message }}", "continue-on-error": true }],
+    },
+  };
+  const result = resolveRunPlan(runCfg, {
+    kind: "tasks",
+    names: ["script"],
+    params: { message: "hello" },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.plan.tasks[0].nodes).toEqual([
+    { kind: "run", command: "echo hello", continueOnError: true },
+  ]);
+});
+
+test("returns a structured unknown-flow error", () => {
+  expect(resolveRunPlan(cfg, { kind: "flow", name: "missing", params: {} })).toEqual({
+    ok: false,
+    errors: [{ path: "flow", message: 'Unknown flow: "missing"' }],
+  });
+});
+
+test("returns a structured call-cycle error with the complete path", () => {
+  const cycleCfg: BoltConfig = {
+    ...cfg,
+    tasks: {
+      first: [{ call: "second" }],
+      second: [{ call: "first" }],
+    },
+  };
+
+  expect(resolveRunPlan(cycleCfg, { kind: "tasks", names: ["first"], params: {} })).toEqual({
+    ok: false,
+    errors: [
+      {
+        path: "tasks[0].steps[0].call.steps[0].call",
+        message: "Task call cycle: first -> second -> first",
+      },
+    ],
+  });
+});
+
+test("formats structured plan errors", () => {
+  expect(
+    formatPlanErrors([
+      { path: "tasks[0]", message: "first" },
+      { path: "tasks[1]", message: "second" },
+    ]),
+  ).toBe("tasks[0]: first\ntasks[1]: second");
 });
