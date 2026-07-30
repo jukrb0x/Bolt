@@ -40,6 +40,19 @@ test("runTask throws on unknown task", async () => {
 // call composition + cycle detection
 // ---------------------------------------------------------------------------
 
+test("rejects legacy task references at runtime with a migration hint", async () => {
+  const legacy: BoltConfig = {
+    ...testCfg,
+    tasks: {
+      inner: [{ run: "echo inner" }],
+      outer: [{ uses: "task/inner" }],
+    },
+  };
+  await expect(new Runner(legacy, { dryRun: true }).runTask("outer")).rejects.toThrow(
+    'replace with "call: inner"',
+  );
+});
+
 test("call executes a task inline without mutating its definition", async () => {
   const ran: string[] = [];
   const composed: BoltConfig = {

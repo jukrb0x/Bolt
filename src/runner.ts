@@ -302,6 +302,9 @@ export class Runner {
     if (slashIdx === -1) throw new Error(`Invalid uses format (expected "ns/op"): "${uses}"`);
     const ns = uses.slice(0, slashIdx);
     const op = uses.slice(slashIdx + 1);
+    if (ns === "task") {
+      throw new Error(`legacy task reference "${uses}"; replace with "call: ${op}"`);
+    }
 
     // Interpolated step.with, then run params applied as a shallow override (params win).
     const yamlParams = Object.fromEntries(
