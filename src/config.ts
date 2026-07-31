@@ -45,6 +45,7 @@ const CallStepSchema = StepOptionsSchema.extend({
 const RunStepSchema = z.object({
   run: z.string().min(1),
   "continue-on-error": z.boolean().optional(),
+  with: z.never().optional(),
   uses: z.never().optional(),
   call: z.never().optional(),
 });
