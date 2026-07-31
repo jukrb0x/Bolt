@@ -137,6 +137,24 @@ test("rejects steps with multiple execution fields", async () => {
   await expect(loadConfig(path.join(dir, "bolt.yaml"))).rejects.toThrow();
 });
 
+test("rejects with parameters on run steps", async () => {
+  const shared = SHARED_YAML.replace(
+    "  start: [{ uses: ue/start }]",
+    "  start:\n    - run: echo hi\n      with: { mode: debug }",
+  );
+  const dir = makeConfigDir(shared, LOCAL_YAML);
+  const configPath = path.join(dir, "bolt.yaml");
+
+  await expect(loadConfig(configPath)).rejects.toThrow();
+
+  const result = await checkConfig(configPath);
+  expect(result.ok).toBe(false);
+  expect(result.errors).toContainEqual({
+    path: "tasks.start.0",
+    message: "Invalid input",
+  });
+});
+
 test("rejects legacy task references with a migration hint", async () => {
   const shared = SHARED_YAML.replace(
     "  start: [{ uses: ue/start }]",
