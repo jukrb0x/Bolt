@@ -59,9 +59,32 @@ export type DescribeFunction = (
   params: Record<string, string>,
 ) => string | undefined;
 
+export type AiMode = false | true | "confirm";
+
+export interface HandlerManifest {
+  description?: string;
+  ai: AiMode;
+  params?: import("zod").ZodTypeAny;
+  /** Draft-07 JSON Schema emitted from the flat zod subset. */
+  paramsSchema?: Record<string, unknown>;
+}
+
+/**
+ * Normalized plugin metadata generated from plugin code at load time.
+ * Not a file, and `deps` is intentionally absent.
+ */
+export interface PluginManifest {
+  namespace: string;
+  version: string;
+  description: string;
+  metadata?: import("zod").ZodTypeAny;
+  handlers: Record<string, HandlerManifest>;
+}
+
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
+  manifest?: PluginManifest;
   describe?: DescribeFunction;
 }
 
@@ -72,6 +95,20 @@ export interface RunOptions {
   dryRun?: boolean;
 }
 
+export interface HandlerDef<T = Record<string, unknown>> {
+  description?: string;
+  ai: AiMode;
+  params?: import("zod").ZodType<T>;
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void>;
+}
+
+export interface PluginMeta<TMeta = unknown> {
+  namespace: string;
+  version: string;
+  description: string;
+  metadata?: import("zod").ZodType<TMeta>;
+}
+
 // --- Public type declarations for decorator & base class ---
 // The actual implementations live in plugin.ts and are available at runtime
 // via the bundled binary. We declare types here so dts-bundle-generator
@@ -79,29 +116,36 @@ export interface RunOptions {
 
 /**
  * Method decorator — mark a method as a plugin handler.
- * Only decorated methods are exposed as handlers by PluginBase.
- *
- * @param description  Optional description template for `bolt ai`.
- * @param alias        Optional handler name override (defaults to method name).
+ * The string form remains valid. The object form carries ai and params.
  */
 export declare function handler(
   description?: string,
   alias?: string,
 ): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
 
+export declare function handler(options: {
+  description?: string;
+  ai?: AiMode;
+  params?: import("zod").ZodTypeAny;
+  alias?: string;
+}): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
+
 /**
  * Base class for class-based plugins.
  * Only methods decorated with @handler() are exposed as handlers.
+ * Lifecycle hooks stay on the instance and are not part of PluginManifest.
  */
 export declare abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
-  descriptor?: PluginDescriptor<any>;
+  version: string;
+  description: string;
+  metadata?: import("zod").ZodTypeAny;
   config?: unknown;
   deps?: Record<string, BoltPlugin>;
   get handlers(): Record<string, BoltPluginHandler>;
+  get manifest(): PluginManifest;
   describe(handler: string, params: Record<string, string>): string | undefined;
 
-  // Lifecycle hooks (optional — override in subclass)
   onInit?(ctx: BoltPluginContext): Promise<void>;
   onBeforeStep?(
     handlerName: string,
@@ -114,46 +158,48 @@ export declare abstract class PluginBase implements BoltPlugin {
     ctx: BoltPluginContext,
   ): Promise<void>;
 
-  static withDescriptor<TConfig = unknown>(
-    desc: PluginDescriptor<TConfig>,
+  static withDescriptor<TMeta = unknown>(
+    meta: PluginMeta<TMeta>,
   ): {
     new (
-      config?: TConfig,
+      config?: unknown,
       deps?: Record<string, BoltPlugin>,
     ): PluginBase & {
-      config: TConfig | undefined;
+      config: unknown;
       deps: Record<string, BoltPlugin> | undefined;
-      descriptor: PluginDescriptor<TConfig>;
+      metadata?: import("zod").ZodType<TMeta>;
+      manifest: PluginManifest;
     };
   };
 }
 
-// --- Plugin descriptor ---
+/**
+ * Build one handler definition. `ai` defaults to false.
+ * `params` must be the flat zod subset; the registry stores its JSON Schema.
+ */
+export declare function defineHandler<T = Record<string, string>>(
+  meta: {
+    description?: string;
+    ai?: AiMode;
+    params?: import("zod").ZodType<T>;
+  },
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void>,
+): HandlerDef<T>;
 
-export interface PluginDescriptor<TConfig = unknown> {
+/**
+ * Define a plugin object. This used to return a descriptor for
+ * `PluginBase.withDescriptor`; it now returns the plugin (public API break).
+ * Class plugins pass `PluginMeta` to `withDescriptor` instead.
+ */
+export declare function definePlugin<TMeta = unknown>(def: {
   namespace: string;
   version: string;
   description: string;
-  configSchema?: import("zod").ZodType<TConfig>;
-  deps?: string[];
-}
+  metadata?: import("zod").ZodType<TMeta>;
+  handlers: Record<string, HandlerDef<any>>;
+}): BoltPlugin & { manifest: PluginManifest };
 
-/**
- * Define a plugin descriptor. Pass to `PluginBase.withDescriptor()`.
- */
-export declare function definePlugin<TConfig = unknown>(
-  opts: PluginDescriptor<TConfig>,
-): PluginDescriptor<TConfig>;
-
-/**
- * Parameter decorator — document a named parameter for a handler method.
- */
-export declare function param(
-  name: string,
-  description: string,
-): (target: any, propertyKey: string, parameterIndex: number) => void;
-
-/** Optional lifecycle hooks for class-based plugins. */
+/** Optional lifecycle hooks for class-based plugins. Not part of PluginManifest. */
 export interface PluginLifecycleHooks {
   onInit?(ctx: BoltPluginContext): Promise<void>;
   onBeforeStep?(

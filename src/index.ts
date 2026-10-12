@@ -7,7 +7,18 @@ export { loadConfig, checkConfig } from "./config";
 export type { BoltConfig, Project, RepoConfig, Target, Flow, Step } from "./config";
 
 // Types
-export type { BoltPlugin, BoltPluginHandler, BoltPluginContext, BoltLogger } from "./plugin";
+export type {
+  AiMode,
+  BoltPlugin,
+  BoltPluginHandler,
+  BoltPluginContext,
+  BoltLogger,
+  HandlerDef,
+  HandlerManifest,
+  PluginManifest,
+  PluginMeta,
+  PluginLifecycleHooks,
+} from "./plugin";
 
-// Plugin API (class-based)
-export { PluginBase, handler } from "./plugin";
+// Plugin API. definePlugin returns a plugin object; class plugins use withDescriptor.
+export { PluginBase, defineHandler, definePlugin, handler } from "./plugin";

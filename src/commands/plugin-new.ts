@@ -22,47 +22,42 @@ export async function scaffoldPlugin({ name, baseDir, isUser }: ScaffoldOptions)
 
   mkdirSync(pluginDir, { recursive: true });
 
-  const indexTs = `import { definePlugin, PluginBase, handler, param } from "boltstack";
+  const indexTs = `import { defineHandler, definePlugin } from "boltstack";
 import type { BoltPluginContext } from "boltstack";
+import { z } from "zod";
 
-const descriptor = definePlugin({
+export default definePlugin({
   namespace: "${name}",
   version: "0.1.0",
   description: "TODO: describe your plugin",
+  handlers: {
+    run: defineHandler(
+      {
+        description: "Run \${input}",
+        params: z.object({
+          input: z.string().describe("Input value to process"),
+        }),
+      },
+      async (params, ctx: BoltPluginContext) => {
+        ctx.logger.info(\`${name}/run called with: \${JSON.stringify(params)}\`);
+      },
+    ),
+  },
 });
-
-export default class extends PluginBase.withDescriptor(descriptor) {
-  @handler("Run ${name}")
-  async run(
-    @param("input", "Input value to process")
-    params: Record<string, string>,
-    ctx: BoltPluginContext,
-  ) {
-    ctx.logger.info(\`${name}/run called with: \${JSON.stringify(params)}\`);
-  }
-}
 `;
-
-  const tsconfig = {
-    compilerOptions: {
-      experimentalDecorators: true,
-    },
-  };
 
   const packageJson = {
     name,
     type: "module",
+    dependencies: {
+      zod: "^3",
+    },
     devDependencies: {
       boltstack: "latest",
     },
   };
 
   writeFileSync(path.join(pluginDir, "index.ts"), indexTs, "utf8");
-  writeFileSync(
-    path.join(pluginDir, "tsconfig.json"),
-    JSON.stringify(tsconfig, null, 2) + "\n",
-    "utf8",
-  );
   writeFileSync(
     path.join(pluginDir, "package.json"),
     JSON.stringify(packageJson, null, 2) + "\n",

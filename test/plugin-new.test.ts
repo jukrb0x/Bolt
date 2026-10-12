@@ -10,24 +10,18 @@ afterEach(() => {
 });
 
 describe("scaffoldPlugin", () => {
-  test("generates class-based plugin template", async () => {
+  test("generates a definePlugin template", async () => {
     const pluginDir = await scaffoldPlugin({ name: "my-deploy", baseDir: TEST_DIR, isUser: false });
     const indexTs = readFileSync(path.join(pluginDir, "index.ts"), "utf8");
 
-    // Must import from "boltstack"
     expect(indexTs).toContain('from "boltstack"');
-    // Must use definePlugin
     expect(indexTs).toContain("definePlugin(");
-    // Must use PluginBase.withDescriptor
-    expect(indexTs).toContain("PluginBase.withDescriptor(");
-    // Must use @handler decorator
-    expect(indexTs).toContain("@handler(");
-    // Must use @param decorator
-    expect(indexTs).toContain("@param(");
-    // Must have the plugin namespace
+    expect(indexTs).toContain("defineHandler(");
+    expect(indexTs).not.toContain("PluginBase.withDescriptor(");
+    expect(indexTs).not.toContain("@handler(");
+    expect(indexTs).not.toContain("@param(");
     expect(indexTs).toContain('"my-deploy"');
-    // Must export default class
-    expect(indexTs).toContain("export default");
+    expect(indexTs).toContain("export default definePlugin");
   });
 
   test("generates package.json with boltstack as devDependency", async () => {
@@ -39,14 +33,13 @@ describe("scaffoldPlugin", () => {
     expect(pkg.dependencies?.boltstack).toBeUndefined();
   });
 
-  test("generates tsconfig.json with experimentalDecorators", async () => {
+  test("does not scaffold a decorator tsconfig", async () => {
     const pluginDir = await scaffoldPlugin({
       name: "with-tsconfig",
       baseDir: TEST_DIR,
       isUser: false,
     });
-    expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(true);
-    const tsconfig = JSON.parse(readFileSync(path.join(pluginDir, "tsconfig.json"), "utf8"));
-    expect(tsconfig.compilerOptions.experimentalDecorators).toBe(true);
+    expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(false);
+    expect(existsSync(path.join(pluginDir, "index.ts"))).toBe(true);
   });
 });

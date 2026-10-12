@@ -21,8 +21,9 @@ bolt plugin new myplugin
 This creates a directory at `.bolt/plugins/myplugin/` with:
 
 - `index.ts` - Plugin entry point
-- `package.json` - Dependencies
-- `tsconfig.json` - TypeScript configuration
+- `package.json` - Dependencies (`zod` and `boltstack`)
+
+Bolt builds a manifest from this file when the plugin loads. Do not add a JSON or YAML manifest.
 
 ## Step 2: Install Dependencies
 
@@ -31,64 +32,44 @@ cd .bolt/plugins/myplugin
 bun install
 ```
 
-This installs the `boltstack` package, which provides TypeScript definitions for the plugin API.
+This installs `boltstack` and `zod`.
 
 ## Step 3: Implement Plugin
 
-Edit `index.ts`:
+`bolt plugin new` writes `index.ts` in this shape. `definePlugin` returns the plugin object:
 
 ```typescript
-import type { BoltPlugin } from "bolt";
+import { defineHandler, definePlugin } from "boltstack";
+import type { BoltPluginContext } from "boltstack";
+import { z } from "zod";
 
-const plugin: BoltPlugin = {
+export default definePlugin({
   namespace: "myplugin",
+  version: "0.1.0",
+  description: "TODO: describe your plugin",
   handlers: {
-    // Handler: runs a custom command
-    run: async (params, ctx) => {
-      const { command, args } = params;
-      ctx.logger.info(`Running: ${command} ${args?.join(" ")}`);
-
-      if (ctx.dryRun) {
-        ctx.logger.info("[dry-run] skipping execution");
-        return;
-      }
-
-      // Execute the command
-      const { execa } = require("child_process");
-      return new Promise((resolve, reject) => {
-        const proc = execa(command, args.split(" "), {
-          cwd: ctx.cfg.project.project_path,
-          stdio: "inherit",
-        });
-        proc.on("close", (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(`Command failed with code ${code}`));
-        });
-      });
-    },
-
-    // Handler: sends a notification
-    notify: async (params, ctx) => {
-      const { message, webhook_url } = params;
-      ctx.logger.info(`Sending notification: ${message}`);
-
-      if (ctx.dryRun) {
-        ctx.logger.info("[dry-run] skipping notification");
-        return;
-      }
-
-      // Send notification via webhook
-      // Implementation depends on your notification service
-    },
+    run: defineHandler(
+      {
+        description: "Run ${input}",
+        params: z.object({
+          input: z.string().describe("Input value to process"),
+        }),
+      },
+      async (params, ctx: BoltPluginContext) => {
+        ctx.logger.info(`myplugin/run called with: ${JSON.stringify(params)}`);
+      },
+    ),
   },
-};
-
-export default plugin;
+});
 ```
+
+`description` is the task-line template (`${input}` is replaced with the step's `with:` value). `ai` defaults to `false`. Set `true` to list the handler for agents, or `"confirm"` to mark it as something the user runs themselves. `"confirm"` is metadata only; `bolt run` does not prompt. Params are a flat zod object: `z.string()`, `z.enum()`, `z.coerce.number()`, `z.coerce.boolean()`, plus `.optional()`, `.default()`, and `.describe()`. Bolt checks them before the handler runs.
+
+Class plugins still work. Keep `@handler("...")`, or use `@handler({ description, ai, params, alias })`. Plugin-level fields go through `PluginBase.withDescriptor({ namespace, version, description, metadata })`, not through `definePlugin`. `onInit`, `onBeforeStep`, and `onAfterStep` stay on the instance.
 
 ## Step 4: Use in bolt.yaml
 
-Add a task that uses your handlers and reuses the built-in `build` task with `call`:
+Add a task that uses your handler and reuses the built-in `build` task with `call`:
 
 ```yaml
 tasks:
@@ -97,11 +78,7 @@ tasks:
     - call: build
     - uses: myplugin/run
       with:
-        command: npm test
-    - uses: myplugin/notify
-      with:
-        message: "CI build complete"
-        webhook_url: ${{ env.SLACK_WEBHOOK }}
+        input: npm test
 ```
 
 ## Step 5: Test the Plugin
@@ -114,8 +91,7 @@ Expected output:
 
 ```
 [dry-run] ue/build target=editor
-[dry-run] myplugin/run command=npm test
-[dry-run] myplugin/notify message=CI build complete
+[dry-run] myplugin/run input=npm test
 ```
 
 Run without `--dry-run` to execute for real:
@@ -126,88 +102,52 @@ bolt run ci
 
 ## Complete Plugin Example
 
-Here's a more comprehensive example with error handling:
+A second handler can set `ai` and coerce a number. The manifest still comes from this code:
 
 ```typescript
-import type { BoltPlugin } from "bolt";
+import { defineHandler, definePlugin } from "boltstack";
+import type { BoltPluginContext } from "boltstack";
+import { z } from "zod";
 
-const plugin: BoltPlugin = {
+export default definePlugin({
   namespace: "deploy",
+  version: "0.1.0",
+  description: "Ship a build",
   handlers: {
-    "to-s3": async (params, ctx) => {
-      const { bucket, region } = params;
-
-      ctx.logger.info(`Deploying to S3`);
-      ctx.logger.info(`Bucket: ${bucket}`);
-      ctx.logger.info(`Region: ${region}`);
-
-      if (ctx.dryRun) {
-        ctx.logger.info("[dry-run] skipping deployment");
-        return;
-      }
-
-      const { project } = ctx.cfg;
-      const buildPath = `./Builds/${project.name}`;
-
-      // Upload to S3
-      const { S3Client } = require("@aws-sdk/client-s3");
-      const client = new S3Client({ region });
-
-      const files = await fs.promises.readdir(buildPath);
-      for (const file of files) {
-        ctx.logger.info(`Uploading ${file}`);
-        await client.putObject({
-          Bucket: bucket,
-          Key: `${project.name}/${file}`,
-          Body: await fs.promises.readFile(`${buildPath}/${file}`),
-        });
-      }
-
-      ctx.logger.info("Deployment complete");
-    },
-
-    notify: async (params, ctx) => {
-      const { message, channel } = params;
-
-      ctx.logger.info(`Sending notification: ${message}`);
-
-      if (ctx.dryRun) {
-        return;
-      }
-
-      // Send Slack notification
-      const { WebClient } = require("@slack/web-api");
-      const client = new WebClient(process.env.SLACK_TOKEN);
-
-      await client.chat.postMessage({
-        channel,
-        text: message,
-      });
-    },
+    run: defineHandler(
+      {
+        description: "Deploy ${bucket}",
+        ai: "confirm",
+        params: z.object({
+          bucket: z.string().describe("Destination bucket"),
+          retries: z.coerce.number().default(1),
+        }),
+      },
+      async (params, ctx: BoltPluginContext) => {
+        ctx.logger.info(`Deploying to ${params.bucket} (${params.retries} retries)`);
+        if (ctx.dryRun) return;
+      },
+    ),
   },
-};
-
-export default plugin;
+});
 ```
 
 ## Testing the Plugin
 
 ```bash
-# Install dependencies
 cd .bolt/plugins/deploy
-bun install @aws-sdk/client-s3 @slack/web-api
+bun install
 ```
 
-Add a task that calls the handler, then run it. Params passed on the command line
-override the step's `with:` values:
+Add a task that calls the handler, then run it. Params passed on the command line override the step's `with:` values:
 
 ```yaml
 tasks:
-  ship: [{ uses: deploy/to-s3, with: { bucket: my-bucket, region: us-east-1 } }]
+  ship: [{ uses: deploy/run, with: { bucket: my-bucket } }]
 ```
 
 ```bash
-bolt run ship --bucket=my-bucket --region=us-east-1 --dry-run
+bolt run ship --bucket=my-bucket --dry-run
 ```
 
 ## See Also
