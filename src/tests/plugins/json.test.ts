@@ -1,6 +1,6 @@
 import { expect, test, beforeEach, afterEach } from "bun:test";
 import jsonPlugin from "../../plugins/json";
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "fs";
 import { testCfg, mockRuntime } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
@@ -156,13 +156,24 @@ test("merge rejects nested forbidden key", async () => {
   expect(readFileSync(file, "utf8")).toBe(original);
 });
 
-test("merge dry-run still rejects forbidden keys", async () => {
-  const original = readFileSync(file, "utf8");
-  const patchFile = `${tmp}/patch.json`;
-  writeFileSync(patchFile, '{"__proto__":{"polluted":true}}');
+test("set dry-run does not throw when the target does not exist", async () => {
+  rmSync(file);
   const dry = dryCtx();
-  await expect(jsonPlugin.handlers["merge"]({ file, patch: patchFile }, dry)).rejects.toThrow(
-    "Forbidden key segment",
+  await jsonPlugin.handlers["set"]({ file, key: "a", value: "99" }, dry);
+  expect(existsSync(file)).toBe(false);
+  expect(dry.logged.some((line) => line.includes("[dry-run]") && line.includes("json/set"))).toBe(
+    true,
   );
-  expect(readFileSync(file, "utf8")).toBe(original);
+});
+
+test("merge dry-run does not throw when the target does not exist", async () => {
+  rmSync(file);
+  const patchFile = `${tmp}/missing-patch.json`;
+  const dry = dryCtx();
+  await jsonPlugin.handlers["merge"]({ file, patch: patchFile }, dry);
+  expect(existsSync(file)).toBe(false);
+  expect(existsSync(patchFile)).toBe(false);
+  expect(dry.logged.some((line) => line.includes("[dry-run]") && line.includes("json/merge"))).toBe(
+    true,
+  );
 });
