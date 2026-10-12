@@ -102,7 +102,7 @@ vars:
   some_key: some_local_value
 ```
 
-Commit `bolt.local.example.yaml` so teammates know the file is optional and only carries vars. `bolt init` writes `bolt.yaml` only.
+Commit `bolt.local.example.yaml` so teammates know the file is optional and only carries vars. Commit `bolt.yaml` itself. The core file is generic `version: 1`.
 
 ### `.bolt/` — generated and local
 

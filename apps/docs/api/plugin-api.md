@@ -2,62 +2,111 @@
 title: "Plugin API"
 ---
 
-Bolt's plugin system allows you to extend functionality with custom handlers.
+Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and `apiVersion` `1` (`PLUGIN_API_VERSION`).
 
-## BoltPlugin Interface
+The manifest is not a file. `defineHandler` and `@handler` fill it in memory when the plugin is defined.
+
+## definePlugin
 
 ```typescript
-interface BoltPlugin {
-  namespace: string;
-  handlers: Record<string, BoltPluginHandler>;
+import { defineHandler, definePlugin } from "boltstack";
+import type { BoltPluginContext } from "boltstack";
+import { z } from "zod";
+
+export default definePlugin({
+  namespace: "deploy",
+  version: "0.1.0",
+  description: "Ship a build",
+  handlers: {
+    to_s3: defineHandler(
+      {
+        description: "Upload to ${bucket}",
+        ai: true,
+        params: z.object({
+          bucket: z.string().describe("Destination bucket"),
+          region: z.string().default("us-east-1"),
+        }),
+      },
+      async (params, ctx: BoltPluginContext) => {
+        ctx.logger.info(`Deploying to ${params.bucket} (${params.region})`);
+        if (ctx.dryRun) return;
+        ctx.logger.info(`Project: ${ctx.cfg.project.name}`);
+      },
+    ),
+  },
+});
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `namespace` | yes | Used as `uses: namespace/handler` |
+| `version` | yes | Plugin version string, not the CLI version |
+| `description` | yes | Plugin summary |
+| `apiVersion` | no | Must be `1` when set. Omitted means `1` |
+| `metadata` | no | Zod schema for this plugin's `bolt.yaml` config. The runner does not check it |
+| `handlers` | yes | At least one `defineHandler()` result |
+
+`definePlugin` used to return a descriptor for `withDescriptor`. It now returns the plugin object.
+
+A plugin that exposes a `manifest` getter without `Symbol.for("boltstack.plugin")` is rejected. A branded plugin whose `apiVersion` is not `1` is rejected. The registry does not rewrite a foreign `apiVersion` to `1`.
+
+## defineHandler
+
+```typescript
+defineHandler(meta, fn);
+```
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `description` | none | Task line. `${name}` is replaced from params |
+| `ai` | `false` | `false`, `true`, or `"confirm"`. `"confirm"` does not prompt |
+| `params` | none | Flat zod object. Checked before `fn` runs |
+
+Allowed param fields: `z.string()`, `z.enum()`, `z.coerce.number()`, `z.coerce.boolean()`, with `.optional()`, `.default()`, and `.describe()` only.
+
+`fn` receives the parsed params and a `BoltPluginContext`.
+
+## Class plugins
+
+```typescript
+import { PluginBase, handler } from "boltstack";
+import type { BoltPluginContext } from "boltstack";
+import { z } from "zod";
+
+export default class DeployPlugin extends PluginBase.withDescriptor({
+  namespace: "deploy",
+  version: "0.1.0",
+  description: "Ship a build",
+}) {
+  @handler({
+    description: "Upload to ${bucket}",
+    params: z.object({ bucket: z.string() }),
+  })
+  async to_s3(params: { bucket: string }, ctx: BoltPluginContext) {
+    ctx.logger.info(params.bucket);
+  }
 }
 ```
 
-### namespace
+`@handler("...")` still works. The object form takes `description`, `ai`, `params`, and `alias`. Only decorated methods become handlers. `onInit`, `onBeforeStep`, and `onAfterStep` are lifecycle hooks on the instance. They are not copied into the manifest.
 
-The unique identifier for your plugin. Used in `uses:` steps as `myplugin/handler-name`.
+The host compiles class files with legacy decorators. It does not read the project's `tsconfig`.
 
-```typescript
-namespace: "myplugin";
-```
-
-### handlers
-
-A map of handler names to handler functions.
+## Brand
 
 ```typescript
-handlers: {
-  deploy: async (params, ctx) => { /* ... */ },
-  notify: async (params, ctx) => { /* ... */ },
-}
+Symbol.for("boltstack.plugin");
 ```
 
-## BoltPluginHandler Type
+`definePlugin` and the `PluginBase` constructor set that symbol and `apiVersion: 1`. `instanceof` is not the check. Two copies of the library would fail `instanceof` even when the protocol matches, so the registry reads the shared symbol and the numeric `apiVersion`.
 
-```typescript
-type BoltPluginHandler = (params: Record<string, string>, ctx: BoltPluginContext) => Promise<void>;
-```
+Plain handler maps with no brand still load. Their manifest is reflected as `ai: false` and no params. New plugins should use `definePlugin`.
 
-### params
-
-Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation), overridden by CLI-level params.
-
-```yaml
-- uses: myplugin/deploy
-  with:
-    env: staging
-    region: us-east
-```
-
-### ctx
-
-The BoltPluginContext provides access to configuration, logging, and execution state.
-
-## BoltPluginContext Interface
+## BoltPluginContext
 
 ```typescript
 interface BoltPluginContext {
-  cfg: BoltConfig;
+  cfg: BoltPluginConfig;
   configDir: string;
   dryRun: boolean;
   logger: BoltLogger;
@@ -65,57 +114,13 @@ interface BoltPluginContext {
 }
 ```
 
-### cfg
+`cfg.project` is `{ name }`. Engine paths and targets are not fields of `project`. They are `cfg.plugins` entries. The `ue` entry's `config` holds `engine`, `project`, `uproject`, and `targets`.
 
-The loaded configuration. `project` is a name. Plugin metadata, including Unreal engine, project, uproject, and targets, is on `plugins`.
+`configDir` is the directory that contains `bolt.yaml`. Relative plugin paths resolve against it.
 
-```typescript
-cfg: {
-  project: {
-    name: "MyGame";
-  }
-  vars: {
-  }
-  plugins: [
-    {
-      namespace: "ue",
-      config: {
-        engine: { path: "C:/UnrealEngine", vcs: "git" },
-        project: { path: "C:/Projects/MyGame", vcs: "svn" },
-        uproject: "C:/Projects/MyGame/MyGame.uproject",
-        targets: {
-          editor: { kind: "editor", config: "development" },
-        },
-      },
-    },
-  ];
-}
-```
+`runtime` is `spawn`, `spawnSync`, `shell`, and `parseYaml`.
 
-### configDir
-
-Directory containing `bolt.yaml`. Relative plugin paths resolve against it.
-
-### runtime
-
-Runtime abstraction (`spawn`/`spawnSync`/`shell`/`parseYaml`) that works on both Bun and Node.js.
-
-### dryRun
-
-True if `--dry-run` was passed. Use to skip actual execution.
-
-```typescript
-if (ctx.dryRun) {
-  ctx.logger.info("[dry-run] skipping actual deploy");
-  return;
-}
-```
-
-### logger
-
-Structured logger for output.
-
-## BoltLogger Interface
+`dryRun` is true when `--dry-run` was passed. Return before side effects.
 
 ```typescript
 interface BoltLogger {
@@ -127,70 +132,45 @@ interface BoltLogger {
 }
 ```
 
-## Complete Example
+## bolt.yaml
 
-```typescript
-import type { BoltPlugin } from "boltstack";
-
-const plugin: BoltPlugin = {
-  namespace: "deploy",
-  handlers: {
-    to_s3: async (params, ctx) => {
-      const { bucket, region } = params;
-
-      ctx.logger.info(`Deploying to S3 bucket: ${bucket}`);
-      ctx.logger.info(`Region: ${region}`);
-
-      if (ctx.dryRun) {
-        ctx.logger.info("[dry-run] skipping upload");
-        return;
-      }
-
-      const { project } = ctx.cfg;
-      ctx.logger.info(`Project: ${project.name}`);
-
-      // Upload to S3...
-    },
-
-    notify: async (params, ctx) => {
-      const { message } = params;
-
-      ctx.logger.info(`Sending notification: ${message}`);
-
-      // Send notification...
-    },
-  },
-};
-
-export default plugin;
-```
-
-## Using in bolt.yaml
+Core keys are generic. `version` is `1`. There is no root `targets` field.
 
 ```yaml
+version: 1
+
+project:
+  name: MyGame
+
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: C:/UnrealEngine
+        vcs: git
+      project:
+        path: C:/Projects/MyGame
+        vcs: svn
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
+
 tasks:
   deploy:
     - uses: deploy/to_s3
       with:
         bucket: my-game-builds
         region: us-east-1
-    - uses: deploy/notify
-      with:
-        message: "Deploy complete!"
 ```
 
-## Type Package
+## Types
 
-Plugin types are available via the `boltstack` npm package:
-
-```bash
-bun add -d boltstack
-```
-
-This provides the type declarations for `boltstack` and `boltstack/plugins` for editor autocompletion.
+Import from `"boltstack"`. The release asset `bolt.d.ts` is wrapped as `declare module "boltstack"`. `bolt plugin new` puts `boltstack` in `devDependencies` for that module name. The host still injects the runtime module. Do not bundle a second `boltstack` or a second `zod`.
 
 ## See Also
 
-- [Plugin System](/guides/plugin-system.md) - How plugins work
-- [Built-in Handlers](./built-in-handlers.md) - Reference for existing handlers
-- [Plugin Development Tutorial](/guides/plugin-development.md) - Step-by-step guide
+- [Plugin System](/guides/plugin-system) - Load order, cache, and `BUN_BE_BUN`
+- [Plugin Development](/guides/plugin-development) - Tutorial
+- [Built-in Handlers](./built-in-handlers) - `ue`, `fs`, `json`, and the rest

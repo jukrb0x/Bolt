@@ -2,86 +2,49 @@
 title: "Plugin System"
 ---
 
-Bolt's handler system is fully extensible. A plugin is a TypeScript module that exports a `BoltPlugin` object — a namespace string and a map of async handler functions.
+A plugin is a TypeScript module that exports a plugin object: a namespace and async handlers. `uses:` steps call those handlers as `namespace/handler`.
 
-## Overview
+The manifest is built in memory from `@handler` or `defineHandler`. Bolt does not read a JSON or YAML manifest.
 
-Handlers are invoked by `uses:` steps in tasks:
+## Discovery
 
-```yaml
-tasks:
-  deploy:
-    - uses: myplugin/run
-      with:
-        env: staging
+Later layers replace an earlier plugin with the same namespace.
+
+| Priority | Scope | Location |
+| --- | --- | --- |
+| 1 (lowest) | Built-in | Compiled into the bolt binary |
+| 2 | User | `~/.bolt/plugins/<namespace>/` |
+| 3 | Project | `<project>/.bolt/plugins/<namespace>/` |
+| 4 (highest) | Explicit | `plugins:` entry in `bolt.yaml` with a `path` |
+
+A `plugins:` entry with no `path` is config for a builtin. The `ue` entry is that kind of record. It is not imported.
+
+Project directories prefer `index.ts`. Bolt compiles it and caches the JavaScript under `<project>/.bolt/.cache/plugins/`. User directories (`~/.bolt/plugins/`) load `index.js` when that file exists, and `index.ts` otherwise. An explicit `path` may point at either file. A `.ts` path is compiled.
+
+`boltstack` and `zod` are left external. The host injects one module of each name, so the plugin and the core share a single `boltstack` and a single `zod`.
+
+## Host install
+
+If `package.json` has `dependencies` and the directory has no `node_modules`, Bolt installs them by running its own executable:
+
+```text
+BUN_BE_BUN=1 <this bolt> install
 ```
 
-## Plugin Scopes
+That does not look up a `bun` binary on `PATH`. `bolt plugin new` puts `boltstack` in `devDependencies`, not `dependencies`.
 
-Plugins are discovered and registered in priority order. A later layer overwrites an earlier one for the same namespace.
+## Brand
 
-| Priority    | Scope            | Location                                       |
-| ----------- | ---------------- | ---------------------------------------------- |
-| 1 (lowest)  | Built-in         | Compiled into bolt binary                      |
-| 2           | User             | `~/.bolt/plugins/<namespace>/index.ts`         |
-| 3           | Project auto     | `<project>/.bolt/plugins/<namespace>/index.ts` |
-| 4 (highest) | Project explicit | Path declared in `bolt.yaml` under `plugins:`  |
+`definePlugin` and `PluginBase` set `Symbol.for("boltstack.plugin")` and `apiVersion` `1`. The registry accepts a branded plugin only when `apiVersion` is `1`. A `manifest` getter without that symbol is an error. See [Plugin API](/api/plugin-api).
 
-This lets you override any built-in handler by providing a plugin with the same namespace at a higher scope.
-
-## Writing a Plugin
-
-### 1. Scaffold
+## Scaffold
 
 ```bash
-bolt plugin new myplugin           # project-scope
-bolt plugin new myplugin --user    # user-scope
+bolt plugin new myplugin
+bolt plugin new myplugin --user
 ```
 
-### 2. Install Types
-
-```bash
-cd .bolt/plugins/myplugin
-bun install
-```
-
-This installs `boltstack` from npm, which provides `declare module "bolt"` so your editor resolves `import type { BoltPlugin } from "bolt"`.
-
-### 3. Implement
-
-```typescript
-import type { BoltPlugin } from "bolt";
-
-const plugin: BoltPlugin = {
-  namespace: "myplugin",
-  handlers: {
-    deploy: async (params, ctx) => {
-      const { env } = params;
-      ctx.logger.info(`Deploying to ${env}...`);
-
-      if (ctx.dryRun) {
-        ctx.logger.info("[dry-run] skipping actual deploy");
-        return;
-      }
-
-      const { project } = ctx.cfg;
-      ctx.logger.info(`Project: ${project.name}`);
-    },
-  },
-};
-
-export default plugin;
-```
-
-### 4. Register
-
-**Project-scope auto-discovery**
-
-If the plugin is at `.bolt/plugins/myplugin/index.ts`, it is discovered automatically — no `bolt.yaml` change needed.
-
-**Explicit path**
-
-For an explicit path (e.g. outside `.bolt/plugins/`):
+Writes `index.ts` and `package.json` in the plugin directory. A plugin at `.bolt/plugins/myplugin/index.ts` is discovered with no `bolt.yaml` change. An explicit path:
 
 ```yaml
 plugins:
@@ -89,80 +52,20 @@ plugins:
     path: ./tools/myplugin/index.ts
 ```
 
-## Plugin API
+Core `bolt.yaml` stays `version: 1` with `project.name`. Unreal `targets` belong under the `ue` plugin's `config`, not at the root of the file.
 
-### BoltPluginHandler
+## Handler params
 
-```typescript
-type BoltPluginHandler = (params: Record<string, string>, ctx: BoltPluginContext) => Promise<void>;
-```
+`with:` values are interpolated, then overridden by `--key=value` on `bolt run`. `defineHandler` params are checked before the function runs.
 
-`params` contains:
+`ctx.dryRun` is true for `--dry-run`. `ctx.cfg.project` is the project name. Plugin metadata, including Unreal paths, is on `ctx.cfg.plugins`. `ctx.configDir` is the `bolt.yaml` directory. `ctx.logger` is `info`, `warn`, `error`, `debug`, and `cmd`. `ctx.runtime` spawns processes.
 
-- Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation)
-- Overridden by any CLI-level params (`--key=val` passed to `bolt run`)
+## Built-in plugins
 
-### BoltPluginContext
-
-```typescript
-interface BoltPluginContext {
-  cfg: BoltConfig; // Full parsed bolt.yaml — project paths, targets, etc.
-  dryRun: boolean; // True if --dry-run was passed
-  logger: BoltLogger; // Structured logger
-}
-```
-
-### BoltLogger
-
-```typescript
-interface BoltLogger {
-  info(msg: string): void;
-  warn(msg: string): void;
-  error(msg: string): void;
-  debug(msg: string): void;
-}
-```
-
-## Built-in Plugins
-
-See [Built-in Handlers](/api/built-in-handlers.md) for the full list of built-in `ue/`, `fs/`, and `json/` handlers.
-
-## Type Package
-
-Plugin types are published to npm as `boltstack`:
-
-```bash
-bun add -d boltstack
-```
-
-`boltstack` ships a single `bolt.d.ts` containing `declare module "bolt"`. The scaffolded `tsconfig.json` includes `"boltstack"` in `compilerOptions.types`, which activates the ambient declaration so `import type { BoltPlugin } from "bolt"` resolves correctly in any TS LSP.
-
-## Overriding Built-ins
-
-To override a built-in handler, create a plugin with the same namespace at a higher scope:
-
-```typescript
-// .bolt/plugins/ue/index.ts
-import type { BoltPlugin } from "bolt";
-
-const plugin: BoltPlugin = {
-  namespace: "ue",
-  handlers: {
-    // Override the built-in build handler
-    build: async (params, ctx) => {
-      ctx.logger.info("Custom build logic...");
-      // Your implementation
-    },
-  },
-};
-
-export default plugin;
-```
-
-Since project-scope plugins have higher priority than built-ins, your custom implementation will be used instead.
+See [Built-in Handlers](/api/built-in-handlers). Overriding a builtin means shipping another plugin with the same namespace from a higher-priority scope, created with `definePlugin` so it carries the brand and `apiVersion` `1`.
 
 ## See Also
 
-- [Plugin API](/api/plugin-api.md) - API reference
-- [Plugin Development Tutorial](/guides/plugin-development.md) - Step-by-step guide
-- [Built-in Handlers](/api/built-in-handlers.md) - Existing handlers
+- [Plugin API](/api/plugin-api) - `definePlugin`, `defineHandler`, and context
+- [Plugin Development](./plugin-development) - Tutorial
+- [bolt plugin](/cli/plugin) - CLI

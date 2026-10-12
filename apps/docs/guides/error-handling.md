@@ -119,7 +119,7 @@ Bolt provides clear error messages with context.
 
 | Error                         | Cause                                              | Solution                                                                           |
 | ----------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `bolt.yaml not found`         | No config file in directory tree                   | Run `bolt init` or navigate to project root                                        |
+| `bolt.yaml not found`         | No config file in directory tree                   | Create `bolt.yaml` (`version: 1`) in the project root, or `cd` there               |
 | `bolt.local.yaml` invalid     | Local file has keys other than `vars`, or bad YAML | Keep only a `vars` map, or delete the file                                         |
 | `ue plugin config is missing` | A task uses `ue/` without ue metadata              | Add `plugins: [{ namespace: ue, config: { engine, project, uproject, targets } }]` |
 | `Unknown task: foo`           | Task name not defined                              | Run `bolt list` to see available tasks/flows                                       |

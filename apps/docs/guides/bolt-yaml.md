@@ -11,7 +11,7 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 | `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows. |
 | `bolt.local.yaml` | No (optional) | `vars` overrides only                                   | Per-machine variable overrides. A missing file is fine.             |
 
-`bolt init` writes `bolt.yaml` only. Relative paths inside plugin config resolve against the directory containing `bolt.yaml`.
+Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
 ## Model in one minute
 
