@@ -1,4 +1,11 @@
-import type { BoltPlugin } from "./plugin";
+import {
+  PluginBase,
+  hasManifestGetter,
+  isDefinedPlugin,
+  markDefinedPlugin,
+  reflectObjectManifest,
+  type BoltPlugin,
+} from "./plugin";
 import path from "path";
 import { existsSync, readdirSync, statSync, readFileSync, mkdirSync } from "fs";
 import os from "os";
@@ -33,11 +40,48 @@ function hasNodeModules(pluginDir: string): boolean {
   return existsSync(path.join(pluginDir, "node_modules"));
 }
 
+function pluginDirectory(resolved: string): string {
+  try {
+    if (existsSync(resolved) && statSync(resolved).isDirectory()) return resolved;
+  } catch {
+    // Missing path: report the parent directory with the import error.
+  }
+  return path.dirname(resolved);
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof AggregateError) {
+    const inner = error.errors.map((item) => (item instanceof Error ? item.message : String(item)));
+    const parts = [error.message, ...inner].filter(
+      (part, index, all) => part && all.indexOf(part) === index,
+    );
+    if (parts.length > 0) return parts.join("\n");
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function pluginLoadError(name: string, dir: string, error: unknown): Error {
+  return new Error(`Failed to load plugin "${name}" from ${dir}:\n${errorText(error)}`);
+}
+
 export class PluginRegistry {
   private plugins = new Map<string, BoltPlugin>();
 
+  /**
+   * Class plugins and definePlugin() already carry a manifest.
+   * Plain handler maps are reflected here (ai: false, no params).
+   */
+  private normalize(plugin: BoltPlugin): BoltPlugin {
+    if (isDefinedPlugin(plugin)) return plugin;
+    // Another bundled copy of PluginBase fails instanceof, but its manifest is still a getter.
+    if (plugin instanceof PluginBase || hasManifestGetter(plugin)) return plugin;
+    plugin.manifest = reflectObjectManifest(plugin);
+    return plugin;
+  }
+
   register(plugin: BoltPlugin): void {
-    this.plugins.set(plugin.namespace, plugin);
+    const loaded = this.normalize(plugin);
+    this.plugins.set(loaded.namespace, loaded);
   }
 
   get(namespace: string): BoltPlugin | undefined {
@@ -136,14 +180,18 @@ export class PluginRegistry {
       return instance;
     }
 
-    // POJO plugin (backward compatible)
+    // POJO plugin (backward compatible). definePlugin() objects keep their manifest.
     if (!exported || !exported.handlers) {
       throw new Error(
         `Plugin "${namespace}" has no default export with handlers.\n` +
-          `For class-based plugins, ensure you export a class extending PluginBase.`,
+          `For class-based plugins, ensure you export a class extending PluginBase. ` +
+          `New plugins should export definePlugin().`,
       );
     }
-    return { ...exported, namespace: exported.namespace || namespace };
+    const defined = isDefinedPlugin(exported);
+    const plugin: BoltPlugin = { ...exported, namespace: exported.namespace || namespace };
+    if (defined) markDefinedPlugin(plugin);
+    return plugin;
   }
 
   /**
@@ -164,13 +212,10 @@ export class PluginRegistry {
       let candidate: string | null = null;
 
       if (existsSync(tsFile) && projectRoot) {
-        // JIT compile .ts → cached .js
         try {
           candidate = await this.jitCompile(entry, entryPath, projectRoot);
-        } catch (e: any) {
-          console.warn(`[Bolt] JIT compilation failed for plugin "${entry}": ${e.message}`);
-          // Fall back to pre-compiled JS if available
-          if (existsSync(jsFile)) candidate = jsFile;
+        } catch (e: unknown) {
+          throw pluginLoadError(entry, entryPath, e);
         }
       } else if (existsSync(jsFile)) {
         candidate = jsFile;
@@ -182,8 +227,8 @@ export class PluginRegistry {
       if (candidate) {
         try {
           await this.loadFromPath(entry, candidate);
-        } catch (e: any) {
-          console.warn(`[Bolt] Failed to load plugin "${entry}" from ${candidate}: ${e.message}`);
+        } catch (e: unknown) {
+          throw pluginLoadError(entry, entryPath, e);
         }
       }
     }
@@ -201,25 +246,7 @@ export class PluginRegistry {
   ): Promise<void> {
     const mod = await import(pluginPath);
     const exported = mod.default ?? mod;
-
-    // Validate config against descriptor schema if available
-    let validatedConfig = config;
-    if (typeof exported === "function" && exported.prototype) {
-      // Construct a temporary instance to access the descriptor
-      const temp = new exported();
-      if (temp.descriptor?.configSchema && config !== undefined) {
-        const result = temp.descriptor.configSchema.safeParse(config);
-        if (!result.success) {
-          const issues = result.error.issues
-            .map((i: any) => `  ${i.path.join(".")}: ${i.message}`)
-            .join("\n");
-          throw new Error(`Invalid config for plugin "${namespace}":\n${issues}`);
-        }
-        validatedConfig = result.data; // Use parsed (with defaults applied)
-      }
-    }
-
-    const plugin = this.resolvePluginExport(exported, namespace, validatedConfig, deps);
+    const plugin = this.resolvePluginExport(exported, namespace, config, deps);
     this.register(plugin);
   }
 }
@@ -245,10 +272,15 @@ export async function buildRegistry(
   // 4. Project-scope explicit declarations (highest priority)
   for (const entry of cfg.plugins ?? []) {
     const resolved = path.resolve(configDir, entry.path);
-    if (entry.config) {
-      await reg.loadAndInstantiate(entry.namespace, resolved, entry.config);
-    } else {
-      await reg.loadFromPath(entry.namespace, resolved);
+    const dir = pluginDirectory(resolved);
+    try {
+      if (entry.config) {
+        await reg.loadAndInstantiate(entry.namespace, resolved, entry.config);
+      } else {
+        await reg.loadFromPath(entry.namespace, resolved);
+      }
+    } catch (e: unknown) {
+      throw pluginLoadError(entry.namespace, dir, e);
     }
   }
 
