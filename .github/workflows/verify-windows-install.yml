@@ -1,0 +1,31 @@
+name: Verify Windows release install
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: windows-latest install from GitHub Release
+    runs-on: windows-latest
+    steps:
+      - name: Install from the public release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest"
+          Write-Host "Release URL: $($release.html_url)"
+          if ($release.tag_name -ne "v2.1.0") {
+            throw "latest release is $($release.tag_name), expected v2.1.0"
+          }
+          irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
+          $env:Path = "$env:USERPROFILE\.bolt\bin;" + $env:Path
+          $version = (bolt --version).Trim()
+          Write-Host "bolt --version: $version"
+          if ($version -ne "2.1.0") {
+            throw "bolt --version '$version' did not match tag v2.1.0"
+          }
+          Write-Host "bolt --version matched tag v2.1.0"
