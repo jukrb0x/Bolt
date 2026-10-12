@@ -24,6 +24,22 @@ const UNREAL_NAMES: Record<BuildConfig, string> = {
 
 const ACCEPTED = "development/dev, debug/dbg, debuggame/dbggame, shipping, test";
 
+/** Any case, with surrounding space. Same strings `normalizeBuildConfig` accepts. */
+export function buildConfigSchemaPattern(): string {
+  const alts = Object.keys(ALIASES)
+    .map((token) =>
+      [...token]
+        .map((ch) => {
+          const lower = ch.toLowerCase();
+          const upper = ch.toUpperCase();
+          return lower === upper ? ch : `[${upper}${lower}]`;
+        })
+        .join(""),
+    )
+    .join("|");
+  return `^\\s*(?:${alts})\\s*$`;
+}
+
 export function normalizeBuildConfig(input: string): BuildConfigResult {
   const value = ALIASES[input.trim().toLowerCase()];
   return value

@@ -93,17 +93,8 @@
         },
         "config": {
           "type": "string",
-          "enum": [
-            "development",
-            "dev",
-            "debug",
-            "dbg",
-            "debuggame",
-            "dbggame",
-            "shipping",
-            "test"
-          ],
-          "description": "Build configuration. Bolt also accepts these names in any case."
+          "pattern": "^\\s*(?:[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Mm][Ee][Nn][Tt]|[Dd][Ee][Vv]|[Dd][Ee][Bb][Uu][Gg]|[Dd][Bb][Gg]|[Dd][Ee][Bb][Uu][Gg][Gg][Aa][Mm][Ee]|[Dd][Bb][Gg][Gg][Aa][Mm][Ee]|[Ss][Hh][Ii][Pp][Pp][Ii][Nn][Gg]|[Tt][Ee][Ss][Tt])\\s*$",
+          "description": "Build configuration. Same names bolt check accepts, in any case, with surrounding space allowed."
         }
       }
     },

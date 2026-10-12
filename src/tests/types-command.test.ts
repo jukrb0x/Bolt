@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { mkdtempSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { VERSION } from "../version";
@@ -40,6 +40,7 @@ test("bolt types writes that declaration and a plugin tsconfig", () => {
   expect(tsconfig.compilerOptions.useDefineForClassFields).toBe(false);
   expect(tsconfig.compilerOptions.module).toBe("ESNext");
   expect(tsconfig.compilerOptions.moduleResolution).toBe("bundler");
+  expect(tsconfig.compilerOptions.baseUrl).toBeUndefined();
   expect(tsconfig.compilerOptions.paths.boltstack).toEqual(["./.bolt/types/boltstack.d.ts"]);
 });
 
@@ -60,6 +61,42 @@ test("bolt types refreshes the declaration and keeps an existing tsconfig", () =
   writePluginTypes(dir, { force: true });
   const replaced = JSON.parse(readFileSync(path.join(dir, "tsconfig.json"), "utf8"));
   expect(replaced.compilerOptions.paths.boltstack).toEqual(["./.bolt/types/boltstack.d.ts"]);
+});
+
+test("a compiled binary keeps definePlugin after the source text is set aside", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-embed-"));
+  const entry = path.join(dir, "entry.ts");
+  const binary = path.join(dir, "embed-check");
+  const declaration = path.join(root, "src/plugin-declaration.ts");
+  writeFileSync(
+    entry,
+    `import { PLUGIN_DECLARATION_TEXT } from ${JSON.stringify(declaration)};\n` +
+      `if (!PLUGIN_DECLARATION_TEXT.includes("definePlugin")) process.exit(2);\n` +
+      `console.log("embedded");\n`,
+  );
+  const build = Bun.spawn(["bun", "build", entry, "--compile", "--outfile", binary], {
+    cwd: dir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const buildCode = await build.exited;
+  expect(buildCode).toBe(0);
+
+  const textFile = path.join(root, "src/plugin-types.txt");
+  const hidden = path.join(dir, "plugin-types.txt");
+  renameSync(textFile, hidden);
+  try {
+    const run = Bun.spawn([binary], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(run.stdout).text(),
+      new Response(run.stderr).text(),
+      run.exited,
+    ]);
+    expect(code).toBe(0);
+    expect(`${stdout}\n${stderr}`).toContain("embedded");
+  } finally {
+    renameSync(hidden, textFile);
+  }
 });
 
 test("bolt types is registered", async () => {

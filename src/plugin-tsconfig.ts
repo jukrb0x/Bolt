@@ -19,7 +19,6 @@ export function pluginAuthorTsconfig(): string {
           strict: true,
           noEmit: true,
           skipLibCheck: true,
-          baseUrl: ".",
           paths: {
             boltstack: ["./.bolt/types/boltstack.d.ts"],
           },

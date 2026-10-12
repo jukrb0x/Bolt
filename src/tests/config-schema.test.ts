@@ -95,6 +95,24 @@ const documents: Array<{ name: string; yaml: string; ok: boolean }> = [
     ].join("\n"),
   },
   {
+    name: "mixed-case and padded ue build configs",
+    ok: true,
+    yaml: [
+      "version: 1",
+      "project: { name: MyProject }",
+      "plugins:",
+      "  - namespace: ue",
+      "    config:",
+      "      engine: { path: e }",
+      "      project: { path: p }",
+      "      uproject: p.uproject",
+      "      targets:",
+      "        editor: { kind: editor, config: Development }",
+      '        game: { kind: game, config: " DebugGame " }',
+      '        client: { kind: client, config: "  development  " }',
+    ].join("\n"),
+  },
+  {
     name: "invalid ue target kind",
     ok: false,
     yaml: [
