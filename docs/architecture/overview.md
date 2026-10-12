@@ -12,7 +12,7 @@ src/
 ├── main.ts               # CLI entry — citty command tree
 ├── index.ts              # Library public API (run, createContext, loadConfig)
 ├── api.ts                # High-level run() implementation
-├── config.ts             # Zod schema, types, loadConfig (+ bolt.local.yaml merge), checkConfig
+├── config.ts             # Zod schema, types, loadConfig (optional local vars), checkConfig
 ├── discover.ts           # Upward bolt.yaml search
 ├── runner.ts             # Core execution engine (runTask / runFlow)
 ├── interpolate.ts        # ${{ }} template engine
@@ -39,9 +39,9 @@ bolt
 ├── run <name...>          # run tasks (typed order) or a single flow
 ├── list                   # list tasks and flows
 ├── info                   # project + VCS summary
-├── check                  # validate bolt.yaml (+ bolt.local.yaml)
+├── check                  # validate bolt.yaml (and bolt.local.yaml when present)
 ├── config                 # open bolt.yaml in $EDITOR
-├── init                   # scaffold bolt.yaml + bolt.local.yaml
+├── init                   # scaffold bolt.yaml
 ├── inspect <name...>      # show resolved steps without executing
 ├── plugin
 │   ├── list               # active plugins + handlers
@@ -61,7 +61,7 @@ output (the Ink/React `help` TUI and interactive `init` wizard were removed in v
 CLI args
   └── citty routes to command
         └── discover(cwd)          # walk up to find bolt.yaml
-              └── loadConfig()      # parse bolt.yaml + merge bolt.local.yaml + Zod
+              └── loadConfig()      # parse bolt.yaml, merge optional local vars, Zod
                     └── resolveRunPlan()      # resolve tasks/calls/params once
                           └── Runner.executePlan()
                                 ├── call      # recursively owned task nodes
@@ -94,9 +94,12 @@ protection before execution, inspection, or notification formatting.
 notification consume the same resolved task tree. Multi-task notifications show
 the top-level task list and recursively owned nodes.
 
-**Config split:** `bolt.yaml` is the committed shared contract (identity, tasks,
-flows, targets); `bolt.local.yaml` holds per-machine paths (gitignored). `loadConfig`
-merges them into the runtime `project.engine_repo`/`project_repo`/`uproject` shape.
+**Config split:** `bolt.yaml` starts with `version: 1`. `project` is a name. Tasks
+and flows live in that file. Unreal engine, project, uproject, and target metadata
+live on the `ue` plugin (`plugins` entry with `namespace: ue`). `bolt.local.yaml` is
+optional and may only override `vars`. `loadConfig` keeps Unreal metadata on that
+ue plugin entry and merges optional local `vars`. Relative plugin paths resolve
+against the directory containing `bolt.yaml`.
 
 **Registry is per-Runner:** each `Runner` lazily builds its own registry on first
 `uses:` dispatch. Display-only paths (e.g. `plugin list`) call `buildRegistry()`

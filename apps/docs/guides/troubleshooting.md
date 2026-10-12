@@ -177,9 +177,12 @@ project:
 **Solution**: Use a valid kind.
 
 ```yaml
-targets:
-  mytarget:
-    kind: editor # e.g. editor | program
+plugins:
+  - namespace: ue
+    config:
+      targets:
+        mytarget:
+          kind: editor # editor | program | game | client | server
 ```
 
 ## Performance Issues
