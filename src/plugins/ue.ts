@@ -116,47 +116,40 @@ function ueConfig(ctx: BoltPluginContext): UeConfig {
   };
 }
 
-/** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
+/** Normalise a Windows engine root to backslashes so cmd.exe handles it. */
 const w = (p: string) => p.replace(/\//g, "\\");
 
+/** Drive-letter and UNC roots are Windows paths. A posix engine path is not. */
+function winRoot(root: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(root) || root.startsWith("\\\\");
+}
+
 /**
- * Production commands target Windows batch files (.bat / .exe, backslashes).
- * End-to-end tests set BOLT_E2E_UE_SHELL so those handlers can execute a fake
- * script instead of a PE binary. Unset, the strings stay the Windows forms.
- * - posix: forward slashes and .sh
- * - cmd: backslashes, .bat unchanged, .exe rewritten to .cmd
+ * Engine-relative tool. The filename is always `rel` (`.bat` or `.exe`).
+ * A Windows root keeps the historical `w(root)/rel` form. A posix root keeps
+ * forward slashes so that same filename is the file on disk.
  */
-function e2eUeShell(): "posix" | "cmd" | undefined {
-  const value = process.env.BOLT_E2E_UE_SHELL;
-  if (value === "posix" || value === "cmd") return value;
-  return undefined;
+function engineFile(root: string, rel: string): string {
+  if (winRoot(root)) return `${w(root)}/${rel}`;
+  return `${root}/${rel}`;
 }
 
-/** Engine-relative script. Unset matches the historical `w(root)/rel` form. */
-function ueScript(root: string, winRel: string): string {
-  const mode = e2eUeShell();
-  if (mode === "posix") {
-    const rel = winRel.replace(/\.bat$/i, ".sh").replace(/\.exe$/i, ".sh");
-    return `${root}/${rel}`;
-  }
-  const rel = mode === "cmd" ? winRel.replace(/\.exe$/i, ".cmd") : winRel;
-  return `${w(root)}/${rel}`;
-}
-
-/** Setup.bat is joined with a backslash, unlike the other batch paths. */
+/** Setup.bat is joined with a backslash on Windows, unlike the other batch paths. */
 function setupScript(root: string): string {
-  if (e2eUeShell() === "posix") return `${root}/Setup.sh`;
-  return `${w(root)}\\Setup.bat`;
+  if (winRoot(root)) return `${w(root)}\\Setup.bat`;
+  return `${root}/Setup.bat`;
 }
 
-function hostSep(): string {
-  return e2eUeShell() === "posix" ? "/" : "\\";
-}
-
-function hostExt(): string {
-  if (e2eUeShell() === "posix") return ".sh";
-  if (e2eUeShell() === "cmd") return ".cmd";
-  return ".exe";
+/**
+ * `cmd` and `taskkill` resolve to System32 before PATH, so a PATH entry cannot
+ * shim them. BOLT_E2E_BIN, when set, is the directory of those two shims.
+ * Engine-relative names do not read it. Unset, the result is `cmd` or `taskkill`.
+ */
+function hostTool(name: string): string {
+  const bin = process.env.BOLT_E2E_BIN;
+  if (!bin) return name;
+  const file = process.platform === "win32" ? `${name}.cmd` : name;
+  return path.join(bin, file);
 }
 
 /** Omit an unset branch so git/pull keeps its default (`main`). */
@@ -219,13 +212,13 @@ class UEPlugin extends PluginBase.withDescriptor({
 
     const uePath = ueConfig(ctx).engine.path;
     const platform = params.platform ?? "Win64";
-    const buildBat = `"${ueScript(uePath, "Engine/Build/BatchFiles/Build.bat")}"`;
+    const buildBat = `"${engineFile(uePath, "Engine/Build/BatchFiles/Build.bat")}"`;
 
     // "engine" is a reserved target that builds the engine from source
     if (targetName === "engine") {
       const buildType = requireUnrealBuildConfig(params.config ?? "development");
       await this.setup({ force: "true" }, ctx);
-      const genFile = ueScript(uePath, "GenerateProjectFiles.bat");
+      const genFile = engineFile(uePath, "GenerateProjectFiles.bat");
       const genCmd = `"${genFile}"`;
       ctx.logger.cmd(genCmd);
       if (!ctx.dryRun) {
@@ -309,7 +302,7 @@ class UEPlugin extends PluginBase.withDescriptor({
     const uePath = ueConfig(ctx).engine.path;
     const projFile = ueConfig(ctx).uproject;
     await run(
-      `"${ueScript(uePath, "Engine/Build/BatchFiles/GenerateProjectFiles.bat")}" "${projFile}" -Game`,
+      `"${engineFile(uePath, "Engine/Build/BatchFiles/GenerateProjectFiles.bat")}" "${projFile}" -Game`,
       ctx,
     );
   }
@@ -334,7 +327,7 @@ class UEPlugin extends PluginBase.withDescriptor({
 
     if (params.target) {
       const t = params.target as string;
-      const binName = `${t}${suffix}${hostExt()}`;
+      const binName = `${t}${suffix}.exe`;
       const candidates = [
         path.join(projectDir, "Binaries", platform, binName),
         path.join(uePath, "Engine", "Binaries", platform, binName),
@@ -344,28 +337,26 @@ class UEPlugin extends PluginBase.withDescriptor({
       if (!exePath)
         throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
     } else {
-      const binDir =
-        e2eUeShell() === "posix"
-          ? `${uePath}/Engine/Binaries/Win64`
-          : w(`${uePath}/Engine/Binaries/Win64`);
-      const sep = hostSep();
-      const ext = hostExt();
+      const binDir = path.join(uePath, "Engine", "Binaries", "Win64");
       const candidates = suffix
         ? [
-            `${binDir}${sep}UE4Editor${suffix}${ext}`,
-            `${binDir}${sep}UnrealEditor${suffix}${ext}`,
-            `${binDir}${sep}UE4Editor${ext}`,
-            `${binDir}${sep}UnrealEditor${ext}`,
+            path.join(binDir, `UE4Editor${suffix}.exe`),
+            path.join(binDir, `UnrealEditor${suffix}.exe`),
+            path.join(binDir, "UE4Editor.exe"),
+            path.join(binDir, "UnrealEditor.exe"),
           ]
-        : [`${binDir}${sep}UE4Editor${ext}`, `${binDir}${sep}UnrealEditor${ext}`];
+        : [path.join(binDir, "UE4Editor.exe"), path.join(binDir, "UnrealEditor.exe")];
       exePath = ctx.dryRun ? candidates[0] : candidates.find(existsSync);
       if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
     }
 
     ctx.logger.cmd(`start "" "${exePath}" "${projFile}"`);
     if (!ctx.dryRun) {
-      // SpawnOptions has no stdio mode. Both runtimes pipe, and this result is unused.
-      ctx.runtime.spawnSync(["cmd", "/c", "start", "", exePath, projFile]);
+      // `start` is a cmd builtin. On a headless runner it never returns, and
+      // System32\cmd.exe is found before any PATH shim. hostTool("cmd") is
+      // still "cmd" unless BOLT_E2E_BIN points at the e2e shim, which runs the
+      // program and returns. The engine path above is not rewritten.
+      ctx.runtime.spawnSync([hostTool("cmd"), "/c", "start", "", exePath, projFile]);
     }
   }
 
@@ -381,7 +372,8 @@ class UEPlugin extends PluginBase.withDescriptor({
     ];
     for (const p of procs) {
       ctx.logger.cmd(`taskkill /f /im ${p}`);
-      if (!ctx.dryRun) await ctx.runtime.spawn(["taskkill", "/f", "/im", p]).catch(() => {});
+      if (!ctx.dryRun)
+        await ctx.runtime.spawn([hostTool("taskkill"), "/f", "/im", p]).catch(() => {});
     }
   }
 
@@ -390,7 +382,7 @@ class UEPlugin extends PluginBase.withDescriptor({
     const uePath = ueConfig(ctx).engine.path;
     const projFile = ueConfig(ctx).uproject;
     await run(
-      `"${ueScript(uePath, "Engine/Binaries/Win64/UE4Editor-Cmd.exe")}" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
+      `"${engineFile(uePath, "Engine/Binaries/Win64/UE4Editor-Cmd.exe")}" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
       ctx,
     );
   }

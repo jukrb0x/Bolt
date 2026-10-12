@@ -123,7 +123,7 @@ describe("Library API", () => {
       expect(ctx.cfg.plugins).toBe(cfg.plugins);
       await ue.handlers["build"]({ target: "editor" }, ctx);
       const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
-      expect(cmd).toContain("/from-file/engine".replace(/\//g, "\\"));
+      expect(cmd).toContain("/from-file/engine/Engine/Build/BatchFiles/Build.bat");
       expect(cmd).not.toContain("decoy");
     } finally {
       rmSync(dir, { recursive: true, force: true });
