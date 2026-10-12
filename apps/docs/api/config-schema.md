@@ -13,16 +13,16 @@ At load time Bolt **merges** them into a single runtime config. Field names and 
 
 Top-level keys:
 
-| Key | Type | Required | Default | Description |
-|-----|------|----------|---------|-------------|
-| `project` | object | yes | — | Project identity (no paths) |
-| `targets` | map | no | `{}` | Build targets |
-| `tasks` | map | no | `{}` | Named lists of steps |
-| `flows` | map | no | `{}` | Named, ordered sets of tasks |
-| `vars` | map | no | `{}` | Shared string variables |
-| `plugins` | array | no | `[]` | Project-scope plugin entries |
-| `timeout_hours` | number | no | — | Abort the run if it exceeds this duration (positive) |
-| `notifications` | object | no | — | Build-event notifications |
+| Key             | Type   | Required | Default | Description                                          |
+| --------------- | ------ | -------- | ------- | ---------------------------------------------------- |
+| `project`       | object | yes      | —       | Project identity (no paths)                          |
+| `targets`       | map    | no       | `{}`    | Build targets                                        |
+| `tasks`         | map    | no       | `{}`    | Named lists of steps                                 |
+| `flows`         | map    | no       | `{}`    | Named, ordered sets of tasks                         |
+| `vars`          | map    | no       | `{}`    | Shared string variables                              |
+| `plugins`       | array  | no       | `[]`    | Project-scope plugin entries                         |
+| `timeout_hours` | number | no       | —       | Abort the run if it exceeds this duration (positive) |
+| `notifications` | object | no       | —       | Build-event notifications                            |
 
 ## project
 
@@ -30,31 +30,31 @@ Project **identity** only. Machine paths live in `bolt.local.yaml`.
 
 ```yaml
 project:
-  name: MyProject          # required
-  engine:                  # required — repo identity (NO path)
-    vcs: git               # git | svn (default: git)
-    url: https://github.com/EpicGames/UnrealEngine.git  # optional
-    branch: main           # optional
-  project:                 # required — repo identity (NO path)
-    vcs: svn               # git | svn (default: git)
-    url: svn://svn.example.com/project/trunk            # optional
+  name: MyProject # required
+  engine: # required — repo identity (NO path)
+    vcs: git # git | svn (default: git)
+    url: https://github.com/EpicGames/UnrealEngine.git # optional
+    branch: main # optional
+  project: # required — repo identity (NO path)
+    vcs: svn # git | svn (default: git)
+    url: svn://svn.example.com/project/trunk # optional
 ```
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `name` | string | yes | — | Project display name |
-| `engine` | RepoIdentity | yes | — | Engine repo identity |
-| `project` | RepoIdentity | yes | — | Project repo identity |
+| Field     | Type         | Required | Default | Description           |
+| --------- | ------------ | -------- | ------- | --------------------- |
+| `name`    | string       | yes      | —       | Project display name  |
+| `engine`  | RepoIdentity | yes      | —       | Engine repo identity  |
+| `project` | RepoIdentity | yes      | —       | Project repo identity |
 
 Extra scalar (`string`/`boolean`) fields on `project` pass through and are available as `${{ project.<key> }}`.
 
 ### RepoIdentity
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `vcs` | string | no | `git` | `git` or `svn` |
-| `url` | string | no | — | Remote repository URL |
-| `branch` | string | no | — | Branch (git) |
+| Field    | Type   | Required | Default | Description           |
+| -------- | ------ | -------- | ------- | --------------------- |
+| `vcs`    | string | no       | `git`   | `git` or `svn`        |
+| `url`    | string | no       | —       | Remote repository URL |
+| `branch` | string | no       | —       | Branch (git)          |
 
 There is **no `path`** here — the path is supplied per-machine by `bolt.local.yaml` and merged at load (see [Merged runtime shape](#merged-runtime-shape)).
 
@@ -73,11 +73,11 @@ targets:
     config: shipping
 ```
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `kind` | string | yes | — | `editor` \| `program` \| `game` \| `client` \| `server` |
-| `name` | string | no | — | Binary name (for program/game/server) |
-| `config` | string | no | `development` | `development` \| `debug` \| `debuggame` \| `shipping` \| `test` |
+| Field    | Type   | Required | Default       | Description                                                     |
+| -------- | ------ | -------- | ------------- | --------------------------------------------------------------- |
+| `kind`   | string | yes      | —             | `editor` \| `program` \| `game` \| `client` \| `server`         |
+| `name`   | string | no       | —             | Binary name (for program/game/server)                           |
+| `config` | string | no       | `development` | `development` \| `debug` \| `debuggame` \| `shipping` \| `test` |
 
 ## tasks
 
@@ -85,25 +85,25 @@ A **task** is a named list of steps — the only building block. Each step is on
 
 ```yaml
 tasks:
-  kill:   [{ uses: ue/kill }]
+  kill: [{ uses: ue/kill }]
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:  [{ uses: ue/build, with: { target: editor } }]
-  start:  [{ uses: ue/start }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
   # reuse other tasks inline (cycle-detected):
-  reset:  [{ call: kill }, { call: update }, { call: build }]
+  reset: [{ call: kill }, { call: update }, { call: build }]
   # run a shell command:
-  clean:  [{ run: "rm -rf ./Intermediate" }]
+  clean: [{ run: "rm -rf ./Intermediate" }]
 ```
 
 ### Step Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `uses` | string | one of `uses`/`call`/`run` | Plugin handler (`ns/handler`) or local action (`./path` or `../path`) |
-| `call` | string | one of `uses`/`call`/`run` | Reusable task name (resolved recursively; cycle-detected) |
-| `run` | string | one of `uses`/`call`/`run` | Shell command (`${{ }}` interpolated) |
-| `with` | map (string→string) | no | Params forwarded to the plugin/local action or called task (interpolated) |
-| `continue-on-error` | boolean | no | Continue if this step fails (default: `false`) |
+| Field               | Type                | Required                   | Description                                                               |
+| ------------------- | ------------------- | -------------------------- | ------------------------------------------------------------------------- |
+| `uses`              | string              | one of `uses`/`call`/`run` | Plugin handler (`ns/handler`) or local action (`./path` or `../path`)     |
+| `call`              | string              | one of `uses`/`call`/`run` | Reusable task name (resolved recursively; cycle-detected)                 |
+| `run`               | string              | one of `uses`/`call`/`run` | Shell command (`${{ }}` interpolated)                                     |
+| `with`              | map (string→string) | no                         | Params forwarded to the plugin/local action or called task (interpolated) |
+| `continue-on-error` | boolean             | no                         | Continue if this step fails (default: `false`)                            |
 
 > Note the hyphen: steps use **`continue-on-error`**; flows use **`continue_on_fail`** (underscore).
 
@@ -116,18 +116,18 @@ flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]   # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
   reset:
     description: Kill, update, regenerate, rebuild
     steps: [kill, update, genproj, build]
     continue_on_fail: [kill]
 ```
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `description` | string | no | — | Human-readable summary |
-| `steps` | string[] | yes | — | Task names, run in listed order |
-| `continue_on_fail` | string[] | no | `[]` | Tasks allowed to fail without aborting the flow |
+| Field              | Type     | Required | Default | Description                                     |
+| ------------------ | -------- | -------- | ------- | ----------------------------------------------- |
+| `description`      | string   | no       | —       | Human-readable summary                          |
+| `steps`            | string[] | yes      | —       | Task names, run in listed order                 |
+| `continue_on_fail` | string[] | no       | `[]`    | Tasks allowed to fail without aborting the flow |
 
 ## vars
 
@@ -146,14 +146,14 @@ Explicitly register project-scope plugins by path. (Plugins are also auto-discov
 plugins:
   - namespace: myplugin
     path: ./bolt-plugins/myplugin/index.ts
-    config: { key: value }   # optional
+    config: { key: value } # optional
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `namespace` | string | yes | Plugin namespace used in `uses:` |
-| `path` | string | yes | Path to the plugin entry file |
-| `config` | object | no | Arbitrary plugin config |
+| Field       | Type   | Required | Description                      |
+| ----------- | ------ | -------- | -------------------------------- |
+| `namespace` | string | yes      | Plugin namespace used in `uses:` |
+| `path`      | string | yes      | Path to the plugin entry file    |
+| `config`    | object | no       | Arbitrary plugin config          |
 
 ## timeout_hours
 
@@ -180,43 +180,43 @@ notifications:
       chat_id: "-1001234567890"
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `on_start` | boolean | `true` | Notify when a run starts |
-| `on_op_complete` | boolean | `true` | Notify when each task completes |
-| `on_failure` | boolean | `true` | Notify on task failure |
-| `on_complete` | boolean | `true` | Notify when the whole run completes |
-| `providers` | array | `[]` | Notification providers |
+| Field            | Type    | Default | Description                         |
+| ---------------- | ------- | ------- | ----------------------------------- |
+| `on_start`       | boolean | `true`  | Notify when a run starts            |
+| `on_op_complete` | boolean | `true`  | Notify when each task completes     |
+| `on_failure`     | boolean | `true`  | Notify on task failure              |
+| `on_complete`    | boolean | `true`  | Notify when the whole run completes |
+| `providers`      | array   | `[]`    | Notification providers              |
 
 A run emits one start notification. Multi-task runs show the top-level task list and the recursively owned `call`, plugin/local action, and shell nodes.
 
 ### Provider Types
 
-| Type | Required Fields | Optional |
-|------|-----------------|----------|
-| `wecom` | `webhook_url` | `chat_id` |
-| `telegram` | `bot_token`, `chat_id` | — |
+| Type       | Required Fields        | Optional  |
+| ---------- | ---------------------- | --------- |
+| `wecom`    | `webhook_url`          | `chat_id` |
+| `telegram` | `bot_token`, `chat_id` | —         |
 
 ## bolt.local.yaml (per-machine, gitignored)
 
 Holds machine-specific paths. Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`). Relative paths resolve against the directory containing `bolt.yaml`. A missing or invalid `bolt.local.yaml` is a **loud error**.
 
 ```yaml
-engine_path:  D:/UE                                  # required — local UE root
-project_path: D:/Games/MyProject                     # required — local project working copy
-uproject:     D:/Games/MyProject/MyProject.uproject  # required — .uproject file
-use_tortoise: true                                   # optional — use TortoiseSVN/Proc for SVN
-vars:                                                # optional — shallow-merged over bolt.yaml vars
+engine_path: D:/UE # required — local UE root
+project_path: D:/Games/MyProject # required — local project working copy
+uproject: D:/Games/MyProject/MyProject.uproject # required — .uproject file
+use_tortoise: true # optional — use TortoiseSVN/Proc for SVN
+vars: # optional — shallow-merged over bolt.yaml vars
   some_key: some_local_value
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `engine_path` | string | yes | Local Unreal Engine root |
-| `project_path` | string | yes | Local project working copy |
-| `uproject` | string | yes | Path to the `.uproject` file |
-| `use_tortoise` | boolean | no | Use TortoiseSVN/Proc for SVN operations |
-| `vars` | map (string→string) | no | Per-machine variable overrides |
+| Field          | Type                | Required | Description                             |
+| -------------- | ------------------- | -------- | --------------------------------------- |
+| `engine_path`  | string              | yes      | Local Unreal Engine root                |
+| `project_path` | string              | yes      | Local project working copy              |
+| `uproject`     | string              | yes      | Path to the `.uproject` file            |
+| `use_tortoise` | boolean             | no       | Use TortoiseSVN/Proc for SVN operations |
+| `vars`         | map (string→string) | no       | Per-machine variable overrides          |
 
 ## Merged runtime shape
 
@@ -245,5 +245,6 @@ These merged fields are what plugin handlers and interpolation see — e.g. `${{
 `ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` and `flows`; reuse a task with `call: <name>`. The legacy `uses: task/name` form is rejected; replace it with `call: name`. `bolt go`/`bolt help` are gone — use `bolt run`.
 
 ## See Also
+
 - [bolt.yaml Guide](/guides/bolt-yaml.md) — annotated walkthrough and the config split
 - [Interpolation](/guides/interpolation.md) — template syntax and context

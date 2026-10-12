@@ -18,8 +18,8 @@ The binary is replaced in-place via atomic rename. The temp file is written to t
 
 ## Options
 
-| Flag | Description |
-|------|-------------|
+| Flag      | Description                            |
+| --------- | -------------------------------------- |
 | `--force` | Re-download even if already up to date |
 
 ## Examples

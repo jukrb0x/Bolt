@@ -14,13 +14,15 @@ interface BoltPlugin {
 ```
 
 ### namespace
+
 The unique identifier for your plugin. Used in `uses:` steps as `myplugin/handler-name`.
 
 ```typescript
-namespace: "myplugin"
+namespace: "myplugin";
 ```
 
 ### handlers
+
 A map of handler names to handler functions.
 
 ```typescript
@@ -31,14 +33,13 @@ handlers: {
 ```
 
 ## BoltPluginHandler Type
+
 ```typescript
-type BoltPluginHandler = (
-  params: Record<string, string>,
-  ctx: BoltPluginContext
-) => Promise<void>;
+type BoltPluginHandler = (params: Record<string, string>, ctx: BoltPluginContext) => Promise<void>;
 ```
 
 ### params
+
 Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation), overridden by CLI-level params.
 
 ```yaml
@@ -49,9 +50,11 @@ Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation), overri
 ```
 
 ### ctx
+
 The BoltPluginContext provides access to configuration, logging, and execution state.
 
 ## BoltPluginContext Interface
+
 ```typescript
 interface BoltPluginContext {
   cfg: BoltConfig;
@@ -63,6 +66,7 @@ interface BoltPluginContext {
 ```
 
 ### cfg
+
 The merged runtime configuration (`bolt.yaml` + `bolt.local.yaml`).
 
 ```typescript
@@ -81,12 +85,15 @@ cfg: {
 ```
 
 ### configDir
+
 Directory containing `bolt.yaml`. Use it to resolve relative paths.
 
 ### runtime
+
 Runtime abstraction (`spawn`/`spawnSync`/`shell`/`parseYaml`) that works on both Bun and Node.js.
 
 ### dryRun
+
 True if `--dry-run` was passed. Use to skip actual execution.
 
 ```typescript
@@ -97,9 +104,11 @@ if (ctx.dryRun) {
 ```
 
 ### logger
+
 Structured logger for output.
 
 ## BoltLogger Interface
+
 ```typescript
 interface BoltLogger {
   info(msg: string): void;
@@ -111,6 +120,7 @@ interface BoltLogger {
 ```
 
 ## Complete Example
+
 ```typescript
 import type { BoltPlugin } from "boltstack";
 
@@ -148,6 +158,7 @@ export default plugin;
 ```
 
 ## Using in bolt.yaml
+
 ```yaml
 tasks:
   deploy:
@@ -171,6 +182,7 @@ bun add -d boltstack
 This provides the type declarations for `boltstack` and `boltstack/plugins` for editor autocompletion.
 
 ## See Also
+
 - [Plugin System](/guides/plugin-system.md) - How plugins work
 - [Built-in Handlers](./built-in-handlers.md) - Reference for existing handlers
 - [Plugin Development Tutorial](/guides/plugin-development.md) - Step-by-step guide

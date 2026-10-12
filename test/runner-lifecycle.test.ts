@@ -13,11 +13,19 @@ describe("Lifecycle hooks", () => {
         callOrder.push("init");
       }
 
-      async onBeforeStep(handlerName: string, _params: Record<string, string>, _ctx: BoltPluginContext) {
+      async onBeforeStep(
+        handlerName: string,
+        _params: Record<string, string>,
+        _ctx: BoltPluginContext,
+      ) {
         callOrder.push(`before:${handlerName}`);
       }
 
-      async onAfterStep(handlerName: string, _params: Record<string, string>, _ctx: BoltPluginContext) {
+      async onAfterStep(
+        handlerName: string,
+        _params: Record<string, string>,
+        _ctx: BoltPluginContext,
+      ) {
         callOrder.push(`after:${handlerName}`);
       }
 

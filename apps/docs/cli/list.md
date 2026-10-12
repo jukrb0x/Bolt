@@ -28,6 +28,7 @@ bolt list
 ```
 
 Output example:
+
 ```
 bolt.yaml: /path/to/bolt.yaml
 

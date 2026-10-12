@@ -59,16 +59,19 @@ bolt ai
 ### Step 3: Validate freshness
 
 The second line of `ai-context.md` contains a hash:
+
 ```
 <!-- bolt.yaml hash: 01139e81e95468a7 -->
 ```
 
 Compute the current hash and compare:
+
 ```bash
 sha256sum bolt.yaml | cut -c1-16
 ```
 
 If the hashes differ, `bolt.yaml` has changed — regenerate:
+
 ```bash
 bolt ai
 ```
@@ -78,6 +81,7 @@ Then re-read `.bolt/ai-context.md`.
 ### Step 4: Use the context
 
 The loaded `ai-context.md` contains the **complete command reference** for this project:
+
 - All tasks (`bolt run <task>`) and their steps
 - All flows (`bolt run <flow>`) and their `continue_on_fail` policy
 - Defined targets
@@ -118,9 +122,9 @@ bolt run update build --dry-run     # preview without executing
 
 ### Flags
 
-| Flag | Effect |
-|------|--------|
-| `--dry-run` | Preview steps without executing |
+| Flag          | Effect                                                     |
+| ------------- | ---------------------------------------------------------- |
+| `--dry-run`   | Preview steps without executing                            |
 | `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`) |
 
 ### Introspection (when ai-context.md is insufficient)
@@ -142,23 +146,26 @@ bolt info                    # project and VCS summary
 
 **Build the editor:**
 Check `ai-context.md` for the exact task name — it varies per project. Typical:
+
 - `bolt run build` (task; may default to the editor target)
 - `bolt run build --target=editor`
 
 **Daily sync + build + launch:**
+
 - `bolt run update build start` (tasks in typed order)
 - `bolt run daily` (if a flow is defined)
 
 **Build with a specific config or target:**
+
 - `bolt run build --config=debug`
 - `bolt run build --config=debuggame` (`dbggame` and `DebugGame` are aliases)
 - `bolt run build --target=client`
 
 ## Errors
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| "bolt.yaml not found" | Not in a Bolt project directory | `cd` to the project root |
-| "bolt.local.yaml missing or invalid" | Per-machine config absent | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
-| "Unknown task or flow" | Name not defined in this project's bolt.yaml | Run `bolt list` to see available tasks/flows |
-| Build fails mid-flow | Build error in UE | Check the log file path printed in output |
+| Symptom                              | Cause                                        | Fix                                                                                   |
+| ------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| "bolt.yaml not found"                | Not in a Bolt project directory              | `cd` to the project root                                                              |
+| "bolt.local.yaml missing or invalid" | Per-machine config absent                    | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
+| "Unknown task or flow"               | Name not defined in this project's bolt.yaml | Run `bolt list` to see available tasks/flows                                          |
+| Build fails mid-flow                 | Build error in UE                            | Check the log file path printed in output                                             |

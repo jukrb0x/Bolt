@@ -66,10 +66,7 @@ export function createBunRuntime(): Runtime {
       // turning "path" into \"path\" which cmd.exe misinterprets.
       const cwd = opts?.cwd ?? process.cwd();
       const env = opts?.env ? { ...process.env, ...opts.env } : process.env;
-      const result = await Bun.$`${{ raw: command }}`
-        .nothrow()
-        .cwd(cwd)
-        .env(env);
+      const result = await Bun.$`${{ raw: command }}`.nothrow().cwd(cwd).env(env);
       const out = result.stdout.toString();
       const err = result.stderr.toString();
       if (opts?.onOutput) {

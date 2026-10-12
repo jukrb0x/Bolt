@@ -15,9 +15,9 @@ new Runner(cfg: BoltConfig, opts: RunnerOptions)
 interface RunnerOptions {
   dryRun?: boolean;
   logger?: Logger;
-  configDir?: string;          // bolt.yaml directory (for resolving relative paths)
+  configDir?: string; // bolt.yaml directory (for resolving relative paths)
   notifier?: Notifier;
-  onStep?: (cmd: string) => void;  // test injection hook
+  onStep?: (cmd: string) => void; // test injection hook
 }
 ```
 
@@ -48,10 +48,12 @@ The plugin registry is initialized lazily on first `uses:` dispatch.
 Two mutually exclusive step types:
 
 **`step.run`** (shell):
+
 1. Interpolates `${{ }}` expressions against `{ project, env }`.
 2. Calls `shell(cmd, step["continue-on-error"])`.
 
 **`step.uses`** (handler reference):
+
 1. Delegates to `dispatch(step, ctx, opParams)`.
 
 ## `dispatch(step, ctx, opParams)` — Uses Resolution
@@ -59,17 +61,20 @@ Two mutually exclusive step types:
 Three routing cases, checked in order:
 
 **Relative path** (`./` or `../`):
+
 - Runs `runLocalAction(uses, interpolatedParams)`.
 - Expects an `action.yaml` in the target directory.
 - Tries `run.ts`, `run.js`, `run.py`, `run.sh`, `run.bat` as the runner script.
 - Params become `BOLT_INPUT_<KEY>` environment variables.
 
 **`ops/<opName>` or `ops/<opName>:<variant>`**:
+
 - Looks up `cfg.ops[opName][variant]`.
 - Merges: `{ ...yamlParams, ...opParams }` — CLI params win.
 - Recursively calls `execStep` for each step in the variant's steps.
 
 **`<ns>/<handler>`**:
+
 - Resolves namespace and handler from the plugin registry.
 - Merges: `{ ...yamlParams, ...opParams }` — CLI params win.
 - Calls `handler(mergedParams, pluginContext)`.

@@ -6,9 +6,9 @@ How to author a Bolt project's configuration. Bolt v2 splits config across two f
 
 ## The two files
 
-| File | Committed? | Contains | Why |
-|------|-----------|----------|-----|
-| `bolt.yaml` | Yes (shared) | Project identity, targets, tasks, flows, vars, plugins, notifications | The team's automation contract. Everyone runs the same tasks/flows. |
+| File              | Committed?          | Contains                                                                 | Why                                                                  |
+| ----------------- | ------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)        | Project identity, targets, tasks, flows, vars, plugins, notifications    | The team's automation contract. Everyone runs the same tasks/flows.  |
 | `bolt.local.yaml` | No (**gitignored**) | Machine paths: `engine_path`, `project_path`, `uproject`, `use_tortoise` | Paths differ per developer/machine, so they must never be committed. |
 
 Run `bolt init` to scaffold both (it also tries to auto-detect the `.uproject`). If `bolt.local.yaml` is missing or invalid, Bolt fails loudly — copy `bolt.local.example.yaml` to `bolt.local.yaml` and set the paths.
@@ -30,19 +30,19 @@ Why split? The shared contract stays identical for the whole team, while each ma
 # Project identity only — NO machine paths (those live in bolt.local.yaml)
 project:
   name: MyProject
-  engine:                    # repo identity for the engine
-    vcs: git                 # git | svn (default: git)
+  engine: # repo identity for the engine
+    vcs: git # git | svn (default: git)
     # url: https://github.com/EpicGames/UnrealEngine.git
     branch: main
-  project:                   # repo identity for the game project
+  project: # repo identity for the game project
     vcs: svn
     # url: svn://svn.example.com/project/trunk
 
 # Build targets referenced by ue/build via --target=<name>
 targets:
   editor:
-    kind: editor             # editor | program | game | client | server
-    config: development      # development | debug | debuggame | shipping | test
+    kind: editor # editor | program | game | client | server
+    config: development # development | debug | debuggame | shipping | test
   client:
     kind: program
     name: MyClient
@@ -51,23 +51,23 @@ targets:
 # tasks: the only building block — a task is a named list of steps.
 # Steps: `uses` = plugin/local action, `call` = reusable task, `run` = shell command.
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   genproj: [{ uses: ue/generate_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build, with: { config: debuggame } }]
-  start:   [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 # flows: named, ordered goals. Fail-fast unless a task is in continue_on_fail.
 flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]   # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
   reset:
     description: Kill, update, regenerate, rebuild
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]    # kill may fail (nothing running) without aborting
+    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
 
 # Optional: shared string variables, available as ${{ vars.<key> }}
 # vars:
@@ -97,10 +97,10 @@ flows:
 Gitignored. Relative paths resolve against the directory containing `bolt.yaml`.
 
 ```yaml
-engine_path:  D:/UE                                  # local Unreal Engine root
-project_path: D:/Games/MyProject                     # local project working copy
-uproject:     D:/Games/MyProject/MyProject.uproject  # path to the .uproject file
-use_tortoise: true                                   # use TortoiseSVN/Proc for SVN ops
+engine_path: D:/UE # local Unreal Engine root
+project_path: D:/Games/MyProject # local project working copy
+uproject: D:/Games/MyProject/MyProject.uproject # path to the .uproject file
+use_tortoise: true # use TortoiseSVN/Proc for SVN ops
 
 # Optional per-machine variable overrides (shallow-merged over bolt.yaml vars)
 # vars:
@@ -136,5 +136,6 @@ bolt run reset --dry-run             # preview without executing
 Multi-task start notifications are sent once per invocation and show the top-level task list plus recursively owned actions.
 
 ## See Also
+
 - [Config Schema](/api/config-schema.md) — full field reference and defaults
 - [Interpolation](./interpolation.md) — template syntax and available context

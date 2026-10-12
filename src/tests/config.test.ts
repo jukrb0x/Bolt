@@ -77,17 +77,23 @@ test("engine_repo.path comes from local, identity from shared", async () => {
 });
 
 test("absolute local paths pass through unchanged", async () => {
+  // Drive-letter paths are absolute on Windows only. POSIX uses a root path for the same contract.
+  const enginePath = process.platform === "win32" ? "C:/UnrealEngine" : "/UnrealEngine";
+  const projectPath =
+    process.platform === "win32" ? "C:/Projects/MyProject" : "/Projects/MyProject";
+  const uprojectPath = `${projectPath}/MyProject.uproject`;
+  expect(path.isAbsolute(enginePath)).toBe(true);
   const dir = makeConfigDir(
     SHARED_YAML,
     [
-      "engine_path: C:/UnrealEngine",
-      "project_path: C:/Projects/MyProject",
-      "uproject: C:/Projects/MyProject/MyProject.uproject",
+      `engine_path: ${enginePath}`,
+      `project_path: ${projectPath}`,
+      `uproject: ${uprojectPath}`,
     ].join("\n"),
   );
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
-  expect(cfg.project.engine_repo.path).toBe("C:/UnrealEngine");
-  expect(cfg.project.uproject).toBe("C:/Projects/MyProject/MyProject.uproject");
+  expect(cfg.project.engine_repo.path).toBe(enginePath);
+  expect(cfg.project.uproject).toBe(uprojectPath);
   expect(cfg.project.use_tortoise).toBeUndefined();
 });
 

@@ -1,13 +1,19 @@
 import { expect, test } from "bun:test";
 import svnPlugin from "../../plugins/svn";
-import { testCfg, mockRuntime, PROJECT_ROOT } from "../env";
+import { testCfg, mockRuntime, PROJECT_ROOT, tortoiseProcOnPath } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
 
-function makeCtx(dryRun = true, overrides: Partial<typeof testCfg.project> = {}): BoltPluginContext & { logged: string[] } {
+function makeCtx(
+  dryRun = true,
+  overrides: Partial<typeof testCfg.project> = {},
+): BoltPluginContext & { logged: string[] } {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
-  const cfg = { ...testCfg, project: { ...testCfg.project, project_root: PROJECT_ROOT, ...overrides } };
+  const cfg = {
+    ...testCfg,
+    project: { ...testCfg.project, project_root: PROJECT_ROOT, ...overrides },
+  };
   return { cfg, configDir: process.cwd(), dryRun, logger, logged, runtime: mockRuntime };
 }
 
@@ -31,15 +37,15 @@ test("cleanup with use_tortoise=false uses plain svn", async () => {
 });
 
 test("cleanup with use_tortoise=true throws when TortoiseProc absent", async () => {
-  const tp = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
-  if (tp.exitCode === 0) return; // TortoiseProc present — skip
+  if (tortoiseProcOnPath()) return; // TortoiseProc present — skip
   const ctx = makeCtx(true, { use_tortoise: true });
-  await expect(svnPlugin.handlers["cleanup"]({}, ctx)).rejects.toThrow("TortoiseProc.exe not found");
+  await expect(svnPlugin.handlers["cleanup"]({}, ctx)).rejects.toThrow(
+    "TortoiseProc.exe not found",
+  );
 });
 
 test("cleanup without use_tortoise uses svn when TortoiseProc absent", async () => {
-  const tp = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
-  if (tp.exitCode === 0) return; // TortoiseProc present — skip
+  if (tortoiseProcOnPath()) return; // TortoiseProc present — skip
   const ctx = makeCtx();
   await svnPlugin.handlers["cleanup"]({}, ctx);
   expect(ctx.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
@@ -78,7 +84,9 @@ test("commit throws when message is missing and use_tortoise=false", async () =>
 test("add produces svn add command", async () => {
   const ctx = makeCtx(true, { use_tortoise: false });
   await svnPlugin.handlers["add"]({ path: "C:/Projects/NewFile.txt" }, ctx);
-  expect(ctx.logged.some((l) => l.includes("svn add") && l.includes("C:/Projects/NewFile.txt"))).toBe(true);
+  expect(
+    ctx.logged.some((l) => l.includes("svn add") && l.includes("C:/Projects/NewFile.txt")),
+  ).toBe(true);
 });
 
 test("add throws when path is missing", async () => {

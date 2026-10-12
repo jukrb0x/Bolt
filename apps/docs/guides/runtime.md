@@ -7,6 +7,7 @@ Bolt supports both Bun and Node.js runtime environments.
 ## CLI Runtime
 
 The Bolt CLI is built with and runs on **Bun only** for optimal performance. Bun provides:
+
 - Fast startup time
 - Native TypeScript support
 - Built-in YAML parsing
@@ -17,13 +18,17 @@ The Bolt CLI is built with and runs on **Bun only** for optimal performance. Bun
 When used as a library, Bolt supports both **Bun** and **Node.js** through a runtime abstraction layer.
 
 ### Bun Runtime
+
 Uses native Bun APIs:
+
 - `Bun.spawn()` for process execution
 - `Bun.YAML` for YAML parsing
 - Native TypeScript transpilation
 
 ### Node.js Runtime
+
 Uses Node.js equivalents:
+
 - `child_process.spawn()` for process execution
 - `yaml` package for YAML parsing
 - `ts-node` or compiled JavaScript
@@ -67,17 +72,18 @@ Bun was chosen for the CLI for several reasons:
 ## Library Compatibility
 
 The library maintains Node.js compatibility for:
+
 - Integration into existing Node.js projects
 - CI/CD pipelines using Node.js
 - Server-side applications
 
 ## Subpath Exports
 
-| Export | Bun | Node.js | Description |
-|--------|-----|--------|-------------|
-| `boltstack` | ✓ | ✓ | High-level API |
-| `boltstack/plugins` | ✓ | ✓ | Built-in plugins |
-| `boltstack/core` | ✓ | ✓ | Core internals |
+| Export              | Bun | Node.js | Description      |
+| ------------------- | --- | ------- | ---------------- |
+| `boltstack`         | ✓   | ✓       | High-level API   |
+| `boltstack/plugins` | ✓   | ✓       | Built-in plugins |
+| `boltstack/core`    | ✓   | ✓       | Core internals   |
 
 ## Development
 
@@ -90,5 +96,6 @@ bun test             # Run tests
 ```
 
 ## See Also
+
 - [Library Usage](/api/library-usage.md) - Using Bolt as a library
 - [Architecture](./architecture.md) - Overall architecture

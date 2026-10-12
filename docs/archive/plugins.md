@@ -21,12 +21,12 @@ ops:
 
 Plugins are discovered and registered in priority order. A later layer overwrites an earlier one for the same namespace.
 
-| Priority | Scope | Location |
-|---|---|---|
-| 1 (lowest) | Built-in | Compiled into bolt binary |
-| 2 | User | `~/.bolt/plugins/<namespace>/index.ts` |
-| 3 | Project auto | `<project>/.bolt/plugins/<namespace>/index.ts` |
-| 4 (highest) | Project explicit | Path declared in `bolt.yaml` under `plugins:` |
+| Priority    | Scope            | Location                                       |
+| ----------- | ---------------- | ---------------------------------------------- |
+| 1 (lowest)  | Built-in         | Compiled into bolt binary                      |
+| 2           | User             | `~/.bolt/plugins/<namespace>/index.ts`         |
+| 3           | Project auto     | `<project>/.bolt/plugins/<namespace>/index.ts` |
+| 4 (highest) | Project explicit | Path declared in `bolt.yaml` under `plugins:`  |
 
 This lets you override any built-in handler by providing a plugin with the same namespace at a higher scope.
 
@@ -91,13 +91,11 @@ plugins:
 ### `BoltPluginHandler`
 
 ```typescript
-type BoltPluginHandler = (
-  params: Record<string, string>,
-  ctx: BoltPluginContext,
-) => Promise<void>;
+type BoltPluginHandler = (params: Record<string, string>, ctx: BoltPluginContext) => Promise<void>;
 ```
 
 `params` contains:
+
 - Values from `with:` in the bolt.yaml step (after `${{ }}` interpolation)
 - Overridden by any CLI-level params (`--key=val` passed to `bolt go` or `bolt run`)
 
@@ -105,8 +103,8 @@ type BoltPluginHandler = (
 
 ```typescript
 interface BoltPluginContext {
-  cfg: BoltConfig;    // Full parsed bolt.yaml — project paths, targets, etc.
-  dryRun: boolean;    // True if --dry-run was passed
+  cfg: BoltConfig; // Full parsed bolt.yaml — project paths, targets, etc.
+  dryRun: boolean; // True if --dry-run was passed
   logger: BoltLogger; // Structured logger
 }
 ```

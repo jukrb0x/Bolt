@@ -76,21 +76,21 @@ project:
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:  [{ uses: ue/build, with: { target: editor } }]
-  start:  [{ uses: ue/start }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]   # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
 ```
 
 ```yaml
 # bolt.local.yaml - per-machine paths, gitignored
-engine_path:  C:/UnrealEngine
+engine_path: C:/UnrealEngine
 project_path: C:/Projects/MyGame
-uproject:     C:/Projects/MyGame/MyGame.uproject
+uproject: C:/Projects/MyGame/MyGame.uproject
 ```
 
 ```bash

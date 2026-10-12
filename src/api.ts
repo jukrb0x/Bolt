@@ -31,10 +31,12 @@ export async function run(
   opts: RunOptions & { params?: Record<string, string> } = {},
 ): Promise<void> {
   const runtime = opts.runtime ?? createRuntime();
-  const config = opts.config ?? await loadConfig(
-    opts.configPath ?? await findConfig(opts.cwd ?? process.cwd()),
-    runtime
-  );
+  let config = opts.config;
+  if (!config) {
+    const configPath = opts.configPath ?? (await findConfig(opts.cwd ?? process.cwd()));
+    if (!configPath) throw new Error("bolt.yaml not found (searched up from cwd)");
+    config = await loadConfig(configPath, runtime);
+  }
   const logger = opts.logger ?? new Logger();
   const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime });
   await runner.runTask(taskName, opts.params ?? {});

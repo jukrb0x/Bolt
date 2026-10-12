@@ -24,13 +24,10 @@ test("scaffoldPlugin index.ts has correct namespace", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myns", baseDir: tmpDir, isUser: false });
 
-  const indexTs = readFileSync(
-    path.join(tmpDir, ".bolt", "plugins", "myns", "index.ts"),
-    "utf8"
-  );
+  const indexTs = readFileSync(path.join(tmpDir, ".bolt", "plugins", "myns", "index.ts"), "utf8");
   expect(indexTs).toContain('"myns"');
   expect(indexTs).toContain('from "boltstack"');
-  expect(indexTs).toContain('definePlugin(');
+  expect(indexTs).toContain("definePlugin(");
 });
 
 test("scaffoldPlugin package.json has boltstack devDependency (project-scope)", async () => {
@@ -38,7 +35,7 @@ test("scaffoldPlugin package.json has boltstack devDependency (project-scope)", 
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const pkg = JSON.parse(
-    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8")
+    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8"),
   );
   expect(pkg.devDependencies["boltstack"]).toBe("latest");
 });
@@ -48,7 +45,7 @@ test("scaffoldPlugin package.json has boltstack devDependency (no bun-types)", a
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
   const pkg = JSON.parse(
-    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8")
+    readFileSync(path.join(tmpDir, ".bolt", "plugins", "myplugin", "package.json"), "utf8"),
   );
   expect(pkg.devDependencies["boltstack"]).toBe("latest");
   expect(pkg.devDependencies["bun-types"]).toBeUndefined();
@@ -61,7 +58,7 @@ test("scaffoldPlugin package.json has boltstack devDependency (user-scope)", asy
   await scaffoldPlugin({ name: "myplugin", baseDir: userBase, isUser: true });
 
   const pkg = JSON.parse(
-    readFileSync(path.join(userBase, "plugins", "myplugin", "package.json"), "utf8")
+    readFileSync(path.join(userBase, "plugins", "myplugin", "package.json"), "utf8"),
   );
   expect(pkg.devDependencies["boltstack"]).toBe("latest");
 });
@@ -69,6 +66,6 @@ test("scaffoldPlugin package.json has boltstack devDependency (user-scope)", asy
 test("scaffoldPlugin throws if directory already exists", async () => {
   mkdirSync(path.join(tmpDir, ".bolt", "plugins", "myplugin"), { recursive: true });
   await expect(
-    scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false })
+    scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false }),
   ).rejects.toThrow("already exists");
 });

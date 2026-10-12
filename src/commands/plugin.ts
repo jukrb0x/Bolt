@@ -5,7 +5,7 @@ import pluginListCmd from "./plugin-list";
 export default defineCommand({
   meta: {
     name: "plugin",
-    description: "Manage bolt plugins"
+    description: "Manage bolt plugins",
   },
   subCommands: {
     new: pluginNewCmd,

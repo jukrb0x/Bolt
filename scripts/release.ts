@@ -50,7 +50,10 @@ console.log("  clean");
 
 // 2. Verify branch is main
 step("Verifying branch is main");
-const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
+const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", {
+  cwd: ROOT,
+  encoding: "utf8",
+}).trim();
 if (currentBranch !== "main" && !DRY_RUN) {
   console.error(`Must release from main branch (currently on: ${currentBranch})`);
   process.exit(1);
@@ -106,7 +109,11 @@ run(`bun run ${buildScript}`);
 step("Generating release notes");
 let prevTag = "";
 try {
-  prevTag = execSync("git describe --tags --abbrev=0 HEAD^", { cwd: ROOT, encoding: "utf8", stdio: "pipe" }).trim();
+  prevTag = execSync("git describe --tags --abbrev=0 HEAD^", {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: "pipe",
+  }).trim();
 } catch {
   // no previous tag
 }
@@ -120,7 +127,8 @@ const defaultNotes = `## ${TAG}\n\n${autoChangelog}`;
 
 let releaseNotes = defaultNotes;
 if (!DRY_RUN) {
-  const editor = process.env.EDITOR || process.env.VISUAL || (process.platform === "win32" ? "notepad" : "vi");
+  const editor =
+    process.env.EDITOR || process.env.VISUAL || (process.platform === "win32" ? "notepad" : "vi");
   const tmpEditorPath = path.join(BUILD_DIR, "release-notes-edit.md");
   writeFileSync(tmpEditorPath, defaultNotes, "utf8");
   const result = spawnSync(editor, [tmpEditorPath], { stdio: "inherit" });
@@ -152,9 +160,11 @@ step("Creating GitHub release");
 const preReleaseFlag = PRE_RELEASE ? " --prerelease" : "";
 run(
   `gh release create ${TAG} build/${nativeBinary} build/bolt.d.ts ` +
-  `--title "${TAG}" --notes-file build/release-notes.md${preReleaseFlag}`
+    `--title "${TAG}" --notes-file build/release-notes.md${preReleaseFlag}`,
 );
-console.log(`  Released ${TAG} (${nativeBinary} + bolt.d.ts)${PRE_RELEASE ? pc.yellow(" [pre-release]") : ""}`);
+console.log(
+  `  Released ${TAG} (${nativeBinary} + bolt.d.ts)${PRE_RELEASE ? pc.yellow(" [pre-release]") : ""}`,
+);
 console.log(pc.dim(`  Push the tag to trigger CI for the other platform binary.`));
 
 // 9. Publish boltstack to npm
@@ -185,7 +195,10 @@ step("Restoring src/version.ts to dev marker");
 const devVersionTs = `// This file is overwritten by scripts/release.ts before compilation.\n// The VERSION constant is embedded in the binary.\nexport const VERSION = "${VERSION}-dev";\n`;
 if (!DRY_RUN) {
   writeFileSync(path.join(ROOT, "src", "version.ts"), devVersionTs, "utf8");
-  const dirty = execSync("git status --porcelain src/version.ts", { cwd: ROOT, encoding: "utf8" }).trim();
+  const dirty = execSync("git status --porcelain src/version.ts", {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).trim();
   if (dirty) {
     run("git add src/version.ts");
     run(`git commit -m "chore: restore version.ts to dev after release ${TAG}"`);

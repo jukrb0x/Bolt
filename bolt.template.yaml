@@ -29,7 +29,7 @@
 
 project:
   name: MyProject
-  engine:                    # repo identity only — path lives in bolt.local.yaml
+  engine: # repo identity only — path lives in bolt.local.yaml
     vcs: git
     # url: https://github.com/EpicGames/UnrealEngine.git
     branch: main
@@ -51,14 +51,14 @@ targets:
 # Step keys are strict: `uses` invokes a plugin/local action, `call` reuses a
 # task, and `run` executes a shell command. Compose and parameterize freely.
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   genproj: [{ uses: ue/generate_project }]
-  setup:   [{ uses: ue/setup }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
+  setup: [{ uses: ue/setup }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build, with: { config: debuggame } }]
   fillddc: [{ uses: ue/fillddc }]
-  start:   [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 # flows: named, ordered goals. `bolt run <flow>` runs the steps in order.
 # Fail-fast: the first failing task aborts the flow. List a task in
@@ -67,11 +67,11 @@ flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]   # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
   reset:
     description: Kill, update, regenerate, rebuild
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]    # kill may fail (nothing running) without aborting
+    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
 
 # Usage:
 #   bolt run build start                 # ad-hoc: run tasks in typed order

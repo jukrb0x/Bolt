@@ -6,7 +6,7 @@
 ## Context
 
 Before this change, `docs/` was overloaded: it held the **Mintlify
-documentation website** (`bolt-docs`) *and* was the only obvious place for
+documentation website** (`bolt-docs`) _and_ was the only obvious place for
 project knowledge. The repo had:
 
 - No home for shared project knowledge (ROADMAP, RFCs, architecture, ops,

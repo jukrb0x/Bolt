@@ -6,28 +6,28 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 
 ## Command Overview
 
-| Command | Description |
-|---------|-------------|
-| [`bolt run`](./run.md) | Run tasks (in typed order) or a flow |
-| [`bolt list`](./list.md) | List all tasks and flows |
-| [`bolt info`](./info.md) | Show project and VCS configuration |
-| [`bolt check`](./check.md) | Validate bolt.yaml and bolt.local.yaml |
-| [`bolt init`](./init.md) | Scaffold bolt.yaml + bolt.local.yaml |
-| [`bolt config`](./config.md) | Manage configuration |
-| [`bolt plugin`](./plugin.md) | Manage plugins |
-| [`bolt inspect`](./inspect.md) | Preview resolved steps for a task or flow |
-| [`bolt version`](./version.md) | Print version |
-| [`bolt self-update`](./self-update.md) | Update to latest release |
-| `bolt ai` | Generate `.bolt/ai-context.md` for AI agents |
+| Command                                | Description                                  |
+| -------------------------------------- | -------------------------------------------- |
+| [`bolt run`](./run.md)                 | Run tasks (in typed order) or a flow         |
+| [`bolt list`](./list.md)               | List all tasks and flows                     |
+| [`bolt info`](./info.md)               | Show project and VCS configuration           |
+| [`bolt check`](./check.md)             | Validate bolt.yaml and bolt.local.yaml       |
+| [`bolt init`](./init.md)               | Scaffold bolt.yaml + bolt.local.yaml         |
+| [`bolt config`](./config.md)           | Manage configuration                         |
+| [`bolt plugin`](./plugin.md)           | Manage plugins                               |
+| [`bolt inspect`](./inspect.md)         | Preview resolved steps for a task or flow    |
+| [`bolt version`](./version.md)         | Print version                                |
+| [`bolt self-update`](./self-update.md) | Update to latest release                     |
+| `bolt ai`                              | Generate `.bolt/ai-context.md` for AI agents |
 
 ## Global Options
 
 These options work with all commands:
 
-| Flag | Description |
-|------|-------------|
-| `--help` | Show help for a command |
-| `--version` | Print Bolt version |
+| Flag        | Description             |
+| ----------- | ----------------------- |
+| `--help`    | Show help for a command |
+| `--version` | Print Bolt version      |
 
 ## Common Patterns
 
@@ -58,10 +58,10 @@ bolt run build --config=debug
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Error (config not found, validation failed, execution error) |
+| Code | Meaning                                                      |
+| ---- | ------------------------------------------------------------ |
+| 0    | Success                                                      |
+| 1    | Error (config not found, validation failed, execution error) |
 
 ## Configuration Discovery
 

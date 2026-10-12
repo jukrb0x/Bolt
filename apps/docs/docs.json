@@ -29,24 +29,15 @@
           },
           {
             "group": "Daily Workflow",
-            "pages": [
-              "guides/daily-workflow",
-              "guides/error-handling"
-            ]
+            "pages": ["guides/daily-workflow", "guides/error-handling"]
           },
           {
             "group": "How It Works",
-            "pages": [
-              "guides/architecture",
-              "guides/plugin-system",
-              "guides/runtime"
-            ]
+            "pages": ["guides/architecture", "guides/plugin-system", "guides/runtime"]
           },
           {
             "group": "Plugin Development",
-            "pages": [
-              "guides/plugin-development"
-            ]
+            "pages": ["guides/plugin-development"]
           },
           {
             "group": "Configuration",

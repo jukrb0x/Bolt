@@ -25,10 +25,10 @@ See `overview.md` for the code architecture.
 
 ## The two AI layers
 
-| Layer | Audience | Lives in | Purpose |
-|---|---|---|---|
-| **A. Repo harness** | Agents developing *Bolt itself* | `AGENTS.md`, `docs/`, `docs/superpowers/` | Give agents the project's knowledge + working memory |
-| **B. Product feature** | Agents using Bolt in an *end-user's* project | `bolt ai` → `.bolt/ai-context.md`, `skills/boltstack/`, `.claude-plugin/` | Let LLMs safely drive Bolt in any UE project |
+| Layer                  | Audience                                     | Lives in                                                                  | Purpose                                              |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **A. Repo harness**    | Agents developing _Bolt itself_              | `AGENTS.md`, `docs/`, `docs/superpowers/`                                 | Give agents the project's knowledge + working memory |
+| **B. Product feature** | Agents using Bolt in an _end-user's_ project | `bolt ai` → `.bolt/ai-context.md`, `skills/boltstack/`, `.claude-plugin/` | Let LLMs safely drive Bolt in any UE project         |
 
 These are independent. Layer A is about maintaining this repo. Layer B is a
 shipped feature of the product. Do not mix them.
@@ -42,25 +42,25 @@ this repository.
 
 ### Surfaces
 
-| Surface | Committed? | Role |
-|---|---|---|
-| `AGENTS.md` (repo root) | yes | Entry point. Agent protocol, guardrails, and the **Context Map** pointing here. `CLAUDE.md` symlinks it. |
-| `docs/` | yes | Shared knowledge base (this folder). |
-| `docs/superpowers/` | **no (gitignored)** | Local-first agent working memory. |
-| `apps/docs/` | yes | The **product documentation website** (Mintlify). Not agent context — it's the user-facing docs. |
+| Surface                 | Committed?          | Role                                                                                                     |
+| ----------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md` (repo root) | yes                 | Entry point. Agent protocol, guardrails, and the **Context Map** pointing here. `CLAUDE.md` symlinks it. |
+| `docs/`                 | yes                 | Shared knowledge base (this folder).                                                                     |
+| `docs/superpowers/`     | **no (gitignored)** | Local-first agent working memory.                                                                        |
+| `apps/docs/`            | yes                 | The **product documentation website** (Mintlify). Not agent context — it's the user-facing docs.         |
 
 ### `docs/` context base
 
-| Path | Holds |
-|---|---|
-| `README.md` | Index of the context base |
-| `ROADMAP.md` | Direction and priorities (seeded from the old `TODO.md`) |
-| `RFCs/` | Proposals for non-trivial changes (`0000-template.md`) |
-| `architecture/` | How the system is built (this file, `overview.md`) |
-| `ops/` | Operational runbooks (`release.md`) |
-| `decisions/` | Lightweight ADRs, one decision per file |
-| `archive/` | Superseded/stale docs kept for reference |
-| `superpowers/` | Local-first working memory (below) |
+| Path            | Holds                                                    |
+| --------------- | -------------------------------------------------------- |
+| `README.md`     | Index of the context base                                |
+| `ROADMAP.md`    | Direction and priorities (seeded from the old `TODO.md`) |
+| `RFCs/`         | Proposals for non-trivial changes (`0000-template.md`)   |
+| `architecture/` | How the system is built (this file, `overview.md`)       |
+| `ops/`          | Operational runbooks (`release.md`)                      |
+| `decisions/`    | Lightweight ADRs, one decision per file                  |
+| `archive/`      | Superseded/stale docs kept for reference                 |
+| `superpowers/`  | Local-first working memory (below)                       |
 
 ### `docs/superpowers/` (local-first)
 
@@ -86,7 +86,7 @@ control while still living beside the code. See ADR
 
 ## Layer B — Product AI feature (`bolt ai`)
 
-Bolt ships an LLM integration so agents can operate Bolt inside *any* UE project
+Bolt ships an LLM integration so agents can operate Bolt inside _any_ UE project
 it manages.
 
 ### `bolt ai` → `.bolt/ai-context.md`
@@ -122,11 +122,11 @@ Registers the `boltstack` skill for Claude/agent plugin hosts. Note: its
 
 ## Where a doc belongs (quick guide)
 
-| You are writing… | Put it in… |
-|---|---|
-| Product/user docs (guides, CLI, API) | `apps/docs/` (Mintlify site) |
-| How Bolt is built / a design overview | `docs/architecture/` |
-| A decision + rationale | `docs/decisions/NNNN-*.md` |
-| A proposal to discuss before building | `docs/RFCs/` |
-| A runbook (release, maintenance) | `docs/ops/` |
-| In-flight spec / plan / scratch | `docs/superpowers/` (local) |
+| You are writing…                      | Put it in…                   |
+| ------------------------------------- | ---------------------------- |
+| Product/user docs (guides, CLI, API)  | `apps/docs/` (Mintlify site) |
+| How Bolt is built / a design overview | `docs/architecture/`         |
+| A decision + rationale                | `docs/decisions/NNNN-*.md`   |
+| A proposal to discuss before building | `docs/RFCs/`                 |
+| A runbook (release, maintenance)      | `docs/ops/`                  |
+| In-flight spec / plan / scratch       | `docs/superpowers/` (local)  |
