@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { copyFileSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { VERSION } from "../version";
@@ -84,7 +84,9 @@ test("a compiled binary keeps definePlugin after the source text is set aside", 
 
   const textFile = path.join(root, "src/plugin-types.txt");
   const hidden = path.join(dir, "plugin-types.txt");
-  renameSync(textFile, hidden);
+  // Temp and the repo can sit on different Windows volumes, where rename throws EXDEV.
+  copyFileSync(textFile, hidden);
+  unlinkSync(textFile);
   try {
     const run = Bun.spawn([binary], { cwd: dir, stdout: "pipe", stderr: "pipe" });
     const [stdout, stderr, code] = await Promise.all([
@@ -95,7 +97,8 @@ test("a compiled binary keeps definePlugin after the source text is set aside", 
     expect(code).toBe(0);
     expect(`${stdout}\n${stderr}`).toContain("embedded");
   } finally {
-    renameSync(hidden, textFile);
+    copyFileSync(hidden, textFile);
+    unlinkSync(hidden);
   }
 });
 
