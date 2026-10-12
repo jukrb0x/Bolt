@@ -1,5 +1,4 @@
 import { defineCommand } from "citty";
-import { normalizeBuildConfig } from "../build-config";
 import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
 import { Runner } from "../runner";
@@ -43,8 +42,7 @@ export function parseRunArgs(rawArgs: string[]): ParsedRun {
       const k = inner.slice(0, eq);
       const v = inner.slice(eq + 1);
       if (k === "dry-run") continue;
-      const normalized = k === "config" ? normalizeBuildConfig(v) : undefined;
-      params[k] = normalized?.ok ? normalized.value : v;
+      params[k] = v;
       continue;
     }
     if (arg.startsWith("-")) continue; // ignore other short flags

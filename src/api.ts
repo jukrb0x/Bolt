@@ -57,6 +57,7 @@ export interface CreateContextOptions {
 export function createContext(opts: CreateContextOptions): BoltPluginContext {
   return {
     cfg: {
+      version: 1,
       project: opts.project,
       vars: opts.vars ?? {},
       targets: {},

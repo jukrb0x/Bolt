@@ -1,0 +1,49 @@
+# Example bolt.yaml fragment for the ue plugin.
+# Core bolt.yaml stays generic (version, project.name, vars, tasks, flows).
+# This block is the plugin's own metadata. Omit `path` for the builtin.
+
+version: 1
+
+project:
+  name: MyProject
+
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: D:/UE
+        vcs: git
+        # url: https://github.com/EpicGames/UnrealEngine.git
+        branch: main
+      project:
+        path: D:/Games/MyProject
+        vcs: svn
+        # url: svn://svn.example.com/project/trunk
+      uproject: D:/Games/MyProject/MyProject.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
+  - namespace: svn
+    config:
+      use_tortoise: false
+
+tasks:
+  update:
+    - uses: ue/update_engine
+    - uses: ue/update_project
+  build:
+    - uses: ue/build
+      with: { target: editor }
+  start:
+    - uses: ue/start
+
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start]

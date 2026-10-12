@@ -1,81 +1,45 @@
-# bolt.yaml - shared project contract (commit this)
+# bolt.yaml — pipeline contract (commit this)
 #
-# This file holds the team-shared automation contract. It must NOT contain
-# machine-specific paths. Per-machine paths (engine/project/uproject) live in
-# bolt.local.yaml (gitignored) — see bolt.local.example.yaml. Run `bolt init`
-# to scaffold both files.
+# Generic metadata only. Unreal Engine settings belong to the ue plugin.
+# See src/plugins/ue.example.yaml.
 #
-# Optional: stop the entire run if it exceeds this duration
+# Optional: stop the run if it exceeds this duration
 # timeout_hours: 6
 #
-# Optional: notify via WeCom or Telegram on build events
+# Optional: notify via WeCom or Telegram. Keep secrets out of the committed file.
 # notifications:
 #   on_start: true
-#   on_op_complete: true
 #   on_failure: true
 #   on_complete: true
-#   providers:
-#     - type: wecom
-#       webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
-#     - type: telegram
-#       bot_token: "123456:ABC-DEF"
-#       chat_id: "-1001234567890"
+#   providers: []
 #
-# Optional: declare project-scope plugins by explicit path
+# Optional: load a project plugin by path. A pathless entry only carries config
+# for a builtin (the registry does not import it).
 # plugins:
 #   - namespace: myplugin
 #     path: ./bolt-plugins/myplugin/index.ts
-# Project-scope plugins are also auto-discovered from .bolt/plugins/<namespace>/index.ts
+
+version: 1
 
 project:
   name: MyProject
-  engine: # repo identity only — path lives in bolt.local.yaml
-    vcs: git
-    # url: https://github.com/EpicGames/UnrealEngine.git
-    branch: main
-  project:
-    vcs: svn
-    # url: svn://svn.example.com/project/trunk
 
-# Build targets referenced by the ue/build handler (via --target=<name>).
-targets:
-  editor:
-    kind: editor
-    config: development
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+# vars:
+#   region: us
 
 # tasks: the only building block. A task is a named list of steps.
-# Step keys are strict: `uses` invokes a plugin/local action, `call` reuses a
-# task, and `run` executes a shell command. Compose and parameterize freely.
+# Step keys: `uses` (plugin), `call` (another task), `run` (shell).
 tasks:
-  kill: [{ uses: ue/kill }]
-  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  genproj: [{ uses: ue/generate_project }]
-  setup: [{ uses: ue/setup }]
-  build: [{ uses: ue/build, with: { target: editor } }]
-  build_editor: [{ call: build, with: { config: debuggame } }]
-  fillddc: [{ uses: ue/fillddc }]
-  start: [{ uses: ue/start }]
+  hello:
+    - run: echo "hello from ${{ project.name }}"
 
 # flows: named, ordered goals. `bolt run <flow>` runs the steps in order.
-# Fail-fast: the first failing task aborts the flow. List a task in
-# continue_on_fail to let it fail without aborting.
 flows:
-  daily:
-    description: Update, build, and launch the editor
-    steps: [update, build, start]
-    continue_on_fail: [start] # update/build failures abort; start may fail
-  reset:
-    description: Kill, update, regenerate, rebuild
-    steps: [kill, update, genproj, build]
-    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
+  demo:
+    description: Say hello
+    steps: [hello]
 
 # Usage:
-#   bolt run build start                 # ad-hoc: run tasks in typed order
-#   bolt run daily                       # goal: run a flow
-#   bolt run build --target=client       # params replace variants
-#   bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
-#   bolt run reset --dry-run
+#   bolt run hello
+#   bolt run demo
+#   bolt run demo --dry-run
