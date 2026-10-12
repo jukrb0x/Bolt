@@ -3,11 +3,7 @@ import { findConfig } from "../discover";
 import { loadConfig } from "../config";
 import { generateAiContext } from "../ai-context";
 import { buildRegistry } from "../plugin-registry";
-import uePlugin from "../plugins/ue";
-import fsPlugin from "../plugins/fs";
-import jsonPlugin from "../plugins/json";
-import gitPlugin from "../plugins/git";
-import svnPlugin from "../plugins/svn";
+import { builtinPlugins } from "../plugins";
 import path from "path";
 import { mkdirSync, writeFileSync } from "fs";
 
@@ -29,13 +25,7 @@ export default defineCommand({
 
     const cfg = await loadConfig(configPath);
     const configDir = path.dirname(path.resolve(configPath));
-    const registry = await buildRegistry(cfg, configDir, [
-      uePlugin,
-      fsPlugin,
-      jsonPlugin,
-      gitPlugin,
-      svnPlugin,
-    ]);
+    const registry = await buildRegistry(cfg, configDir, Object.values(builtinPlugins));
     const content = generateAiContext(cfg, configPath, registry);
 
     if (args.stdout) {
