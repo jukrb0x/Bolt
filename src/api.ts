@@ -68,7 +68,6 @@ export function createContext(opts: CreateContextOptions): BoltPluginContext {
       version: 1,
       project: opts.project,
       vars: opts.vars ?? {},
-      targets: {},
       tasks: {},
       flows: {},
       plugins: opts.plugins ?? [],

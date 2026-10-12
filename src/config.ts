@@ -88,16 +88,6 @@ export interface Project {
   name: string;
 }
 
-/**
- * Not loaded from bolt.yaml. Kept so readers that still enumerate `cfg.targets`
- * (notably src/ai-context.ts) typecheck against an empty map.
- */
-export interface Target {
-  kind: string;
-  name?: string;
-  config: string;
-}
-
 /** Per-machine overrides from bolt.local.yaml (gitignored). Optional. */
 const LocalConfigSchema = z
   .object({
@@ -153,8 +143,6 @@ export interface BoltConfig {
   version: typeof CONFIG_VERSION;
   project: Project;
   vars: Record<string, string>;
-  /** Always empty. Build targets live on the plugin that declares them. */
-  targets: Record<string, Target>;
   tasks: TasksMap;
   flows: Record<string, Flow>;
   plugins: PluginEntry[];
@@ -227,7 +215,6 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     version: CONFIG_VERSION,
     project: shared.project,
     vars: { ...shared.vars, ...(local.vars ?? {}) },
-    targets: {},
     tasks: shared.tasks,
     flows: shared.flows,
     plugins: shared.plugins,

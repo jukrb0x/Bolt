@@ -67,6 +67,52 @@ test("build with unknown target falls back to raw program build", async () => {
   await uePlugin.handlers["build"]({ target: "CustomProgram" }, ctx);
   const cmd = ctx.logged.find((l) => l.includes("Build.bat")) ?? "";
   expect(cmd).toContain("CustomProgram");
+  expect(cmd).toContain("Development");
+  expect(cmd).toContain("-FromMsBuild");
+  expect(cmd).not.toContain("MyClient");
+});
+
+/** Split a logged Build.bat command into argv. Quoted paths stay one argument. */
+function shellArgv(command: string): string[] {
+  const args: string[] = [];
+  const re = /"([^"]*)"|(\S+)/g;
+  for (let match = re.exec(command); match; match = re.exec(command)) {
+    args.push(match[1] ?? match[2] ?? "");
+  }
+  return args;
+}
+
+test("ue/build alias client resolves to MyClient and Shipping", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "bolt-fake-ue-"));
+  const engine = path.join(root, "FakeUE");
+  const batDir = path.join(engine, "Engine", "Build", "BatchFiles");
+  mkdirSync(batDir, { recursive: true });
+  const bat = path.join(batDir, "Build.bat");
+  writeFileSync(bat, "#!/bin/sh\nexit 0\n");
+  const captured: string[] = [];
+  const ctx = {
+    cfg: withUeConfig({ engine: { path: engine } }),
+    configDir: root,
+    dryRun: false,
+    logger: new Logger({ sink: () => {} }),
+    runtime: {
+      ...mockRuntime,
+      shell: async (command: string) => {
+        captured.push(command);
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    },
+  };
+  try {
+    await uePlugin.handlers["build"]({ target: "client" }, ctx);
+    const argv = shellArgv(captured[0] ?? "");
+    expect(argv[0]).toBe(`${engine.replace(/\//g, "\\")}/Engine/Build/BatchFiles/Build.bat`);
+    expect(argv[1]).toBe("MyClient");
+    expect(argv[2]).toBe("Win64");
+    expect(argv[3]).toBe("Shipping");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("build throws when no target specified", async () => {

@@ -52,7 +52,6 @@ test("loads version, project name, tasks, and flows without a local file", async
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
   expect(cfg.version).toBe(1);
   expect(cfg.project.name).toBe("MyProject");
-  expect(cfg.targets).toEqual({});
   expect(cfg.plugins).toEqual([
     {
       namespace: "ue",
