@@ -6,17 +6,17 @@ Bolt includes built-in handlers for common Unreal Engine and file operations.
 
 ## ue/ — Unreal Engine
 
-All `ue/` handlers read paths from the merged `ctx.cfg.project` (`engine_repo.path`, `project_repo.path`, `uproject`) — identity comes from `bolt.yaml`, paths from `bolt.local.yaml`. Path separators are normalized to backslashes before being passed to `cmd.exe`.
+All `ue/` handlers read `engine`, `project`, `uproject`, and `targets` from the `ue` plugin config (`plugins: [{ namespace: ue, config }]`). Relative paths resolve against the directory containing `bolt.yaml`. Path separators are normalized to backslashes before being passed to `cmd.exe`.
 
 ### ue/build
 
-Build a target from the `targets:` map (or a raw program target name).
+Build a target from the `ue` plugin `targets` map (or a raw program target name).
 
-| Param      | Required | Description                                                                                |
-| ---------- | -------- | ------------------------------------------------------------------------------------------ |
-| `target`   | yes      | Key from `bolt.yaml` `targets:` map, a raw program target name, or the reserved `engine`   |
-| `config`   | no       | Override target's config (`development` \| `debug` \| `debuggame` \| `shipping` \| `test`) |
-| `platform` | no       | Target platform (default: `Win64`)                                                         |
+| Param      | Required | Description                                                                                 |
+| ---------- | -------- | ------------------------------------------------------------------------------------------- |
+| `target`   | yes      | Key from the `ue` plugin `targets` map, a raw program target name, or the reserved `engine` |
+| `config`   | no       | Override target's config (`development` \| `debug` \| `debuggame` \| `shipping` \| `test`)  |
+| `platform` | no       | Target platform (default: `Win64`)                                                          |
 
 For `kind: editor`: invokes `Build.bat` with `-Target="<ProjectName>Editor <platform> <config>" -Target="ShaderCompileWorker <platform> Development -Quiet" -Project="<uproject>" -WaitMutex`.
 
@@ -53,11 +53,11 @@ Build an arbitrary standalone program target.
 
 Launch the UE editor or a built program binary.
 
-| Param      | Required | Description                                                                        |
-| ---------- | -------- | ---------------------------------------------------------------------------------- |
-| `target`   | no       | Key from `targets:` — launches that binary instead of the editor                   |
-| `config`   | no       | Config suffix for binary lookup (`debug` \| `shipping` \| `test` \| `development`) |
-| `platform` | no       | Platform directory (default: `Win64`)                                              |
+| Param      | Required | Description                                                                         |
+| ---------- | -------- | ----------------------------------------------------------------------------------- |
+| `target`   | no       | Key from the `ue` plugin `targets` map — launches that binary instead of the editor |
+| `config`   | no       | Config suffix for binary lookup (`debug` \| `shipping` \| `test` \| `development`)  |
+| `platform` | no       | Platform directory (default: `Win64`)                                               |
 
 Binary search order for a named target:
 
@@ -78,14 +78,14 @@ No params.
 
 ### ue/update_engine
 
-Update the engine repo. Uses git or SVN based on `project.engine.vcs`:
+Update the engine repo. Uses git or SVN based on the `ue` plugin `engine.vcs`:
 
-- git → `git -C <engine_repo.path> pull origin <branch> --autostash --no-edit` (branch from `engine_repo.branch`, default `main`)
-- svn → `svn update <engine_repo.path> --non-interactive --trust-server-cert`
+- git → `git -C <engine.path> pull origin <branch> --autostash --no-edit` (branch from `engine.branch`, default `main`)
+- svn → `svn update <engine.path> --non-interactive --trust-server-cert`
 
 ### ue/update_project
 
-Update the project repo. Uses git or SVN based on `project.project.vcs`, against `project_repo.path` (same commands as `ue/update_engine`).
+Update the project repo. Uses git or SVN based on the `ue` plugin `project.vcs`, against `project.path` (same commands as `ue/update_engine`).
 
 ### ue/setup
 
@@ -97,9 +97,9 @@ Run the engine `Setup.bat`. Skips (warns) if `Setup.bat` is not found.
 
 ### ue/svn_cleanup
 
-Run SVN cleanup on the project working copy (`project_repo.path`). Uses TortoiseProc (full cleanup with all flags) if available/configured, otherwise falls back to `svn cleanup`.
+Run SVN cleanup on the project working copy (`project.path` from the `ue` plugin). Uses TortoiseProc (full cleanup with all flags) if available/configured, otherwise falls back to `svn cleanup`.
 
-TortoiseProc behaviour is controlled by `use_tortoise` in `bolt.local.yaml`:
+TortoiseProc behaviour is controlled by `use_tortoise` on the `svn` plugin:
 
 - `true` — require TortoiseProc, throw if not found
 - `false` — always use plain svn
@@ -109,9 +109,9 @@ TortoiseProc behaviour is controlled by `use_tortoise` in `bolt.local.yaml`:
 
 Revert all local SVN changes.
 
-| Param  | Required | Description                                     |
-| ------ | -------- | ----------------------------------------------- |
-| `path` | no       | Override path (defaults to `project_repo.path`) |
+| Param  | Required | Description                                                |
+| ------ | -------- | ---------------------------------------------------------- |
+| `path` | no       | Override path (defaults to the `ue` plugin `project.path`) |
 
 Uses TortoiseProc cleanup-with-revert if available, otherwise `svn revert -R`.
 
@@ -137,14 +137,14 @@ No params.
 
 Set a value in a UE INI file.
 
-| Param          | Required                | Description                                                          |
-| -------------- | ----------------------- | -------------------------------------------------------------------- |
-| `file`         | yes                     | Path relative to `project_repo.path` (e.g. `Config/DefaultGame.ini`) |
-| `section`      | yes                     | INI section name (e.g. `[/Script/EngineSettings.GameMapsSettings]`)  |
-| `key`          | yes                     | Key name                                                             |
-| `value`        | one of value/value-list | New scalar value                                                     |
-| `value-list`   | one of value/value-list | Semicolon-separated list, written as repeated `+key=` entries        |
-| `insert-front` | no                      | Insert a new section at the top of the file (`true`/`false`)         |
+| Param          | Required                | Description                                                                     |
+| -------------- | ----------------------- | ------------------------------------------------------------------------------- |
+| `file`         | yes                     | Path relative to the `ue` plugin `project.path` (e.g. `Config/DefaultGame.ini`) |
+| `section`      | yes                     | INI section name (e.g. `[/Script/EngineSettings.GameMapsSettings]`)             |
+| `key`          | yes                     | Key name                                                                        |
+| `value`        | one of value/value-list | New scalar value                                                                |
+| `value-list`   | one of value/value-list | Semicolon-separated list, written as repeated `+key=` entries                   |
+| `insert-front` | no                      | Insert a new section at the top of the file (`true`/`false`)                    |
 
 Reads the file, finds the section, updates the key in-place. Appends a new section block if the section does not exist.
 
@@ -154,7 +154,7 @@ Read a value from a UE INI file and log it.
 
 | Param     | Required | Description                                      |
 | --------- | -------- | ------------------------------------------------ |
-| `file`    | yes      | Path relative to `project_repo.path`             |
+| `file`    | yes      | Path relative to the `ue` plugin `project.path`  |
 | `section` | yes      | INI section name                                 |
 | `key`     | yes      | Key name                                         |
 | `type`    | no       | Coerce value (`string` \| `number` \| `boolean`) |
@@ -163,32 +163,32 @@ Read a value from a UE INI file and log it.
 
 Remove a key from a section in a UE INI file. Warns if the key is not found.
 
-| Param     | Required | Description                          |
-| --------- | -------- | ------------------------------------ |
-| `file`    | yes      | Path relative to `project_repo.path` |
-| `section` | yes      | INI section name                     |
-| `key`     | yes      | Key name                             |
+| Param     | Required | Description                                     |
+| --------- | -------- | ----------------------------------------------- |
+| `file`    | yes      | Path relative to the `ue` plugin `project.path` |
+| `section` | yes      | INI section name                                |
+| `key`     | yes      | Key name                                        |
 
 ### ue/ini_override
 
 Apply an override INI file over a target INI file.
 
-| Param           | Required | Description                                   |
-| --------------- | -------- | --------------------------------------------- |
-| `file`          | yes      | Target INI, relative to `project_repo.path`   |
-| `override-file` | yes      | Override INI, relative to `project_repo.path` |
+| Param           | Required | Description                                              |
+| --------------- | -------- | -------------------------------------------------------- |
+| `file`          | yes      | Target INI, relative to the `ue` plugin `project.path`   |
+| `override-file` | yes      | Override INI, relative to the `ue` plugin `project.path` |
 
 ### ue/ini_read_all
 
 Log every section and key of a UE INI file.
 
-| Param  | Required | Description                          |
-| ------ | -------- | ------------------------------------ |
-| `file` | yes      | Path relative to `project_repo.path` |
+| Param  | Required | Description                                     |
+| ------ | -------- | ----------------------------------------------- |
+| `file` | yes      | Path relative to the `ue` plugin `project.path` |
 
 ### ue/info
 
-Print VCS status for both repos. For each of `engine_repo.path` and `project_repo.path` it runs git info (`git log -1`, branch) or `svn info` depending on the repo's `vcs`. Logs URL, Revision, and Last Changed Rev.
+Print VCS status for both repos. For each of the `ue` plugin `engine.path` and `project.path` it runs git info (`git log -1`, branch) or `svn info` depending on that repo's `vcs`. Logs URL, Revision, and Last Changed Rev.
 
 No params.
 

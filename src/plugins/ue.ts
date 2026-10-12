@@ -2,16 +2,104 @@ import { PluginBase, handler } from "../plugin";
 import type { BoltPluginContext } from "../plugin";
 import path from "path";
 import { existsSync, readdirSync, statSync, renameSync, mkdirSync } from "fs";
-import { run, execRaw as exec } from "./helpers";
+import { z } from "zod";
+import { declaredPluginConfig, run, execRaw as exec } from "./helpers";
 import gitPlugin from "./git";
 import svnPlugin from "./svn";
 import * as ueIni from "./ue-ini";
-import { normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
+import { BuildConfigSchema, normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
+import type { BuildConfig } from "../build-config";
+
+const RepoSchema = z.object({
+  path: z.string().min(1),
+  vcs: z.enum(["git", "svn"]).default("git"),
+  url: z.string().optional(),
+  branch: z.string().optional(),
+});
+
+const TargetSchema = z.object({
+  kind: z.enum(["editor", "program", "game", "client", "server"]),
+  name: z.string().optional(),
+  config: BuildConfigSchema.default("development"),
+});
+
+/** UE plugin metadata. Validated here, not by the core bolt.yaml schema. */
+export const ueConfigSchema = z.object({
+  engine: RepoSchema,
+  project: RepoSchema,
+  uproject: z.string().min(1),
+  targets: z.record(TargetSchema).default({}),
+});
+
+export interface UeConfig {
+  engine: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
+  project: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
+  uproject: string;
+  targets: Record<string, { kind: string; name?: string; config: BuildConfig }>;
+}
+
+function resolveAgainst(configDir: string, value: string): string {
+  return path.isAbsolute(value) ? value : path.resolve(configDir, value);
+}
+
+export function ueMetadataErrors(plugins: unknown): Array<{ path: string; message: string }> {
+  if (!Array.isArray(plugins)) return [];
+  const entry = plugins.find(
+    (item) =>
+      !!item && typeof item === "object" && (item as { namespace?: unknown }).namespace === "ue",
+  ) as { config?: unknown } | undefined;
+  if (!entry) return [];
+  const result = ueConfigSchema.safeParse(entry.config);
+  if (result.success) return [];
+  return result.error.issues.map((issue) => ({
+    path: ["plugins", "ue", "config", ...issue.path.map(String)].join("."),
+    message: issue.message,
+  }));
+}
+
+export function tasksReferenceUe(tasks: unknown): boolean {
+  if (!tasks || typeof tasks !== "object") return false;
+  for (const steps of Object.values(tasks as Record<string, unknown>)) {
+    if (!Array.isArray(steps)) continue;
+    for (const step of steps) {
+      if (!step || typeof step !== "object") continue;
+      const uses = (step as { uses?: unknown }).uses;
+      if (typeof uses === "string" && uses.startsWith("ue/")) return true;
+    }
+  }
+  return false;
+}
+
+function formatIssues(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => `  ${issue.path.join(".") || "<root>"}: ${issue.message}`)
+    .join("\n");
+}
+
+function ueConfig(ctx: BoltPluginContext): UeConfig {
+  const raw = declaredPluginConfig(ctx, "ue");
+  if (raw === undefined) {
+    throw new Error(
+      "ue plugin config is missing. Declare it under plugins: [{ namespace: ue, config: { engine, project, uproject, targets } }]",
+    );
+  }
+  const result = ueConfigSchema.safeParse(raw);
+  if (!result.success) {
+    throw new Error(`Invalid config for plugin "ue":\n${formatIssues(result.error)}`);
+  }
+  const data = result.data;
+  return {
+    engine: { ...data.engine, path: resolveAgainst(ctx.configDir, data.engine.path) },
+    project: { ...data.project, path: resolveAgainst(ctx.configDir, data.project.path) },
+    uproject: resolveAgainst(ctx.configDir, data.uproject),
+    targets: data.targets,
+  };
+}
 
 /** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
 const w = (p: string) => p.replace(/\//g, "\\");
 
-/** Omit an unset branch so git/pull keeps its default (`git_branch`, else `main`). */
+/** Omit an unset branch so git/pull keeps its default (`main`). */
 function gitPullArgs(repo: { path: string; branch?: string }): Record<string, string> {
   const args: Record<string, string> = { path: repo.path };
   if (repo.branch !== undefined) args.branch = repo.branch;
@@ -54,7 +142,12 @@ function findZeroByteDlls(dir: string): string[] {
   return results;
 }
 
-class UEPlugin extends PluginBase {
+class UEPlugin extends PluginBase.withDescriptor({
+  namespace: "ue",
+  version: "1.0.0",
+  description: "Unreal Engine build and editor automation",
+  metadata: ueConfigSchema,
+}) {
   namespace = "ue";
 
   @handler("Build target: ${target} with config: ${config}")
@@ -64,7 +157,7 @@ class UEPlugin extends PluginBase {
       throw new Error(`No target specified for ue/build`);
     }
 
-    const uePath = ctx.cfg.project.engine_repo.path;
+    const uePath = ueConfig(ctx).engine.path;
     const platform = params.platform ?? "Win64";
     const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
 
@@ -82,8 +175,8 @@ class UEPlugin extends PluginBase {
       return;
     }
 
-    const projFile = ctx.cfg.project.uproject;
-    const target = ctx.cfg.targets[targetName];
+    const projFile = ueConfig(ctx).uproject;
+    const target = ueConfig(ctx).targets[targetName];
 
     if (target) {
       // Known target from cfg.targets
@@ -106,7 +199,7 @@ class UEPlugin extends PluginBase {
 
   @handler("Update engine repository")
   async update_engine(params: Record<string, string>, ctx: BoltPluginContext) {
-    const repo = ctx.cfg.project.engine_repo;
+    const repo = ueConfig(ctx).engine;
     const vcs = repo.vcs ?? "git";
     if (vcs === "git") {
       await gitPlugin.handlers["pull"](gitPullArgs(repo), ctx);
@@ -117,7 +210,7 @@ class UEPlugin extends PluginBase {
 
   @handler("Update project repository")
   async update_project(params: Record<string, string>, ctx: BoltPluginContext) {
-    const repo = ctx.cfg.project.project_repo;
+    const repo = ueConfig(ctx).project;
     const vcs = repo.vcs ?? "svn";
     if (vcs === "git") {
       await gitPlugin.handlers["pull"](gitPullArgs(repo), ctx);
@@ -128,18 +221,18 @@ class UEPlugin extends PluginBase {
 
   @handler("SVN cleanup")
   async svn_cleanup(params: Record<string, string>, ctx: BoltPluginContext) {
-    await svnPlugin.handlers["cleanup"]({ path: ctx.cfg.project.project_repo.path }, ctx);
+    await svnPlugin.handlers["cleanup"]({ path: ueConfig(ctx).project.path }, ctx);
   }
 
   @handler("SVN revert ${path}")
   async svn_revert(params: Record<string, string>, ctx: BoltPluginContext) {
-    const p = params.path ?? ctx.cfg.project.project_repo.path;
+    const p = params.path ?? ueConfig(ctx).project.path;
     await svnPlugin.handlers["revert"]({ path: p }, ctx);
   }
 
   @handler("Run engine Setup.bat")
   async setup(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ctx.cfg.project.engine_repo.path;
+    const uePath = ueConfig(ctx).engine.path;
     const setupBat = `${w(uePath)}\\Setup.bat`;
     if (!existsSync(setupBat)) {
       ctx.logger.warn(`Setup.bat not found at ${setupBat}, skipping`);
@@ -152,8 +245,8 @@ class UEPlugin extends PluginBase {
 
   @handler("Generate project files")
   async generate_project(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ctx.cfg.project.engine_repo.path;
-    const projFile = ctx.cfg.project.uproject;
+    const uePath = ueConfig(ctx).engine.path;
+    const projFile = ueConfig(ctx).uproject;
     await run(
       `"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`,
       ctx,
@@ -162,8 +255,8 @@ class UEPlugin extends PluginBase {
 
   @handler("Launch ${target} (${config})")
   async start(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ctx.cfg.project.engine_repo.path;
-    const projFile = ctx.cfg.project.uproject;
+    const uePath = ueConfig(ctx).engine.path;
+    const projFile = ueConfig(ctx).uproject;
     const projectDir = getProjectDir(projFile);
 
     const suffixMap: Record<string, string> = {
@@ -228,8 +321,8 @@ class UEPlugin extends PluginBase {
 
   @handler("Fill DDC for PIE")
   async fillddc(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ctx.cfg.project.engine_repo.path;
-    const projFile = ctx.cfg.project.uproject;
+    const uePath = ueConfig(ctx).engine.path;
+    const projFile = ueConfig(ctx).uproject;
     await run(
       `"${w(uePath)}/Engine/Binaries/Win64/UE4Editor-Cmd.exe" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
       ctx,
@@ -246,7 +339,7 @@ class UEPlugin extends PluginBase {
       "value-list": valueList,
       "insert-front": insertFront,
     } = params;
-    const projectPath = ctx.cfg.project.project_repo.path;
+    const projectPath = ueConfig(ctx).project.path;
     const projFile = path.join(projectPath, file);
 
     // Parse value-list (semicolon-separated) if provided
@@ -271,7 +364,7 @@ class UEPlugin extends PluginBase {
   @handler()
   async ini_get(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, section, key, type } = params;
-    const projectPath = ctx.cfg.project.project_repo.path;
+    const projectPath = ueConfig(ctx).project.path;
     const projFile = path.join(projectPath, file);
 
     const options = type ? { valueType: type as "string" | "number" | "boolean" } : undefined;
@@ -289,7 +382,7 @@ class UEPlugin extends PluginBase {
   @handler()
   async ini_remove(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, section, key } = params;
-    const projectPath = ctx.cfg.project.project_repo.path;
+    const projectPath = ueConfig(ctx).project.path;
     const projFile = path.join(projectPath, file);
 
     ctx.logger.info(`ini-remove ${file} [${section}] ${key}`);
@@ -305,7 +398,7 @@ class UEPlugin extends PluginBase {
   @handler("Override INI ${file} with ${override-file}")
   async ini_override(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, "override-file": overrideFile } = params;
-    const projectPath = ctx.cfg.project.project_repo.path;
+    const projectPath = ueConfig(ctx).project.path;
     const targetPath = path.join(projectPath, file);
     const overridePath = path.join(projectPath, overrideFile);
 
@@ -319,7 +412,7 @@ class UEPlugin extends PluginBase {
   @handler()
   async ini_read_all(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file } = params;
-    const projectPath = ctx.cfg.project.project_repo.path;
+    const projectPath = ueConfig(ctx).project.path;
     const projFile = path.join(projectPath, file);
 
     const data = await ueIni.readIniAll(projFile);
@@ -354,10 +447,10 @@ class UEPlugin extends PluginBase {
   @handler("Show VCS info")
   async info(params: Record<string, string>, ctx: BoltPluginContext) {
     ctx.logger.info("=== VCS Info ===");
-    const engineVcs = ctx.cfg.project.engine_repo.vcs ?? "git";
-    const projectVcs = ctx.cfg.project.project_repo.vcs ?? "svn";
-    const enginePath = ctx.cfg.project.engine_repo.path;
-    const projectPath = ctx.cfg.project.project_repo.path;
+    const engineVcs = ueConfig(ctx).engine.vcs ?? "git";
+    const projectVcs = ueConfig(ctx).project.vcs ?? "svn";
+    const enginePath = ueConfig(ctx).engine.path;
+    const projectPath = ueConfig(ctx).project.path;
 
     if (engineVcs === "git") {
       await gitPlugin.handlers["info"]({ path: enginePath }, ctx);
@@ -373,8 +466,8 @@ class UEPlugin extends PluginBase {
 
   @handler("Fix 0-byte DLL files")
   async fix_dll(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ctx.cfg.project.engine_repo.path;
-    const projectDir = getProjectDir(ctx.cfg.project.uproject);
+    const uePath = ueConfig(ctx).engine.path;
+    const projectDir = getProjectDir(ueConfig(ctx).uproject);
     const trashDir = path.join(projectDir, ".bolt", "trash-dlls");
     const dirsToScan = [
       path.join(uePath, "Engine", "Binaries"),

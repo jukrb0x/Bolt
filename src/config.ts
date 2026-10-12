@@ -1,21 +1,16 @@
 import { z } from "zod";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import path from "path";
-import { BuildConfigSchema } from "./build-config";
 import { createRuntime, type Runtime } from "./runtime";
+import { svnMetadataErrors } from "./plugins/svn";
+import { tasksReferenceUe, ueMetadataErrors } from "./plugins/ue";
 
-export type { BuildConfig } from "./build-config";
+/** bolt.yaml schema version. Unknown versions are rejected; there is no migrator. */
+export const CONFIG_VERSION = 1;
 
 // ============================================================================
 // Schemas (single source of truth) + Derived Types
 // ============================================================================
-
-// --- Enums ---
-const TargetKindSchema = z.enum(["editor", "program", "game", "client", "server"]);
-const VcsTypeSchema = z.enum(["git", "svn"]);
-
-export type TargetKind = z.infer<typeof TargetKindSchema>;
-export type VcsType = z.infer<typeof VcsTypeSchema>;
 
 // --- Core Schemas ---
 const StepOptionsSchema = z.object({
@@ -71,75 +66,45 @@ export type Flow = z.infer<typeof FlowSchema>;
 
 const PluginEntrySchema = z.object({
   namespace: z.string(),
-  path: z.string(),
+  path: z.string().optional(),
   config: z.record(z.unknown()).optional(),
 });
-export type PluginEntry = z.infer<typeof PluginEntrySchema>;
 
-const TargetSchema = z.object({
-  kind: TargetKindSchema,
-  name: z.string().optional(),
-  config: BuildConfigSchema.default("development"),
-});
-export type Target = z.infer<typeof TargetSchema>;
+/** Plugin entries returned by loadConfig. A missing path is config for a builtin. */
+export interface PluginEntry {
+  namespace: string;
+  path?: string;
+  config?: Record<string, unknown>;
+}
 
-// --- Project: shared identity (bolt.yaml) vs local paths (bolt.local.yaml) ---
-
-/** Repo identity as declared in the shared, committed bolt.yaml (NO machine path). */
-const RepoIdentitySchema = z.object({
-  vcs: VcsTypeSchema.default("git"),
-  url: z.string().optional(),
-  branch: z.string().optional(),
-});
-export type RepoIdentity = z.infer<typeof RepoIdentitySchema>;
-
-/** Shared project block in bolt.yaml. Extra string/bool fields pass through for interpolation. */
+/** Generic project label. Engine/repo identity belongs to the plugin that uses it. */
 const ProjectSchema = z
   .object({
-    name: z.string(),
-    engine: RepoIdentitySchema,
-    project: RepoIdentitySchema,
+    name: z.string().min(1),
   })
-  .catchall(z.union([z.string(), z.boolean()]));
+  .strict();
 
-/** Parsed shared project shape (manual — Zod catchall + objects don't infer cleanly). */
-interface SharedProject {
-  name: string;
-  engine: RepoIdentity;
-  project: RepoIdentity;
-  [key: string]: string | boolean | RepoIdentity;
-}
-
-/** Per-machine config from bolt.local.yaml (gitignored). */
-const LocalConfigSchema = z.object({
-  engine_path: z.string(),
-  project_path: z.string(),
-  uproject: z.string(),
-  use_tortoise: z.boolean().optional(),
-  vars: z.record(z.string()).optional(),
-});
-export type LocalConfig = z.infer<typeof LocalConfigSchema>;
-
-// --- Merged runtime types (what runner.ts + plugins read) ---
-
-/** Merged runtime repo shape: shared identity + local path. */
-export interface RepoConfig {
-  path: string;
-  vcs: VcsType;
-  url?: string;
-  branch?: string;
-}
-
-/** Merged runtime project shape. Reconstructed by loadConfig so downstream is unaffected. */
 export interface Project {
   name: string;
-  engine_repo: RepoConfig;
-  project_repo: RepoConfig;
-  uproject: string;
-  use_tortoise?: boolean;
-  /** Extra string fields from bolt.yaml are preserved, available as ${{ project.<key> }}. */
-  [key: string]: string | boolean | undefined | RepoConfig;
 }
+
+/**
+ * Not loaded from bolt.yaml. Kept so readers that still enumerate `cfg.targets`
+ * (notably src/ai-context.ts) typecheck against an empty map.
+ */
+export interface Target {
+  kind: string;
+  name?: string;
+  config: string;
+}
+
+/** Per-machine overrides from bolt.local.yaml (gitignored). Optional. */
+const LocalConfigSchema = z
+  .object({
+    vars: z.record(z.string()).optional(),
+  })
+  .strict();
+export type LocalConfig = z.infer<typeof LocalConfigSchema>;
 
 const NotifyProviderSchema = z.discriminatedUnion("type", [
   z.object({
@@ -165,25 +130,39 @@ const NotificationsSchema = z.object({
 export type NotificationsConfig = z.infer<typeof NotificationsSchema>;
 
 // --- Top-level shared config (bolt.yaml) ---
-const BoltConfigSchema = z.object({
-  project: ProjectSchema,
-  vars: z.record(z.string()).default({}),
-  targets: z.record(TargetSchema).default({}),
-  tasks: z.record(TaskSchema).default({}),
-  flows: z.record(FlowSchema).default({}),
-  plugins: z.array(PluginEntrySchema).default([]),
-  timeout_hours: z.number().positive().optional(),
-  notifications: NotificationsSchema.optional(),
-});
+const BoltConfigSchema = z
+  .object({
+    version: z
+      .number({
+        required_error: "config version is required (expected 1)",
+        invalid_type_error: "config version must be 1",
+      })
+      .refine((value) => value === CONFIG_VERSION, { message: "config version must be 1" }),
+    project: ProjectSchema,
+    vars: z.record(z.string()).default({}),
+    tasks: z.record(TaskSchema).default({}),
+    flows: z.record(FlowSchema).default({}),
+    plugins: z.array(PluginEntrySchema).default([]),
+    timeout_hours: z.number().positive().optional(),
+    notifications: NotificationsSchema.optional(),
+  })
+  .strict();
 
-/** Merged runtime config returned by loadConfig (project is the reconstructed shape). */
+/** Runtime config returned by loadConfig. */
 export interface BoltConfig {
+  version: typeof CONFIG_VERSION;
   project: Project;
   vars: Record<string, string>;
+  /** Always empty. Build targets live on the plugin that declares them. */
   targets: Record<string, Target>;
   tasks: TasksMap;
   flows: Record<string, Flow>;
   plugins: PluginEntry[];
+  /**
+   * Directory containing the bolt.yaml this config was loaded from.
+   * Set by loadConfig. Not a bolt.yaml field. Relative plugin paths resolve against it.
+   */
+  configDir?: string;
   timeout_hours?: number;
   notifications?: NotificationsConfig;
 }
@@ -203,32 +182,28 @@ export interface BuildContext {
 // ============================================================================
 
 const LOCAL_FILENAME = "bolt.local.yaml";
-const LOCAL_HINT = "copy bolt.local.example.yaml or run bolt init";
 
-/** Load + validate bolt.local.yaml next to bolt.yaml. Throws with an actionable message. */
+/** Load bolt.local.yaml when it exists. A missing file means "no local overrides". */
 function loadLocalConfig(localPath: string, rt: Runtime): LocalConfig {
+  if (!existsSync(localPath)) return {};
   let raw: string;
   try {
     raw = readFileSync(localPath, "utf8");
-  } catch {
-    throw new Error(
-      `${LOCAL_FILENAME} missing or invalid (not found at ${localPath}) — ${LOCAL_HINT}`,
-    );
+  } catch (e: any) {
+    throw new Error(`${LOCAL_FILENAME} missing or invalid (${e.message})`);
   }
   let parsed: unknown;
   try {
     parsed = rt.parseYaml(raw);
   } catch (e: any) {
-    throw new Error(
-      `${LOCAL_FILENAME} missing or invalid (YAML parse error: ${e.message}) — ${LOCAL_HINT}`,
-    );
+    throw new Error(`${LOCAL_FILENAME} missing or invalid (YAML parse error: ${e.message})`);
   }
-  const result = LocalConfigSchema.safeParse(parsed);
+  const result = LocalConfigSchema.safeParse(parsed ?? {});
   if (!result.success) {
     const detail = result.error.issues
       .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
       .join("; ");
-    throw new Error(`${LOCAL_FILENAME} missing or invalid (${detail}) — ${LOCAL_HINT}`);
+    throw new Error(`${LOCAL_FILENAME} missing or invalid (${detail})`);
   }
   return result.data;
 }
@@ -245,37 +220,18 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     throw new Error(`bolt.yaml invalid (${detail})`);
   }
   const shared = sharedResult.data;
-
-  // Resolve relative paths against the directory containing bolt.yaml
   const configDir = path.dirname(path.resolve(filepath));
-  const resolve = (p: string) => (path.isAbsolute(p) ? p : path.resolve(configDir, p));
-
   const local = loadLocalConfig(path.join(configDir, LOCAL_FILENAME), rt);
 
-  // Reconstruct the runtime project shape handlers expect: identity + local paths.
-  const sharedProject = shared.project as unknown as SharedProject;
-  const { name, engine, project: projectIdentity, ...rest } = sharedProject;
-  const extras = rest as Record<string, string | boolean>;
-
-  const project: Project = {
-    ...extras,
-    name,
-    engine_repo: { path: resolve(local.engine_path), ...engine },
-    project_repo: { path: resolve(local.project_path), ...projectIdentity },
-    uproject: resolve(local.uproject),
-    use_tortoise: local.use_tortoise,
-  };
-
-  // local.vars shallow-override bolt.yaml vars
-  const vars = { ...shared.vars, ...(local.vars ?? {}) };
-
   return {
-    project,
-    vars,
-    targets: shared.targets,
+    version: CONFIG_VERSION,
+    project: shared.project,
+    vars: { ...shared.vars, ...(local.vars ?? {}) },
+    targets: {},
     tasks: shared.tasks,
     flows: shared.flows,
     plugins: shared.plugins,
+    configDir,
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
   };
@@ -284,6 +240,29 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
 export interface ConfigCheckResult {
   ok: boolean;
   errors: Array<{ path: string; message: string }>;
+}
+
+/** Plugin metadata failures. Core schema errors stay in BoltConfigSchema. */
+export function pluginMetadataErrors(parsed: unknown): Array<{ path: string; message: string }> {
+  if (!parsed || typeof parsed !== "object") return [];
+  const record = parsed as { plugins?: unknown; tasks?: unknown };
+  const errors = [...ueMetadataErrors(record.plugins), ...svnMetadataErrors(record.plugins)];
+  const hasUe = Array.isArray(record.plugins)
+    ? record.plugins.some(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          (item as { namespace?: unknown }).namespace === "ue",
+      )
+    : false;
+  if (tasksReferenceUe(record.tasks) && !hasUe) {
+    errors.push({
+      path: "plugins.ue",
+      message:
+        "ue metadata is required when a task uses a ue/ handler (plugins: namespace ue, with engine, project, uproject, targets)",
+    });
+  }
+  return errors;
 }
 
 export async function checkConfig(filepath: string, runtime?: Runtime): Promise<ConfigCheckResult> {
@@ -312,20 +291,22 @@ export async function checkConfig(filepath: string, runtime?: Runtime): Promise<
       })),
     );
   }
+  errors.push(...pluginMetadataErrors(parsed));
 
-  // Validate the per-machine local file (surface problems as errors, never throw).
+  // Optional per-machine file. Missing is fine; invalid content is an error.
   const configDir = path.dirname(path.resolve(filepath));
   const localPath = path.join(configDir, LOCAL_FILENAME);
-  let localRaw: string | undefined;
-  try {
-    localRaw = readFileSync(localPath, "utf8");
-  } catch {
-    errors.push({ path: LOCAL_FILENAME, message: `missing — ${LOCAL_HINT}` });
-  }
-  if (localRaw !== undefined) {
+  if (existsSync(localPath)) {
+    let localRaw: string;
+    try {
+      localRaw = readFileSync(localPath, "utf8");
+    } catch (e: any) {
+      errors.push({ path: LOCAL_FILENAME, message: e.message });
+      return { ok: false, errors };
+    }
     try {
       const localParsed = rt.parseYaml(localRaw);
-      const localResult = LocalConfigSchema.safeParse(localParsed);
+      const localResult = LocalConfigSchema.safeParse(localParsed ?? {});
       if (!localResult.success) {
         errors.push(
           ...localResult.error.issues.map((issue) => ({

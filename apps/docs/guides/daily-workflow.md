@@ -112,22 +112,30 @@ A multi-task invocation sends one start notification. It lists the top-level tas
 
 ```yaml
 # bolt.yaml — shared, committed contract
+version: 1
+
 project:
   name: MyGame
-  engine:
-    vcs: git
-    branch: main
-  project:
-    vcs: svn
 
-targets:
-  editor:
-    kind: editor
-    config: development
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: D:/UE
+        vcs: git
+        branch: main
+      project:
+        path: D:/Games/MyGame
+        vcs: svn
+      uproject: D:/Games/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
 
 tasks:
   kill: [{ uses: ue/kill }]
@@ -147,7 +155,7 @@ flows:
     continue_on_fail: [kill]
 ```
 
-Machine paths live separately in `bolt.local.yaml` (gitignored) — see [Project Structure](/guides/project-structure.md).
+Relative engine, project, and uproject paths resolve against the directory containing `bolt.yaml`. See [Project Structure](/guides/project-structure.md).
 
 ## Tips
 

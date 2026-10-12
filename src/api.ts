@@ -1,5 +1,6 @@
 // src/api.ts
-import { loadConfig, type BoltConfig } from "./config";
+import path from "path";
+import { loadConfig, type BoltConfig, type PluginEntry } from "./config";
 import { Runner } from "./runner";
 import { Logger } from "./logger";
 import { findConfig } from "./discover";
@@ -32,18 +33,25 @@ export async function run(
 ): Promise<void> {
   const runtime = opts.runtime ?? createRuntime();
   let config = opts.config;
+  let configDir = opts.cwd;
   if (!config) {
     const configPath = opts.configPath ?? (await findConfig(opts.cwd ?? process.cwd()));
     if (!configPath) throw new Error("bolt.yaml not found (searched up from cwd)");
     config = await loadConfig(configPath, runtime);
+    configDir = path.dirname(path.resolve(configPath));
+  } else if (config.configDir) {
+    // A preloaded config keeps the directory loadConfig recorded, even when cwd differs.
+    configDir = config.configDir;
   }
   const logger = opts.logger ?? new Logger();
-  const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime });
+  const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime, configDir });
   await runner.runTask(taskName, opts.params ?? {});
 }
 
 export interface CreateContextOptions {
   project: Project;
+  /** Same plugins array loadConfig returns. An empty list does not read bolt.yaml. */
+  plugins?: PluginEntry[];
   vars?: Record<string, string>;
   dryRun?: boolean;
   logger?: BoltLogger;
@@ -57,12 +65,13 @@ export interface CreateContextOptions {
 export function createContext(opts: CreateContextOptions): BoltPluginContext {
   return {
     cfg: {
+      version: 1,
       project: opts.project,
       vars: opts.vars ?? {},
       targets: {},
       tasks: {},
       flows: {},
-      plugins: [],
+      plugins: opts.plugins ?? [],
     },
     configDir: opts.configDir ?? process.cwd(),
     dryRun: opts.dryRun ?? false,

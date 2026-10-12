@@ -65,7 +65,7 @@ const plugin: BoltPlugin = {
       }
 
       const { project } = ctx.cfg;
-      ctx.logger.info(`Project: ${project.name} at ${project.project_repo.path}`);
+      ctx.logger.info(`Project: ${project.name}`);
     },
   },
 };
