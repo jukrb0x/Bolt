@@ -25,13 +25,13 @@ Project directories prefer `index.ts`. Bolt compiles it and caches the JavaScrip
 
 ## Host install
 
-If `package.json` has `dependencies` and the directory has no `node_modules`, Bolt installs them by running its own executable:
+While compiling a `.ts` entry, if `package.json` `dependencies` is non-empty and the directory has no `node_modules`, Bolt installs them by running its own executable:
 
 ```text
 BUN_BE_BUN=1 <this bolt> install
 ```
 
-That does not look up a `bun` binary on `PATH`. `bolt plugin new` puts `boltstack` in `devDependencies`, not `dependencies`.
+That does not look up a `bun` binary on `PATH`. A prebuilt `index.js` is loaded without that install. `bolt plugin new` puts `boltstack` in `devDependencies`, not `dependencies`.
 
 ## Brand
 
@@ -58,7 +58,7 @@ Core `bolt.yaml` stays `version: 1` with `project.name`. Unreal `targets` belong
 
 `with:` values are interpolated, then overridden by `--key=value` on `bolt run`. `defineHandler` params are checked before the function runs.
 
-`ctx.dryRun` is true for `--dry-run`. `ctx.cfg.project` is the project name. Plugin metadata, including Unreal paths, is on `ctx.cfg.plugins`. `ctx.configDir` is the `bolt.yaml` directory. `ctx.logger` is `info`, `warn`, `error`, `debug`, and `cmd`. `ctx.runtime` spawns processes.
+`ctx.dryRun` is true for `--dry-run`. `ctx.cfg.project` is `{ name }`. The name string is `ctx.cfg.project.name`. Plugin metadata, including Unreal paths, is on `ctx.cfg.plugins`. `ctx.configDir` is the `bolt.yaml` directory. `ctx.logger` is `info`, `warn`, `error`, `debug`, and `cmd`. `ctx.runtime` spawns processes.
 
 ## Built-in plugins
 

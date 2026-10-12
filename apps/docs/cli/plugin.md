@@ -48,7 +48,7 @@ The command writes two files:
 
 It does not write `tsconfig.json` or a manifest file. The manifest is built in memory when the plugin loads. See [Plugin Development](/guides/plugin-development).
 
-The command prints a `bun install` hint. You do not need a `bun` binary, and loading the plugin does not run that hint. If `dependencies` is non-empty and `node_modules` is missing, the host runs this executable as `install` with `BUN_BE_BUN=1`. Editor types come from the release asset `bolt.d.ts` (`declare module "boltstack"`).
+The command prints a `bun install` hint. You do not need a `bun` binary, and loading the plugin does not run that hint. While compiling `index.ts`, if `dependencies` is non-empty and `node_modules` is missing, the host runs this executable as `install` with `BUN_BE_BUN=1`. A prebuilt `index.js` is loaded without that install. Editor types come from the release asset `bolt.d.ts` (`declare module "boltstack"`).
 
 ## Examples
 
