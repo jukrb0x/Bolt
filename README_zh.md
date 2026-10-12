@@ -281,11 +281,11 @@ bolt plugin new myplugin --user    # 用户范围 (~/.bolt/plugins/)
 
 ```
 cd .bolt/plugins/myplugin
-bun install    # 设置 IDE 类型支持
+bolt types
 ```
 
 ```typescript
-import type { BoltPlugin } from "bolt";
+import type { BoltPlugin } from "boltstack";
 
 const plugin: BoltPlugin = {
   namespace: "myplugin",
@@ -322,13 +322,11 @@ tasks:
 
 ### 类型定义
 
-插件类型通过 `boltstack` npm 包提供：
+`bolt types` 根据正在运行的 bolt 写入 `.bolt/types/boltstack.d.ts`，以及把模块名 `boltstack` 映射到该文件的 `tsconfig.json`。类型与这个二进制一致。不要再下载一份单独的 `bolt.d.ts`，也不要通过 npm 安装另一份类型。
 
+```bash
+bolt types
 ```
-bun add -d boltstack
-```
-
-安装后 `import type { BoltPlugin, BoltPluginContext } from "bolt"` 可以正确解析。脚手架会自动设置。
 
 ## 库使用
 

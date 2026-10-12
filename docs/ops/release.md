@@ -43,4 +43,4 @@ Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. 
 
 ## bolt.d.ts
 
-CI generates it from `src/plugin-api.ts` with `bun run build:types` and attaches it to the GitHub Release. It is not published to npm.
+CI generates it from `src/plugin-api.ts` with `bun run build:types` before compiling the binaries, and attaches it to the GitHub Release. It is not published to npm. `bolt types` writes the copy embedded in the binary that is running, so plugin authors do not download this asset separately.

@@ -23,17 +23,10 @@ import {
 } from "fs";
 import os from "os";
 import { pathToFileURL } from "url";
+import { PLUGIN_COMPILER_OPTIONS } from "./plugin-tsconfig";
 
 /** Legacy decorator emit. Compiled binaries do not read a project tsconfig. */
-const DECORATOR_TSCONFIG = JSON.stringify({
-  compilerOptions: {
-    experimentalDecorators: true,
-    useDefineForClassFields: false,
-    target: "ESNext",
-    module: "ESNext",
-    moduleResolution: "bundler",
-  },
-});
+const DECORATOR_TSCONFIG = JSON.stringify({ compilerOptions: PLUGIN_COMPILER_OPTIONS });
 
 const HOST_EXTERNALS = ["boltstack", "zod"];
 

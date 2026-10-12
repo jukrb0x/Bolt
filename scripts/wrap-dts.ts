@@ -3,6 +3,8 @@
  * Post-process dts-bundle-generator output to wrap in declare module "boltstack".
  */
 import { readFileSync, writeFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 const file = process.argv[2] || "bolt.d.ts";
 const content = readFileSync(file, "utf8");
@@ -27,4 +29,8 @@ ${stripped
 `;
 
 writeFileSync(file, wrapped, "utf8");
+// Same bytes the CLI embeds. `bolt types` writes this text, so it cannot drift from the declaration just generated.
+const embedded = join(dirname(fileURLToPath(import.meta.url)), "../src/plugin-types.txt");
+writeFileSync(embedded, wrapped, "utf8");
 console.log(`Wrapped ${file} in declare module "boltstack"`);
+console.log(`Embedded declaration text in ${embedded}`);
