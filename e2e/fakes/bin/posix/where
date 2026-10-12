@@ -1,0 +1,19 @@
+#!/bin/sh
+self=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+name=$1
+found=
+IFS=:
+for dir in $PATH; do
+  cand="$dir/$name"
+  if [ -x "$cand" ]; then
+    found=$cand
+    break
+  fi
+done
+unset IFS
+BOLT_FAKE_QUIET=1 bun "$BOLT_FAKE_RECORD" "$0" "$@"
+if [ -n "$found" ]; then
+  printf '%s\n' "$found"
+  exit 0
+fi
+exit 1

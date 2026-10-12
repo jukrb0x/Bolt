@@ -45,7 +45,8 @@
   },
   "scripts": {
     "dev": "bun run src/main.ts",
-    "test": "bun test",
+    "test": "bun test src/tests ./test",
+    "test:e2e": "bun test e2e --timeout 30000",
     "typecheck": "tsc --noEmit",
     "build:types": "bunx dts-bundle-generator --no-banner --project tsconfig.json -o bolt.d.ts src/plugin-api.ts && bun run scripts/wrap-dts.ts bolt.d.ts",
     "build:win": "bun run build:types && bun run scripts/build-binary.ts bun-windows-x64 build/bolt-win-x64.exe && cp bolt.d.ts build/bolt.d.ts",
