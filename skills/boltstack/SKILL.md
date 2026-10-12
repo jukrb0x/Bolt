@@ -17,8 +17,8 @@ digraph context_loading {
   "User requests Bolt task" [shape=doublecircle];
   "ai-context.md exists?" [shape=diamond];
   "Read .bolt/ai-context.md" [shape=box];
-  "Extract hash from line 2" [shape=box];
-  "Compute bolt.yaml hash" [shape=box];
+  "Read context hash comment" [shape=box];
+  "Hash bolt.yaml + NUL + catalog" [shape=box];
   "Hashes match?" [shape=diamond];
   "Run: bolt ai" [shape=box];
   "Re-read .bolt/ai-context.md" [shape=box];
@@ -27,9 +27,9 @@ digraph context_loading {
   "User requests Bolt task" -> "ai-context.md exists?";
   "ai-context.md exists?" -> "Read .bolt/ai-context.md" [label="yes"];
   "ai-context.md exists?" -> "Run: bolt ai" [label="no"];
-  "Read .bolt/ai-context.md" -> "Extract hash from line 2";
-  "Extract hash from line 2" -> "Compute bolt.yaml hash";
-  "Compute bolt.yaml hash" -> "Hashes match?";
+  "Read .bolt/ai-context.md" -> "Read context hash comment";
+  "Read context hash comment" -> "Hash bolt.yaml + NUL + catalog";
+  "Hash bolt.yaml + NUL + catalog" -> "Hashes match?";
   "Hashes match?" -> "Context loaded — proceed" [label="yes"];
   "Hashes match?" -> "Run: bolt ai" [label="stale"];
   "Run: bolt ai" -> "Re-read .bolt/ai-context.md";
@@ -58,25 +58,32 @@ bolt ai
 
 ### Step 3: Validate freshness
 
-The second line of `ai-context.md` contains a hash:
+The header names the digest and its inputs:
 
 ```
-<!-- bolt.yaml hash: 01139e81e95468a7 -->
+<!-- context hash: 01139e81e95468a7 -->
+<!-- inputs: bolt.yaml, plugin manifests -->
 ```
 
-Compute the current hash and compare:
+That digest is the first 16 hex digits of SHA-256 over the raw `bolt.yaml` bytes, one NUL (`\0`), then the catalog JSON. `sha256sum bolt.yaml` leaves out the catalog, so it will not match. `bolt.local.yaml`, source trees, and `node_modules` are not inputs. There is no freshness command.
 
-```bash
-sha256sum bolt.yaml | cut -c1-16
+Build the catalog JSON for the plugins `## Plugins` would list now (compact JSON, no spaces). Do not hash the markdown. Sort plugins by namespace and handlers by name. Leave out `ai: false` handlers. An empty catalog is `[]`. Always include `params` (`[]` when empty). Omit every other empty field. Key order:
+
+- plugin: `namespace`, `description`, `handlers`
+- handler: `name`, `description`, `confirm`, `params`
+- param: `name`, `description`, `type`, `required`, `enum`, `default`
+
+`confirm` is `true` only when that handler says it has side effects and the user must run `bolt run`. Do not record `ai: true`.
+
+```text
+[{"namespace":"git","handlers":[{"name":"info","description":"Show status","params":[{"name":"path","description":"Repo path"}]}]}]
 ```
 
-If the hashes differ, `bolt.yaml` has changed — regenerate:
+If the file still has `<!-- bolt.yaml hash: ... -->`, or the digest differs, regenerate and re-read:
 
 ```bash
 bolt ai
 ```
-
-Then re-read `.bolt/ai-context.md`.
 
 ### Step 4: Use the context
 
@@ -84,6 +91,7 @@ The loaded `ai-context.md` contains the **complete command reference** for this 
 
 - All tasks (`bolt run <task>`) and their steps
 - All flows (`bolt run <flow>`) and their `continue_on_fail` policy
+- Loaded plugins (namespace, handlers, params)
 - Defined targets
 - Available flags
 
