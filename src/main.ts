@@ -11,12 +11,12 @@ import configCmd from "./commands/config";
 import inspectCmd from "./commands/inspect";
 import initCmd from "./commands/init";
 import aiCmd from "./commands/ai";
-import pkg from "../package.json";
+import { VERSION } from "./version";
 
 const main = defineCommand({
   meta: {
     name: "bolt",
-    version: pkg.version,
+    version: VERSION,
     description: "Bolt - build and workflow automation for game development",
   },
   subCommands: {

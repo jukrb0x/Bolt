@@ -59,3 +59,8 @@ jobs:
 
       - name: End-to-end
         run: bun run test:e2e
+
+  # Pull requests and main. Tag pushes are built by the Release workflow.
+  binaries:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/binaries.yml
