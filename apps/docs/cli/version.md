@@ -22,8 +22,10 @@ None.
 
 ```bash
 bolt version
-# Output: 1.2.2
+bolt --version
 ```
+
+Both print the version compiled into that binary, for example `2.1.1`.
 
 ## See Also
 

@@ -2,7 +2,7 @@
 title: "First Project"
 ---
 
-This guide walks through setting up a new Bolt project using `bolt init`.
+This guide walks through a first `bolt.yaml` and a first `bolt run`.
 
 ## Prerequisites
 
@@ -12,16 +12,9 @@ Before starting, make sure you have:
 - Git or SVN repository (for version control)
 - Basic familiarity with command line
 
-## Step 1: Run bolt init
+## Step 1: Add bolt.yaml
 
-Navigate to your UE project directory and run:
-
-```bash
-cd /path/to/your/ue/project
-bolt init
-```
-
-`bolt init` is non-interactive. It writes `bolt.yaml` when that file is missing. Pass `--force` to overwrite it.
+In the project root, create `bolt.yaml` and commit it. `version` must be `1`. Do not put engine paths or `targets` at the root of the file.
 
 | File              | Committed?            | Contents                                                  |
 | ----------------- | --------------------- | --------------------------------------------------------- |
