@@ -2,9 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
+import { z } from "zod";
 import { generateAiContext } from "../ai-context";
 import type { BoltConfig } from "../config";
-import { handler, param, PluginBase } from "../plugin";
+import { defineHandler, definePlugin, handler, PluginBase } from "../plugin";
 import { PluginRegistry } from "../plugin-registry";
 import { testCfg } from "./env";
 
@@ -61,25 +62,33 @@ test("lists loaded plugins after tasks and flows", () => {
   class Demo extends PluginBase {
     namespace = "demo";
 
-    @handler("Copy ${src} to ${dst}")
-    async copy(
-      @param("src", "Source file")
-      @param("dst", "Destination file")
-      _params: Record<string, string>,
-      _ctx: unknown,
-    ) {}
+    @handler({
+      description: "Copy ${src} to ${dst}",
+      ai: true,
+      params: z.object({
+        dst: z.string().describe("Destination file"),
+        src: z.string().describe("Source file"),
+      }),
+    })
+    async copy(_params: Record<string, string>, _ctx: unknown) {}
 
-    @handler()
+    @handler({ ai: true })
     async ping(_params: Record<string, string>, _ctx: unknown) {}
   }
 
   const registry = new PluginRegistry();
   registry.register(new Demo());
-  registry.register({
-    namespace: "alpha",
-    handlers: { zed: async () => {}, mid: async () => {} },
-    describe: (name) => (name === "mid" ? "Middle step" : undefined),
-  });
+  registry.register(
+    definePlugin({
+      namespace: "alpha",
+      version: "1.0.0",
+      description: "Alpha",
+      handlers: {
+        mid: defineHandler({ ai: true, description: "Middle step" }, async () => {}),
+        zed: defineHandler({ ai: true }, async () => {}),
+      },
+    }),
+  );
 
   const context = generateAiContext(cfg, import.meta.path, registry);
   const tasksAt = context.indexOf("## Tasks");
@@ -101,48 +110,41 @@ test("lists loaded plugins after tasks and flows", () => {
   expect(alphaBlock.indexOf("**mid**")).toBeLessThan(alphaBlock.indexOf("**zed**"));
   expect(alphaBlock).toContain("**mid** — Middle step");
 
-  expect(plugins).toContain("**copy** — Copy src to dst");
+  expect(plugins).toContain("**copy** — Copy ${src} to ${dst}");
   expect(plugins).toContain("**ping**");
   const copyAt = plugins.indexOf("**copy**");
   const pingAt = plugins.indexOf("**ping**");
   const copyBlock = plugins.slice(copyAt, pingAt);
-  expect(copyBlock.indexOf("`dst`: Destination file")).toBeLessThan(
-    copyBlock.indexOf("`src`: Source file"),
+  expect(copyBlock.indexOf("`dst` (string, required): Destination file")).toBeLessThan(
+    copyBlock.indexOf("`src` (string, required): Source file"),
   );
 });
 
 test("reads plugin.manifest, drops ai false, and notes confirm side effects", () => {
   const registry = new PluginRegistry();
-  const plugin = {
-    namespace: "zeta",
-    handlers: {
-      ship: async () => {},
-      peek: async () => {},
-      hidden: async () => {},
-      plain: async () => {},
-    },
-    manifest: {
+  registry.register(
+    definePlugin({
+      namespace: "zeta",
+      version: "1.0.0",
       description: "Zeta tools",
       handlers: {
-        ship: {
-          description: "Ship the build",
-          ai: "confirm" as const,
-          paramsSchema: {
-            type: "object",
-            required: ["host"],
-            properties: {
-              host: { type: "string", description: "Target host" },
-              force: { type: "boolean", default: false },
-            },
+        ship: defineHandler(
+          {
+            description: "Ship the build",
+            ai: "confirm",
+            params: z.object({
+              host: z.string().describe("Target host"),
+              force: z.coerce.boolean().default(false),
+            }),
           },
-        },
-        peek: { description: "Read status", ai: true as const },
-        hidden: { description: "Do not list", ai: false as const },
-        plain: { description: "No flag yet" },
+          async () => {},
+        ),
+        peek: defineHandler({ description: "Read status", ai: true }, async () => {}),
+        hidden: defineHandler({ description: "Do not list", ai: false }, async () => {}),
+        plain: defineHandler({ description: "No flag yet", ai: true }, async () => {}),
       },
-    },
-  };
-  registry.register(plugin);
+    }),
+  );
 
   const context = generateAiContext(cfg, import.meta.path, registry);
   const block = context.slice(context.indexOf("### `zeta`"));
@@ -162,15 +164,19 @@ test("reads plugin.manifest, drops ai false, and notes confirm side effects", ()
   ).toBe(1);
 });
 
-test("handler ai false is omitted without a manifest; no flag is listed", () => {
-  const hidden = Object.assign(async () => {}, { ai: false as const });
-  const shown = async () => {};
+test("handler ai false is omitted; no flag is listed", () => {
   const registry = new PluginRegistry();
-  registry.register({
-    namespace: "mix",
-    handlers: { hidden, shown },
-    describe: (name) => name,
-  });
+  registry.register(
+    definePlugin({
+      namespace: "mix",
+      version: "1.0.0",
+      description: "Mix",
+      handlers: {
+        hidden: defineHandler({ ai: false }, async () => {}),
+        shown: defineHandler({ ai: true, description: "shown" }, async () => {}),
+      },
+    }),
+  );
 
   const context = generateAiContext(cfg, import.meta.path, registry);
   expect(context).toContain("**shown** — shown");
@@ -180,39 +186,48 @@ test("handler ai false is omitted without a manifest; no flag is listed", () => 
 test("catalog order does not change the hash; catalog contents do", () => {
   const configPath = writeProject("name: stable\n");
 
+  const same = (namespace: string, names: string[]) =>
+    definePlugin({
+      namespace,
+      version: "1.0.0",
+      description: namespace,
+      handlers: Object.fromEntries(
+        names.map((name) => [
+          name,
+          defineHandler({ ai: true, description: "Same" }, async () => {}),
+        ]),
+      ),
+    });
+
   const forward = new PluginRegistry();
-  forward.register({ namespace: "b", handlers: { one: async () => {} } });
-  forward.register({
-    namespace: "a",
-    handlers: { two: async () => {}, one: async () => {} },
-    describe: () => "Same",
-  });
+  forward.register(same("b", ["one"]));
+  forward.register(same("a", ["two", "one"]));
 
   const backward = new PluginRegistry();
-  backward.register({
-    namespace: "a",
-    handlers: { one: async () => {}, two: async () => {} },
-    describe: () => "Same",
-  });
-  backward.register({ namespace: "b", handlers: { one: async () => {} } });
+  backward.register(same("a", ["one", "two"]));
+  backward.register(same("b", ["one"]));
 
   const left = generateAiContext(cfg, configPath, forward);
   const right = generateAiContext(cfg, configPath, backward);
   expect(left).toBe(right);
 
   const smaller = new PluginRegistry();
-  smaller.register({ namespace: "a", handlers: { one: async () => {} }, describe: () => "Same" });
+  smaller.register(same("a", ["one"]));
   expect(hashOf(generateAiContext(cfg, configPath, smaller))).not.toBe(hashOf(left));
 });
 
 test("omits the plugins section when every handler is ai false", () => {
   const registry = new PluginRegistry();
-  const plugin = {
-    namespace: "quiet",
-    handlers: { secret: async () => {} },
-    manifest: { handlers: { secret: { ai: false as const, description: "Secret" } } },
-  };
-  registry.register(plugin);
+  registry.register(
+    definePlugin({
+      namespace: "quiet",
+      version: "1.0.0",
+      description: "Quiet",
+      handlers: {
+        secret: defineHandler({ ai: false, description: "Secret" }, async () => {}),
+      },
+    }),
+  );
 
   const context = generateAiContext(cfg, import.meta.path, registry);
   expect(context).toMatch(/<!-- context hash: [0-9a-f]{16} -->/);
