@@ -94,13 +94,13 @@ test("lists loaded plugins after tasks and flows", () => {
   const tasksAt = context.indexOf("## Tasks");
   const flowsAt = context.indexOf("## Flows");
   const pluginsAt = context.indexOf("## Plugins");
-  const targetsAt = context.indexOf("## Targets");
+  const flagsAt = context.indexOf("## Flags");
   expect(tasksAt).toBeGreaterThan(-1);
   expect(flowsAt).toBeGreaterThan(tasksAt);
   expect(pluginsAt).toBeGreaterThan(flowsAt);
-  expect(targetsAt).toBeGreaterThan(pluginsAt);
+  expect(flagsAt).toBeGreaterThan(pluginsAt);
 
-  const plugins = context.slice(pluginsAt, targetsAt);
+  const plugins = context.slice(pluginsAt, flagsAt);
   const alpha = plugins.indexOf("### `alpha`");
   const demo = plugins.indexOf("### `demo`");
   expect(alpha).toBeGreaterThan(-1);

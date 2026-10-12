@@ -1,4 +1,4 @@
-import { PluginBase, definePlugin, handler } from "../plugin";
+import { PluginBase, handler } from "../plugin";
 import type { BoltPluginContext } from "../plugin";
 import path from "path";
 import { existsSync, readdirSync, statSync, renameSync, mkdirSync } from "fs";
@@ -37,13 +37,6 @@ export interface UeConfig {
   uproject: string;
   targets: Record<string, { kind: string; name?: string; config: BuildConfig }>;
 }
-
-const descriptor = definePlugin({
-  namespace: "ue",
-  version: "1.0.0",
-  description: "Unreal Engine build and editor automation",
-  configSchema: ueConfigSchema,
-});
 
 function resolveAgainst(configDir: string, value: string): string {
   return path.isAbsolute(value) ? value : path.resolve(configDir, value);
@@ -149,7 +142,12 @@ function findZeroByteDlls(dir: string): string[] {
   return results;
 }
 
-class UEPlugin extends PluginBase.withDescriptor(descriptor) {
+class UEPlugin extends PluginBase.withDescriptor({
+  namespace: "ue",
+  version: "1.0.0",
+  description: "Unreal Engine build and editor automation",
+  metadata: ueConfigSchema,
+}) {
   namespace = "ue";
 
   @handler("Build target: ${target} with config: ${config}")

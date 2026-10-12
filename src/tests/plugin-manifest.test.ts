@@ -17,7 +17,8 @@ afterEach(() => {
 
 test("string @handler on ue produces a manifest and does not invent params", () => {
   expect(ue.manifest.namespace).toBe("ue");
-  expect(ue.manifest.version).toBe("");
+  expect(ue.manifest.version).toBe("1.0.0");
+  expect(ue.manifest.description).toBe("Unreal Engine build and editor automation");
   expect(ue.manifest.handlers.build).toEqual({
     description: "Build target: ${target} with config: ${config}",
     ai: false,
