@@ -371,7 +371,13 @@ export function brandPlugin(plugin: object, apiVersion: number = PLUGIN_API_VERS
 
 export function assertPluginApiVersion(plugin: { namespace?: string; apiVersion?: unknown }): void {
   if (plugin.apiVersion === PLUGIN_API_VERSION) return;
-  const found = plugin.apiVersion === undefined ? "none" : `v${String(plugin.apiVersion)}`;
+  const version = plugin.apiVersion;
+  const found =
+    version === undefined
+      ? "none"
+      : typeof version === "number"
+        ? `v${version}`
+        : JSON.stringify(version);
   throw new Error(
     `Plugin "${plugin.namespace ?? "(unknown)"}" requires plugin API ${found}, but this bolt supports plugin API v${PLUGIN_API_VERSION}.`,
   );

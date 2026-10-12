@@ -1,8 +1,9 @@
+import { createHash } from "crypto";
 import { spawnSync } from "child_process";
 import {
   PLUGIN_API_VERSION,
+  PLUGIN_BRAND,
   assertPluginApiVersion,
-  brandPlugin,
   hasManifestGetter,
   isBrandedPlugin,
   isDefinedPlugin,
@@ -11,8 +12,17 @@ import {
   type BoltPlugin,
 } from "./plugin";
 import path from "path";
-import { existsSync, readdirSync, statSync, readFileSync, mkdirSync, writeFileSync } from "fs";
+import {
+  existsSync,
+  readdirSync,
+  statSync,
+  readFileSync,
+  mkdirSync,
+  writeFileSync,
+  realpathSync,
+} from "fs";
 import os from "os";
+import { pathToFileURL } from "url";
 
 /** Legacy decorator emit. Compiled binaries do not read a project tsconfig. */
 const DECORATOR_TSCONFIG = JSON.stringify({
@@ -83,6 +93,54 @@ function pluginLoadError(name: string, dir: string, error: unknown): Error {
 
 function isTypeScript(file: string): boolean {
   return file.endsWith(".ts") || file.endsWith(".tsx");
+}
+
+/** Stable path so two spellings of one file share a cache and two files do not. */
+export function canonicalPluginEntry(entryTs: string): string {
+  const abs = path.resolve(entryTs);
+  try {
+    return realpathSync(abs);
+  } catch {
+    return abs;
+  }
+}
+
+/** Cache file for one source. The namespace alone is not unique. */
+export function pluginCacheFile(cacheRoot: string, pluginName: string, entryTs: string): string {
+  const id = createHash("sha256").update(canonicalPluginEntry(entryTs)).digest("hex").slice(0, 16);
+  return path.join(cacheRoot, ".bolt", ".cache", "plugins", pluginName, id, "index.js");
+}
+
+/**
+ * Bun.build leaves import.meta.* pointing at the emitted file.
+ * Rewrite those reads to the plugin source so adjacent assets still resolve.
+ */
+function rewritePluginLocation(source: string, entryTs: string): string {
+  const abs = canonicalPluginEntry(entryTs);
+  const values: Record<string, string> = {
+    url: pathToFileURL(abs).href,
+    dir: path.dirname(abs),
+    path: abs,
+    file: path.basename(abs),
+  };
+  let out = source;
+  for (const [prop, value] of Object.entries(values)) {
+    out = out.replace(new RegExp(`import\\.meta\\.${prop}\\b`, "g"), JSON.stringify(value));
+  }
+  return out;
+}
+
+/** Copy the brand and the export's own apiVersion. Never substitute the host version. */
+function retainPluginBrand(plugin: object, apiVersion: unknown): void {
+  Object.defineProperty(plugin, PLUGIN_BRAND, { value: true });
+  if (apiVersion !== undefined) {
+    Object.defineProperty(plugin, "apiVersion", {
+      value: apiVersion,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
 }
 
 /**
@@ -158,8 +216,8 @@ export class PluginRegistry {
     cacheRoot: string,
   ): Promise<string> {
     const sourceDir = path.dirname(entryTs);
-    const cacheDir = path.join(cacheRoot, ".bolt", ".cache", "plugins", pluginName);
-    const cachedJs = path.join(cacheDir, "index.js");
+    const cachedJs = pluginCacheFile(cacheRoot, pluginName, entryTs);
+    const cacheDir = path.dirname(cachedJs);
 
     if (existsSync(cachedJs)) {
       const cacheMtime = statSync(cachedJs).mtimeMs;
@@ -189,6 +247,7 @@ export class PluginRegistry {
       throw new Error(`Failed to compile plugin "${pluginName}":\n${errors}`);
     }
 
+    writeFileSync(cachedJs, rewritePluginLocation(readFileSync(cachedJs, "utf8"), entryTs));
     return cachedJs;
   }
 
@@ -247,9 +306,7 @@ export class PluginRegistry {
     const apiVersion = (exported as { apiVersion?: unknown }).apiVersion;
     const plugin: BoltPlugin = { ...exported, namespace: exported.namespace || namespace };
     if (defined) markDefinedPlugin(plugin);
-    if (branded) {
-      brandPlugin(plugin, typeof apiVersion === "number" ? apiVersion : PLUGIN_API_VERSION);
-    }
+    if (branded) retainPluginBrand(plugin, apiVersion);
     return plugin;
   }
 
