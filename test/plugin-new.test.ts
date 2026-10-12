@@ -40,7 +40,11 @@ describe("scaffoldPlugin", () => {
   });
 
   test("generates tsconfig.json with experimentalDecorators", async () => {
-    const pluginDir = await scaffoldPlugin({ name: "with-tsconfig", baseDir: TEST_DIR, isUser: false });
+    const pluginDir = await scaffoldPlugin({
+      name: "with-tsconfig",
+      baseDir: TEST_DIR,
+      isUser: false,
+    });
     expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(true);
     const tsconfig = JSON.parse(readFileSync(path.join(pluginDir, "tsconfig.json"), "utf8"));
     expect(tsconfig.compilerOptions.experimentalDecorators).toBe(true);

@@ -30,15 +30,15 @@ Resolution mirrors `bolt run`:
 
 ## Options
 
-| Flag | Description |
-|------|-------------|
+| Flag              | Description                                          |
+| ----------------- | ---------------------------------------------------- |
 | `--<key>=<value>` | Params to apply during resolution (override `with:`) |
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `<name...>` | Yes | One or more task names, or one flow name |
+| Argument    | Required | Description                              |
+| ----------- | -------- | ---------------------------------------- |
+| `<name...>` | Yes      | One or more task names, or one flow name |
 
 ## Examples
 

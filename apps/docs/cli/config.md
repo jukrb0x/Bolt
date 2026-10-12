@@ -27,9 +27,9 @@ If none is set, the command exits with an error.
 
 ## Options
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--editor <editor>` | `-e` | Editor to use (overrides `$EDITOR` / `$VISUAL`) |
+| Flag                | Alias | Description                                     |
+| ------------------- | ----- | ----------------------------------------------- |
+| `--editor <editor>` | `-e`  | Editor to use (overrides `$EDITOR` / `$VISUAL`) |
 
 ## Examples
 

@@ -47,15 +47,15 @@ const ctx = createContext({
 
 ### `run(taskName, opts)`
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `config` | `BoltConfig` | Pre-loaded config (mutually exclusive with `configPath`) |
-| `configPath` | `string` | Path to `bolt.yaml` |
-| `cwd` | `string` | Working directory for config discovery |
-| `dryRun` | `boolean` | Skip actual execution |
-| `params` | `Record<string, string>` | Params applied to every step (override `with:`) |
-| `logger` | `Logger` | Custom logger |
-| `runtime` | `Runtime` | Custom runtime |
+| Option       | Type                     | Description                                              |
+| ------------ | ------------------------ | -------------------------------------------------------- |
+| `config`     | `BoltConfig`             | Pre-loaded config (mutually exclusive with `configPath`) |
+| `configPath` | `string`                 | Path to `bolt.yaml`                                      |
+| `cwd`        | `string`                 | Working directory for config discovery                   |
+| `dryRun`     | `boolean`                | Skip actual execution                                    |
+| `params`     | `Record<string, string>` | Params applied to every step (override `with:`)          |
+| `logger`     | `Logger`                 | Custom logger                                            |
+| `runtime`    | `Runtime`                | Custom runtime                                           |
 
 ## Direct Plugin Access
 
@@ -91,8 +91,8 @@ const runtime = createRuntime(); // Auto-detects Bun vs Node.js
 
 const runner = new Runner(config, { logger, runtime });
 
-await runner.runTask("build", { target: "client" });  // a task, with params
-await runner.runFlow("daily");                          // a flow (fail-fast)
+await runner.runTask("build", { target: "client" }); // a task, with params
+await runner.runFlow("daily"); // a flow (fail-fast)
 ```
 
 > `loadConfig` reads `bolt.yaml` **and** merges the sibling `bolt.local.yaml`; a missing/invalid local file throws. Use `checkConfig` to validate both without throwing.
@@ -101,28 +101,29 @@ await runner.runFlow("daily");                          // a flow (fail-fast)
 
 From `boltstack`:
 
-| Export | Kind | Description |
-|--------|------|-------------|
-| `run` | function | Run a task by name |
-| `createContext` | function | Build a `BoltPluginContext` for direct handler calls |
-| `loadConfig` | function | Load + merge `bolt.yaml` and `bolt.local.yaml` |
-| `checkConfig` | function | Validate config, returning errors (never throws) |
-| `PluginBase`, `handler` | class / decorator | Author class-based plugins |
-| `RunOptions`, `CreateContextOptions` | type | Option shapes |
-| `BoltConfig`, `Project`, `RepoConfig`, `Target`, `Flow`, `Step` | type | Config types |
-| `BoltPlugin`, `BoltPluginHandler`, `BoltPluginContext`, `BoltLogger` | type | Plugin types |
+| Export                                                               | Kind              | Description                                          |
+| -------------------------------------------------------------------- | ----------------- | ---------------------------------------------------- |
+| `run`                                                                | function          | Run a task by name                                   |
+| `createContext`                                                      | function          | Build a `BoltPluginContext` for direct handler calls |
+| `loadConfig`                                                         | function          | Load + merge `bolt.yaml` and `bolt.local.yaml`       |
+| `checkConfig`                                                        | function          | Validate config, returning errors (never throws)     |
+| `PluginBase`, `handler`                                              | class / decorator | Author class-based plugins                           |
+| `RunOptions`, `CreateContextOptions`                                 | type              | Option shapes                                        |
+| `BoltConfig`, `Project`, `RepoConfig`, `Target`, `Flow`, `Step`      | type              | Config types                                         |
+| `BoltPlugin`, `BoltPluginHandler`, `BoltPluginContext`, `BoltLogger` | type              | Plugin types                                         |
 
 ## Subpath Exports
 
-| Export | Description |
-|--------|-------------|
-| `boltstack` | High-level API + config + plugin types (`run`, `createContext`, `loadConfig`, `checkConfig`) |
-| `boltstack/plugins` | Built-in plugins (`git`, `svn`, `ue`, `fs`, `json`) |
-| `boltstack/core` | Core internals (`Runner`, `Logger`, `buildRegistry`, `createRuntime`) |
+| Export              | Description                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| `boltstack`         | High-level API + config + plugin types (`run`, `createContext`, `loadConfig`, `checkConfig`) |
+| `boltstack/plugins` | Built-in plugins (`git`, `svn`, `ue`, `fs`, `json`)                                          |
+| `boltstack/core`    | Core internals (`Runner`, `Logger`, `buildRegistry`, `createRuntime`)                        |
 
 ## Runtime Compatibility
 
 The library uses a runtime abstraction layer:
+
 - **Bun**: uses native APIs (`Bun.spawn`, `Bun.YAML`)
 - **Node.js**: uses `child_process` and the `yaml` package
 
@@ -137,5 +138,6 @@ import type { BoltPlugin, BoltPluginContext, BoltLogger } from "boltstack";
 ```
 
 ## See Also
+
 - [Plugin API](./plugin-api.md) — creating custom handlers
 - [Config Schema](./config-schema.md) — configuration types

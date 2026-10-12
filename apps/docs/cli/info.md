@@ -39,6 +39,7 @@ bolt info
 ```
 
 Output example:
+
 ```
 bolt.yaml: /path/to/bolt.yaml
 
@@ -80,9 +81,9 @@ FLOWS
 
 `bolt info` reflects the two-file layout:
 
-| File | Committed? | Holds |
-|------|-----------|-------|
-| `bolt.yaml` | Yes | Project identity, targets, tasks, flows |
+| File              | Committed?      | Holds                                     |
+| ----------------- | --------------- | ----------------------------------------- |
+| `bolt.yaml`       | Yes             | Project identity, targets, tasks, flows   |
 | `bolt.local.yaml` | No (gitignored) | `engine_path`, `project_path`, `uproject` |
 
 Relative paths in `bolt.local.yaml` resolve against the directory containing

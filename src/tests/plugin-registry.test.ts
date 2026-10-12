@@ -1,4 +1,4 @@
-import { expect, test, beforeEach, afterEach } from "bun:test";
+import { expect, test } from "bun:test";
 import { PluginRegistry, buildRegistry } from "../plugin-registry";
 import type { BoltPlugin } from "../plugin";
 import { mkdirSync, writeFileSync, rmSync } from "fs";

@@ -5,15 +5,15 @@ Shared knowledge for humans and AI agents. This is NOT the docs website
 
 ## Layout
 
-| Path | Purpose | Committed? |
-|---|---|---|
-| `ROADMAP.md` | Direction, priorities, near-term goals | yes |
-| `RFCs/` | Proposals for non-trivial changes (`0000-template.md`) | yes |
-| `architecture/` | How the system is built (design overviews) | yes |
-| `ops/` | Operational runbooks (release, maintenance) | yes |
-| `decisions/` | Lightweight ADRs (one decision per file) | yes |
-| `archive/` | Superseded/stale docs kept for reference | yes |
-| `superpowers/` | Local-first agent working memory | **no (gitignored)** |
+| Path            | Purpose                                                | Committed?          |
+| --------------- | ------------------------------------------------------ | ------------------- |
+| `ROADMAP.md`    | Direction, priorities, near-term goals                 | yes                 |
+| `RFCs/`         | Proposals for non-trivial changes (`0000-template.md`) | yes                 |
+| `architecture/` | How the system is built (design overviews)             | yes                 |
+| `ops/`          | Operational runbooks (release, maintenance)            | yes                 |
+| `decisions/`    | Lightweight ADRs (one decision per file)               | yes                 |
+| `archive/`      | Superseded/stale docs kept for reference               | yes                 |
+| `superpowers/`  | Local-first agent working memory                       | **no (gitignored)** |
 
 ## superpowers/ (local-first)
 

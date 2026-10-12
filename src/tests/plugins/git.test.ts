@@ -45,7 +45,9 @@ test("info runs without throwing and logs output", async () => {
 test("checkout produces git checkout command", async () => {
   const ctx = makeCtx();
   await gitPlugin.handlers["checkout"]({ branch: "main" }, ctx);
-  expect(ctx.logged.some((l) => l.includes("git") && l.includes("checkout") && l.includes("main"))).toBe(true);
+  expect(
+    ctx.logged.some((l) => l.includes("git") && l.includes("checkout") && l.includes("main")),
+  ).toBe(true);
 });
 
 test("checkout throws when branch is missing", async () => {
@@ -55,8 +57,15 @@ test("checkout throws when branch is missing", async () => {
 
 test("clone produces git clone command", async () => {
   const ctx = makeCtx();
-  await gitPlugin.handlers["clone"]({ url: "https://github.com/example/repo", path: "C:/Repos/repo" }, ctx);
-  expect(ctx.logged.some((l) => l.includes("git clone") && l.includes("https://github.com/example/repo"))).toBe(true);
+  await gitPlugin.handlers["clone"](
+    { url: "https://github.com/example/repo", path: "C:/Repos/repo" },
+    ctx,
+  );
+  expect(
+    ctx.logged.some(
+      (l) => l.includes("git clone") && l.includes("https://github.com/example/repo"),
+    ),
+  ).toBe(true);
 });
 
 test("clone throws when url is missing", async () => {
@@ -66,13 +75,18 @@ test("clone throws when url is missing", async () => {
 
 test("clone throws when path is missing", async () => {
   const ctx = makeCtx();
-  await expect(gitPlugin.handlers["clone"]({ url: "https://github.com/example/repo" }, ctx)).rejects.toThrow("path");
+  await expect(
+    gitPlugin.handlers["clone"]({ url: "https://github.com/example/repo" }, ctx),
+  ).rejects.toThrow("path");
 });
 
 test("pull uses git_branch from config when branch param absent", async () => {
   const logged: string[] = [];
   const logger = new Logger({ sink: (l: string) => logged.push(l) });
-  const cfg = { ...testCfg, project: { ...testCfg.project, git_branch: "release/2.0", engine_root: ENGINE_ROOT } };
+  const cfg = {
+    ...testCfg,
+    project: { ...testCfg.project, git_branch: "release/2.0", engine_root: ENGINE_ROOT },
+  };
   const ctx = { cfg, configDir: process.cwd(), dryRun: true, logger, logged, runtime: mockRuntime };
   await gitPlugin.handlers["pull"]({}, ctx);
   expect(logged.some((l) => l.includes("release/2.0"))).toBe(true);

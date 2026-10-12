@@ -46,16 +46,16 @@ bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 
 ## Options
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--dry-run` | `false` | Print the resolved steps without executing |
-| `--<key>=<value>` | - | Pass a param to the whole run (overrides `with:`) |
+| Flag              | Default | Description                                       |
+| ----------------- | ------- | ------------------------------------------------- |
+| `--dry-run`       | `false` | Print the resolved steps without executing        |
+| `--<key>=<value>` | -       | Pass a param to the whole run (overrides `with:`) |
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `<name...>` | Yes | One or more task names, or a single flow name |
+| Argument    | Required | Description                                   |
+| ----------- | -------- | --------------------------------------------- |
+| `<name...>` | Yes      | One or more task names, or a single flow name |
 
 ## Examples
 
@@ -84,21 +84,21 @@ shell command.
 
 ```yaml
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build, with: { config: debuggame } }]
-  start:   [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]   # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
   reset:
     description: Kill, update, regenerate, rebuild
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]    # kill may fail (nothing running) without aborting
+    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
 ```
 
 <Note>

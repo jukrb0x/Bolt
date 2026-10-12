@@ -53,21 +53,37 @@ export default class extends PluginBase.withDescriptor(descriptor) {
     name,
     type: "module",
     devDependencies: {
-      "boltstack": "latest",
+      boltstack: "latest",
     },
   };
 
   writeFileSync(path.join(pluginDir, "index.ts"), indexTs, "utf8");
-  writeFileSync(path.join(pluginDir, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n", "utf8");
-  writeFileSync(path.join(pluginDir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
+  writeFileSync(
+    path.join(pluginDir, "tsconfig.json"),
+    JSON.stringify(tsconfig, null, 2) + "\n",
+    "utf8",
+  );
+  writeFileSync(
+    path.join(pluginDir, "package.json"),
+    JSON.stringify(packageJson, null, 2) + "\n",
+    "utf8",
+  );
   return pluginDir;
 }
 
 export default defineCommand({
   meta: { description: "Scaffold a new bolt plugin" },
   args: {
-    name: { type: "positional" as const, required: true, description: "Plugin name (lowercase alphanumeric, hyphens, underscores)" },
-    user: { type: "boolean", default: false, description: "Create in user scope (~/.bolt/plugins/)" },
+    name: {
+      type: "positional" as const,
+      required: true,
+      description: "Plugin name (lowercase alphanumeric, hyphens, underscores)",
+    },
+    user: {
+      type: "boolean",
+      default: false,
+      description: "Create in user scope (~/.bolt/plugins/)",
+    },
   },
   async run({ args }) {
     const name = args.name as string;
@@ -76,7 +92,9 @@ export default defineCommand({
       process.exit(1);
     }
     if (!/^[a-z0-9_-]+$/.test(name)) {
-      console.error(pc.red("Plugin name must be lowercase alphanumeric with hyphens/underscores only"));
+      console.error(
+        pc.red("Plugin name must be lowercase alphanumeric with hyphens/underscores only"),
+      );
       process.exit(1);
     }
 
@@ -86,7 +104,11 @@ export default defineCommand({
     } else {
       const configPath = await findConfig(process.cwd());
       if (!configPath) {
-        console.error(pc.red("bolt.yaml not found — run from a project directory, or use --user for user-scope"));
+        console.error(
+          pc.red(
+            "bolt.yaml not found — run from a project directory, or use --user for user-scope",
+          ),
+        );
         process.exit(1);
       }
       baseDir = path.dirname(configPath);
@@ -105,10 +127,14 @@ export default defineCommand({
     console.log("");
     console.log("Next steps:");
     console.log(`  ${pc.cyan(`cd ${pluginDir}`)}`);
-    console.log(`  ${pc.cyan("bun install")}         # links bolt types + installs bun-types for IDE support`);
+    console.log(
+      `  ${pc.cyan("bun install")}         # links bolt types + installs bun-types for IDE support`,
+    );
     if (!args.user) {
       console.log("");
-      console.log(pc.dim("Ensure bolt.d.ts is at the project root (download from the bolt release page)."));
+      console.log(
+        pc.dim("Ensure bolt.d.ts is at the project root (download from the bolt release page)."),
+      );
     }
   },
 });

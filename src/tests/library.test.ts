@@ -1,8 +1,8 @@
 // src/tests/library.test.ts
 import { expect, test, describe } from "bun:test";
-import { createContext, loadConfig } from "../index";
+import { createContext, run } from "../index";
 import { git, fs, builtinPlugins } from "../plugins/index";
-import { Runner, Logger, createRuntime } from "../core/index";
+import { createRuntime } from "../core/index";
 
 describe("Library API", () => {
   test("createContext creates valid context", () => {
@@ -76,5 +76,9 @@ describe("Library API", () => {
     });
 
     expect(ctx.cfg.vars.MY_VAR).toBe("my_value");
+  });
+
+  test("run throws when bolt.yaml is not found", async () => {
+    await expect(run("build", { cwd: "/tmp" })).rejects.toThrow(/bolt\.yaml not found/);
   });
 });

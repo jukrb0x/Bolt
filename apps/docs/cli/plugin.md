@@ -12,10 +12,10 @@ bolt plugin <command>
 
 ## Subcommands
 
-| Command | Description |
-|---------|-------------|
-| `list` | List all active plugins and their handlers |
-| `new <name>` | Scaffold a new plugin |
+| Command      | Description                                |
+| ------------ | ------------------------------------------ |
+| `list`       | List all active plugins and their handlers |
+| `new <name>` | Scaffold a new plugin                      |
 
 ## bolt plugin list
 
@@ -26,6 +26,7 @@ bolt plugin list
 ```
 
 Shows namespace and handler names for all discovered plugins:
+
 - Built-in plugins (ue, fs, json)
 - User-scope plugins (`~/.bolt/plugins/`)
 - Project-scope plugins (`.bolt/plugins/` or declared in `bolt.yaml`)
@@ -38,8 +39,8 @@ Scaffold a new plugin.
 bolt plugin new <name> [--user]
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description                                                        |
+| -------- | ------------------------------------------------------------------ |
 | `--user` | Create in user scope (`~/.bolt/plugins/`) instead of project scope |
 
 Name must match `/^[a-z0-9_-]+$/`.

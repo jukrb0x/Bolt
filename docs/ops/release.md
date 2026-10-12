@@ -65,7 +65,7 @@ The output is a single flat file — no imports, no runtime code. Published to n
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `BOLT_INTERNAL_SHARE` | If set, copies build artifacts to this path after release |
-| `EDITOR` / `VISUAL` | Editor for release notes (defaults to `notepad` on Windows, `vi` elsewhere) |
+| Variable              | Description                                                                 |
+| --------------------- | --------------------------------------------------------------------------- |
+| `BOLT_INTERNAL_SHARE` | If set, copies build artifacts to this path after release                   |
+| `EDITOR` / `VISUAL`   | Editor for release notes (defaults to `notepad` on Windows, `vi` elsewhere) |
