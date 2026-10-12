@@ -2,10 +2,10 @@ import "../src/virtual-module";
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, writeFileSync, rmSync, existsSync, statSync } from "fs";
 import path from "path";
-import { PluginRegistry } from "../src/plugin-registry";
+import { PluginRegistry, pluginCacheFile } from "../src/plugin-registry";
 
 const TEST_DIR = path.join(import.meta.dir, ".tmp-registry-test");
-const CACHE_DIR = path.join(TEST_DIR, ".bolt", ".cache", "plugins");
+const PLUGIN_ENTRY = path.join(TEST_DIR, ".bolt", "plugins", "jit-test", "index.ts");
 
 // Minimal plugin source that uses "boltstack" import
 const PLUGIN_SOURCE = `
@@ -40,7 +40,7 @@ describe("JIT compilation", () => {
     const reg = new PluginRegistry();
     await reg.loadDirectory(path.join(TEST_DIR, ".bolt", "plugins"), TEST_DIR);
 
-    const cached = path.join(CACHE_DIR, "jit-test", "index.js");
+    const cached = pluginCacheFile(TEST_DIR, "jit-test", PLUGIN_ENTRY);
     expect(existsSync(cached)).toBe(true);
 
     const plugin = reg.get("jit-test");
@@ -52,7 +52,7 @@ describe("JIT compilation", () => {
     const reg = new PluginRegistry();
     await reg.loadDirectory(path.join(TEST_DIR, ".bolt", "plugins"), TEST_DIR);
 
-    const cached = path.join(CACHE_DIR, "jit-test", "index.js");
+    const cached = pluginCacheFile(TEST_DIR, "jit-test", PLUGIN_ENTRY);
     const firstMtime = statSync(cached).mtimeMs;
 
     // Load again — should use cache (no recompilation)
@@ -67,7 +67,7 @@ describe("JIT compilation", () => {
     const reg = new PluginRegistry();
     await reg.loadDirectory(path.join(TEST_DIR, ".bolt", "plugins"), TEST_DIR);
 
-    const cached = path.join(CACHE_DIR, "jit-test", "index.js");
+    const cached = pluginCacheFile(TEST_DIR, "jit-test", PLUGIN_ENTRY);
     const firstMtime = statSync(cached).mtimeMs;
 
     // Wait a tick so mtime differs, then touch the source

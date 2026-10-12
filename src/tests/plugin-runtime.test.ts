@@ -1,8 +1,17 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "fs";
 import os from "os";
 import path from "path";
-import { PluginRegistry, pluginInstallInvocation } from "../plugin-registry";
+import { pathToFileURL } from "url";
+import { PluginRegistry, pluginCacheFile, pluginInstallInvocation } from "../plugin-registry";
 
 test("plugin install invokes this executable with BUN_BE_BUN", () => {
   const call = pluginInstallInvocation({ PATH: "/usr/bin" });
@@ -79,6 +88,96 @@ test("class @handler is compiled outside the repo tsconfig", async () => {
     const reg = new PluginRegistry();
     await reg.loadFromPath("decor", path.join(pluginDir, "index.ts"), root);
     expect(typeof reg.get("decor")?.handlers.ping).toBe("function");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an explicit plugin does not run the auto-discovered build for the same namespace", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "bolt-plugin-cache-"));
+  const discovered = path.join(root, ".bolt", "plugins", "echo", "index.ts");
+  const explicit = path.join(root, "explicit", "index.ts");
+  mkdirSync(path.dirname(discovered), { recursive: true });
+  mkdirSync(path.dirname(explicit), { recursive: true });
+  const source = (marker: string) =>
+    `export default { namespace: "echo", marker: ${JSON.stringify(marker)}, handlers: { run: async () => {} } };\n`;
+  writeFileSync(discovered, source("discovered"));
+  writeFileSync(explicit, source("explicit"));
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(explicit, past, past);
+
+  try {
+    const reg = new PluginRegistry();
+    await reg.loadDirectory(path.join(root, ".bolt", "plugins"), root);
+    expect((reg.get("echo") as { marker?: string }).marker).toBe("discovered");
+    await reg.loadFromPath("echo", explicit, root);
+    expect((reg.get("echo") as { marker?: string }).marker).toBe("explicit");
+    const discoveredCache = pluginCacheFile(root, "echo", discovered);
+    const explicitCache = pluginCacheFile(root, "echo", explicit);
+    expect(discoveredCache).not.toBe(explicitCache);
+    expect(existsSync(discoveredCache)).toBe(true);
+    expect(existsSync(explicitCache)).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a compiled plugin keeps import.meta on the source file", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "bolt-plugin-meta-"));
+  const pluginDir = path.join(root, "plugin");
+  const entry = path.join(pluginDir, "index.ts");
+  mkdirSync(pluginDir);
+  writeFileSync(path.join(pluginDir, "asset.txt"), "hello\n");
+  writeFileSync(
+    entry,
+    [
+      'import { readFileSync } from "fs";',
+      'import path from "path";',
+      'const text = readFileSync(path.join(import.meta.dir, "asset.txt"), "utf8");',
+      "export default {",
+      '  namespace: "assets",',
+      "  text,",
+      "  located: import.meta.url,",
+      "  handlers: { run: async () => {} },",
+      "};",
+      "",
+    ].join("\n"),
+  );
+
+  try {
+    const reg = new PluginRegistry();
+    await reg.loadFromPath("assets", entry, root);
+    const plugin = reg.get("assets") as { text?: string; located?: string };
+    expect(plugin.text).toBe("hello\n");
+    expect(plugin.located).toBe(pathToFileURL(realpathSync(entry)).href);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a branded export with a missing or nonnumeric apiVersion is rejected", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "bolt-plugin-api-"));
+  const missing = path.join(root, "missing.js");
+  const text = path.join(root, "text.js");
+  const source = (fields: string) =>
+    [
+      'const brand = Symbol.for("boltstack.plugin");',
+      `const plugin = { namespace: "bad", handlers: { run: async () => {} }${fields} };`,
+      "Object.defineProperty(plugin, brand, { value: true });",
+      "export default plugin;",
+      "",
+    ].join("\n");
+  writeFileSync(missing, source(""));
+  writeFileSync(text, source(', apiVersion: "1"'));
+
+  try {
+    const missingReg = new PluginRegistry();
+    await expect(missingReg.loadFromPath("bad", missing)).rejects.toThrow(/plugin API none/);
+    expect(missingReg.get("bad")).toBeUndefined();
+
+    const textReg = new PluginRegistry();
+    await expect(textReg.loadFromPath("bad", text)).rejects.toThrow(/"1"/);
+    expect(textReg.get("bad")).toBeUndefined();
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
