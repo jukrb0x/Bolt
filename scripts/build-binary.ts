@@ -10,7 +10,7 @@
  */
 
 import { createHash } from "crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import type { Build, BunPlugin } from "bun";
@@ -96,10 +96,16 @@ function writeChecksums(files: string[]): void {
 
 const args = process.argv.slice(2);
 if (args[0] === "--all") {
+  const declaration = join(ROOT, "build", "bolt.d.ts");
+  if (!existsSync(declaration)) {
+    console.error("build/bolt.d.ts is missing. Run bun run build:types and copy it into build/.");
+    process.exit(1);
+  }
   const files: string[] = [];
   for (const spec of RELEASE_BINARIES) {
     files.push(await buildOne(spec.target, join("build", spec.filename)));
   }
+  files.push(declaration);
   writeChecksums(files);
 } else {
   const target = args[0] || (process.platform === "win32" ? "bun-windows-x64" : "bun-darwin-arm64");

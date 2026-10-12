@@ -3,6 +3,7 @@ import { VERSION } from "../version";
 import { writeFileSync, renameSync, chmodSync, existsSync, unlinkSync } from "fs";
 import path from "path";
 import pc from "picocolors";
+import { RELEASE_BINARIES } from "../../scripts/release-targets";
 
 const GITHUB_REPO = "jukrb0x/Bolt";
 const API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -27,11 +28,35 @@ export function isNewer(current: string, latest: string): boolean {
   return lc > cc;
 }
 
+const RELEASE_ASSET_NAMES = new Set<string>(RELEASE_BINARIES.map((binary) => binary.filename));
+
+/**
+ * Release asset to download.
+ * An executable that is already named as a release asset keeps that flavor
+ * (baseline, Intel macOS). Otherwise the name comes from platform and arch.
+ */
+export function releaseAssetName(
+  platform: string,
+  arch: string,
+  execName: string,
+): string | undefined {
+  if (RELEASE_ASSET_NAMES.has(execName)) return execName;
+  if (platform === "win32" && arch === "x64") return "bolt-win-x64.exe";
+  if (platform === "darwin" && arch === "arm64") return "bolt-mac-arm64";
+  if (platform === "darwin" && arch === "x64") return "bolt-mac-x64";
+  if (platform === "linux" && arch === "x64") return "bolt-linux-x64";
+  return undefined;
+}
+
 function platformAssetName(): string {
-  if (process.platform === "win32") return "bolt-win-x64.exe";
-  if (process.platform === "darwin") return "bolt-mac-arm64";
-  console.error(pc.red(`self-update is not supported on platform: ${process.platform}`));
-  process.exit(1);
+  const name = releaseAssetName(process.platform, process.arch, path.basename(process.execPath));
+  if (!name) {
+    console.error(
+      pc.red(`self-update is not supported on platform: ${process.platform} ${process.arch}`),
+    );
+    process.exit(1);
+  }
+  return name;
 }
 
 export default defineCommand({
