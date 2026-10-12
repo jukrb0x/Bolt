@@ -21,7 +21,7 @@ Your daily Unreal Engine workflow, automated. Build, update, and deploy with a s
     Extend Bolt with custom handlers for deployment, notifications, or any workflow. Override built-ins with your own implementations.
   </Feature>
   <Feature title="Shared + Local Config" icon="file-code">
-    Commit a shared `bolt.yaml` contract; keep machine paths in a gitignored `bolt.local.yaml`. No personal paths in version control.
+    Commit a shared `bolt.yaml` (`version: 1`). Unreal paths and targets live on the ue plugin. `bolt.local.yaml` only overrides vars.
   </Feature>
   <Feature title="Notifications" icon="bell">
     Get notified on build start, completion, or failure via WeChat Work, Telegram, and more.
@@ -48,7 +48,7 @@ Install Bolt:
   </Tab>
 </Tabs>
 
-Initialize your project. `bolt init` scaffolds a shared `bolt.yaml` and a per-machine `bolt.local.yaml` (edit the paths in the latter):
+Initialize your project. `bolt init` writes `bolt.yaml`:
 
 ```bash
 cd /path/to/your/ue/project
@@ -68,11 +68,26 @@ bolt run daily --dry-run        # preview without executing
 Stop running `Build.bat` by hand. Stop context-switching between TortoiseSVN, the editor, and a dozen batch scripts. Bolt turns repetitive UE tasks into single commands you can chain, script, and share with your team.
 
 ```yaml
-# bolt.yaml - shared contract, committed (no machine paths)
+# bolt.yaml — version 1. UE metadata is the ue plugin's config.
+version: 1
+
 project:
   name: MyGame
-  engine: { vcs: git }
-  project: { vcs: svn }
+
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: C:/UnrealEngine
+        vcs: git
+      project:
+        path: C:/Projects/MyGame
+        vcs: svn
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
@@ -84,13 +99,6 @@ flows:
     description: Update, build, and launch the editor
     steps: [update, build, start]
     continue_on_fail: [start] # update/build failures abort; start may fail
-```
-
-```yaml
-# bolt.local.yaml - per-machine paths, gitignored
-engine_path: C:/UnrealEngine
-project_path: C:/Projects/MyGame
-uproject: C:/Projects/MyGame/MyGame.uproject
 ```
 
 ```bash

@@ -2,82 +2,92 @@
 title: "Config Schema"
 ---
 
-Complete reference for Bolt's configuration. Bolt v2 splits config into two files:
+Complete reference for Bolt's configuration. Field names and defaults below mirror the Zod schema in `src/config.ts`. Unreal metadata is validated by the `ue` plugin, not by the core schema.
 
-- **`bolt.yaml`** — the shared, committed contract (project identity, targets, tasks, flows). It contains **no machine paths**.
-- **`bolt.local.yaml`** — per-machine paths (engine/project/uproject), **gitignored**.
+- **`bolt.yaml`** — required. Starts with `version: 1`. `project` is a name. Tasks, flows, and plugin entries live here.
+- **`bolt.local.yaml`** — optional. Only `vars` is read. A missing file is fine.
 
-At load time Bolt **merges** them into a single runtime config. Field names and defaults below mirror the Zod schema in `src/config.ts` (the source of truth).
-
-## bolt.yaml (shared, committed)
+## bolt.yaml
 
 Top-level keys:
 
 | Key             | Type   | Required | Default | Description                                          |
 | --------------- | ------ | -------- | ------- | ---------------------------------------------------- |
-| `project`       | object | yes      | —       | Project identity (no paths)                          |
-| `targets`       | map    | no       | `{}`    | Build targets                                        |
+| `version`       | number | yes      | —       | Must be `1`                                          |
+| `project`       | object | yes      | —       | Project name                                         |
 | `tasks`         | map    | no       | `{}`    | Named lists of steps                                 |
 | `flows`         | map    | no       | `{}`    | Named, ordered sets of tasks                         |
 | `vars`          | map    | no       | `{}`    | Shared string variables                              |
-| `plugins`       | array  | no       | `[]`    | Project-scope plugin entries                         |
+| `plugins`       | array  | no       | `[]`    | Plugin entries, including builtin metadata           |
 | `timeout_hours` | number | no       | —       | Abort the run if it exceeds this duration (positive) |
 | `notifications` | object | no       | —       | Build-event notifications                            |
 
 ## project
 
-Project **identity** only. Machine paths live in `bolt.local.yaml`.
-
 ```yaml
 project:
-  name: MyProject # required
-  engine: # required — repo identity (NO path)
-    vcs: git # git | svn (default: git)
-    url: https://github.com/EpicGames/UnrealEngine.git # optional
-    branch: main # optional
-  project: # required — repo identity (NO path)
-    vcs: svn # git | svn (default: git)
-    url: svn://svn.example.com/project/trunk # optional
+  name: MyProject
 ```
 
-| Field     | Type         | Required | Default | Description           |
-| --------- | ------------ | -------- | ------- | --------------------- |
-| `name`    | string       | yes      | —       | Project display name  |
-| `engine`  | RepoIdentity | yes      | —       | Engine repo identity  |
-| `project` | RepoIdentity | yes      | —       | Project repo identity |
+| Field  | Type   | Required | Description          |
+| ------ | ------ | -------- | -------------------- |
+| `name` | string | yes      | Project display name |
 
-Extra scalar (`string`/`boolean`) fields on `project` pass through and are available as `${{ project.<key> }}`.
+`${{ project.name }}` resolves to this name. Engine and project paths are not fields of `project`.
 
-### RepoIdentity
+## ue plugin metadata
 
-| Field    | Type   | Required | Default | Description           |
-| -------- | ------ | -------- | ------- | --------------------- |
-| `vcs`    | string | no       | `git`   | `git` or `svn`        |
-| `url`    | string | no       | —       | Remote repository URL |
-| `branch` | string | no       | —       | Branch (git)          |
-
-There is **no `path`** here — the path is supplied per-machine by `bolt.local.yaml` and merged at load (see [Merged runtime shape](#merged-runtime-shape)).
-
-## targets
-
-Build targets referenced by `ue/build` via `--target=<name>`.
+`ue/build` and the other `ue/` handlers read this object from `plugins` where `namespace` is `ue`. Omit `path` for the builtin. Relative `engine.path`, `project.path`, and `uproject` values resolve against the directory containing `bolt.yaml`.
 
 ```yaml
-targets:
-  editor:
-    kind: editor
-    config: development
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: D:/UE
+        vcs: git
+        branch: main
+      project:
+        path: D:/Games/MyProject
+        vcs: svn
+      uproject: D:/Games/MyProject/MyProject.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
 ```
+
+| Field      | Type   | Required | Description                                                               |
+| ---------- | ------ | -------- | ------------------------------------------------------------------------- |
+| `engine`   | object | yes      | `path` (required), `vcs` (`git` or `svn`, default `git`), `url`, `branch` |
+| `project`  | object | yes      | Same shape as `engine`                                                    |
+| `uproject` | string | yes      | Path to the `.uproject` file                                              |
+| `targets`  | map    | no       | Build targets used by `ue/build` via `--target=`                          |
+
+Each target:
 
 | Field    | Type   | Required | Default       | Description                                                     |
 | -------- | ------ | -------- | ------------- | --------------------------------------------------------------- |
 | `kind`   | string | yes      | —             | `editor` \| `program` \| `game` \| `client` \| `server`         |
 | `name`   | string | no       | —             | Binary name (for program/game/server)                           |
 | `config` | string | no       | `development` | `development` \| `debug` \| `debuggame` \| `shipping` \| `test` |
+
+## svn plugin metadata
+
+```yaml
+plugins:
+  - namespace: svn
+    config:
+      use_tortoise: true
+```
+
+| Field          | Type    | Required | Description                                       |
+| -------------- | ------- | -------- | ------------------------------------------------- |
+| `use_tortoise` | boolean | no       | Require, disable, or auto-detect TortoiseSVN/Proc |
 
 ## tasks
 
@@ -149,11 +159,11 @@ plugins:
     config: { key: value } # optional
 ```
 
-| Field       | Type   | Required | Description                      |
-| ----------- | ------ | -------- | -------------------------------- |
-| `namespace` | string | yes      | Plugin namespace used in `uses:` |
-| `path`      | string | yes      | Path to the plugin entry file    |
-| `config`    | object | no       | Arbitrary plugin config          |
+| Field       | Type   | Required | Description                                      |
+| ----------- | ------ | -------- | ------------------------------------------------ |
+| `namespace` | string | yes      | Plugin namespace used in `uses:`                 |
+| `path`      | string | no       | Path to the plugin entry file. Omit for builtins |
+| `config`    | object | no       | Plugin metadata. Shape depends on the plugin     |
 
 ## timeout_hours
 
@@ -197,48 +207,18 @@ A run emits one start notification. Multi-task runs show the top-level task list
 | `wecom`    | `webhook_url`          | `chat_id` |
 | `telegram` | `bot_token`, `chat_id` | —         |
 
-## bolt.local.yaml (per-machine, gitignored)
+## bolt.local.yaml (optional)
 
-Holds machine-specific paths. Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`). Relative paths resolve against the directory containing `bolt.yaml`. A missing or invalid `bolt.local.yaml` is a **loud error**.
+Only `vars` is read. A missing file is fine. Invalid YAML or any key other than `vars` is an error. Local vars shallow-override the same keys in `bolt.yaml`.
 
 ```yaml
-engine_path: D:/UE # required — local UE root
-project_path: D:/Games/MyProject # required — local project working copy
-uproject: D:/Games/MyProject/MyProject.uproject # required — .uproject file
-use_tortoise: true # optional — use TortoiseSVN/Proc for SVN
-vars: # optional — shallow-merged over bolt.yaml vars
+vars:
   some_key: some_local_value
 ```
 
-| Field          | Type                | Required | Description                             |
-| -------------- | ------------------- | -------- | --------------------------------------- |
-| `engine_path`  | string              | yes      | Local Unreal Engine root                |
-| `project_path` | string              | yes      | Local project working copy              |
-| `uproject`     | string              | yes      | Path to the `.uproject` file            |
-| `use_tortoise` | boolean             | no       | Use TortoiseSVN/Proc for SVN operations |
-| `vars`         | map (string→string) | no       | Per-machine variable overrides          |
-
-## Merged runtime shape
-
-At load, Bolt reconstructs a single runtime `project` that handlers read. It combines the shared identity with the local paths:
-
-```typescript
-project: {
-  name: string;
-  engine_repo:  { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
-  project_repo: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
-  uproject: string;        // resolved to an absolute path
-  use_tortoise?: boolean;
-  // extra scalar fields from bolt.yaml `project` pass through
-}
-```
-
-- `engine_repo` = `engine` identity (from `bolt.yaml`) + `engine_path` (from `bolt.local.yaml`).
-- `project_repo` = `project` identity + `project_path`.
-- `uproject`, `use_tortoise` come from `bolt.local.yaml`.
-- `vars` = `bolt.yaml` vars shallow-merged with `bolt.local.yaml` vars (local wins).
-
-These merged fields are what plugin handlers and interpolation see — e.g. `${{ project.engine_repo.path }}`, `${{ project.project_repo.path }}`, `${{ project.uproject }}`.
+| Field  | Type                | Required | Description                    |
+| ------ | ------------------- | -------- | ------------------------------ |
+| `vars` | map (string→string) | no       | Per-machine variable overrides |
 
 ## Migration from v1
 

@@ -36,10 +36,20 @@ declare module "boltstack" {
   export interface Project {
     name: string;
   }
+  /**
+   * One `plugins[]` entry. Same shape `loadConfig` returns.
+   * Omit `path` for a builtin. `config` is that plugin's own metadata.
+   */
+  export interface BoltPluginEntry {
+    namespace: string;
+    path?: string;
+    config?: Record<string, unknown>;
+  }
   /** Subset of BoltConfig exposed to external plugin/library consumers. */
   export interface BoltPluginConfig {
     project: Project;
     vars: Record<string, string>;
+    plugins: BoltPluginEntry[];
   }
   /** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
   export interface BoltPluginContext {

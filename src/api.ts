@@ -1,6 +1,6 @@
 // src/api.ts
 import path from "path";
-import { loadConfig, type BoltConfig } from "./config";
+import { loadConfig, type BoltConfig, type PluginEntry } from "./config";
 import { Runner } from "./runner";
 import { Logger } from "./logger";
 import { findConfig } from "./discover";
@@ -39,6 +39,9 @@ export async function run(
     if (!configPath) throw new Error("bolt.yaml not found (searched up from cwd)");
     config = await loadConfig(configPath, runtime);
     configDir = path.dirname(path.resolve(configPath));
+  } else if (config.configDir) {
+    // A preloaded config keeps the directory loadConfig recorded, even when cwd differs.
+    configDir = config.configDir;
   }
   const logger = opts.logger ?? new Logger();
   const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime, configDir });
@@ -47,6 +50,8 @@ export async function run(
 
 export interface CreateContextOptions {
   project: Project;
+  /** Same plugins array loadConfig returns. An empty list does not read bolt.yaml. */
+  plugins?: PluginEntry[];
   vars?: Record<string, string>;
   dryRun?: boolean;
   logger?: BoltLogger;
@@ -66,7 +71,7 @@ export function createContext(opts: CreateContextOptions): BoltPluginContext {
       targets: {},
       tasks: {},
       flows: {},
-      plugins: [],
+      plugins: opts.plugins ?? [],
     },
     configDir: opts.configDir ?? process.cwd(),
     dryRun: opts.dryRun ?? false,

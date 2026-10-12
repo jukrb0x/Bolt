@@ -442,3 +442,33 @@ test("run() uses pathless ue config from opts.config", async () => {
   expect(cmd).toContain(engine.replace(/\//g, "\\"));
   expect(cmd).not.toContain("decoy");
 });
+
+test("run({ config }) resolves ./engine against the bolt.yaml directory", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-rel-"));
+  const other = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-rel-cwd-"));
+  writeFileSync(
+    path.join(dir, "bolt.yaml"),
+    ueBuildYaml("./engine", "./project", "./Game.uproject"),
+  );
+  writeFileSync(
+    path.join(other, "bolt.yaml"),
+    ueBuildYaml("./engine", "./project", "./Decoy.uproject"),
+  );
+  const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
+  const logged: string[] = [];
+  await run("build", {
+    config: cfg,
+    cwd: other,
+    dryRun: true,
+    runtime: mockRuntime,
+    logger: new Logger({ sink: (line) => logged.push(line) }),
+  });
+  const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
+  const engine = path.resolve(dir, "engine").replace(/\//g, "\\");
+  const uproject = path.resolve(dir, "Game.uproject");
+  const otherEngine = path.resolve(other, "engine").replace(/\//g, "\\");
+  expect(cmd).toContain(engine);
+  expect(cmd).toContain(uproject);
+  expect(cmd).not.toContain(otherEngine);
+  expect(cmd).not.toContain("Decoy.uproject");
+});

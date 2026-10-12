@@ -21,30 +21,38 @@ cd /path/to/your/ue/project
 bolt init
 ```
 
-`bolt init` is non-interactive. It scaffolds **two** files and auto-detects a single `.uproject` in the directory. Pass `--force` to overwrite existing files.
+`bolt init` is non-interactive. It writes `bolt.yaml` when that file is missing. Pass `--force` to overwrite it.
 
-| File              | Committed?            | Contents                                   |
-| ----------------- | --------------------- | ------------------------------------------ |
-| `bolt.yaml`       | Yes (shared contract) | Project identity, targets, tasks, flows    |
-| `bolt.local.yaml` | No (gitignored)       | Per-machine paths: engine/project/uproject |
+| File              | Committed?            | Contents                                                  |
+| ----------------- | --------------------- | --------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared contract) | `version: 1`, project name, plugin metadata, tasks, flows |
+| `bolt.local.yaml` | No (optional)         | `vars` overrides only                                     |
 
 ## Step 2: Review bolt.yaml
 
-`bolt.yaml` is the team-shared contract. It holds project identity and the tasks/flows everyone runs — but **no machine paths**.
+`bolt.yaml` starts with `version: 1`. `project` is a name. Unreal engine, project, uproject, and target metadata belong to the `ue` plugin.
 
 ```yaml
+version: 1
+
 project:
   name: MyGame
-  engine: # repo identity only — no path here
-    vcs: git
-    branch: main
-  project:
-    vcs: svn
 
-targets:
-  editor:
-    kind: editor
-    config: development
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: D:/UE
+        vcs: git
+        branch: main
+      project:
+        path: D:/Games/MyGame
+        vcs: svn
+      uproject: D:/Games/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
@@ -58,37 +66,38 @@ flows:
     continue_on_fail: [start]
 ```
 
-## Step 3: Edit bolt.local.yaml paths
+Relative paths in that plugin config resolve against the directory containing `bolt.yaml`.
 
-`bolt.local.yaml` holds the paths that differ per machine. It is gitignored, so each teammate sets their own. Relative paths resolve against the directory containing `bolt.yaml`.
+## Step 3: Optional bolt.local.yaml
+
+`bolt.local.yaml` is optional. A missing file is fine. It may only override `vars`:
 
 ```yaml
-engine_path: D:/UE # local Unreal Engine root
-project_path: D:/Games/MyGame # local project working copy
-uproject: D:/Games/MyGame/MyGame.uproject # path to the .uproject file
-use_tortoise: true # use TortoiseSVN for SVN ops
+vars:
+  region: eu
 ```
-
-If `bolt.local.yaml` is missing or invalid, Bolt fails loudly and tells you to copy `bolt.local.example.yaml` or run `bolt init`.
 
 ## Step 4: Customize the contract
 
-Edit `bolt.yaml` to add targets, tasks, and flows:
+Add targets under the `ue` plugin, and add tasks and flows next to them:
 
 ```yaml
-# Add a new target
-targets:
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      targets:
+        editor:
+          kind: editor
+          config: development
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
 
-# Add a task that reuses another task and appends a plugin action
 tasks:
   build: [{ uses: ue/build, with: { target: editor } }]
   build-both: [{ call: build }, { uses: ue/build, with: { target: client } }]
 
-# Add a flow (fail-fast; list tasks that may fail in continue_on_fail)
 flows:
   reset:
     description: Kill, update, regenerate, rebuild

@@ -38,15 +38,12 @@ Output: `2.0.0` (or similar)
 
 ## After Installing
 
-`bolt` is not interactive. To set up a project, run `bolt init` from your UE project directory. It scaffolds **two** files:
-
-- `bolt.yaml` — shared, committed contract (project identity, targets, tasks, flows)
-- `bolt.local.yaml` — per-machine paths (engine/project/uproject), gitignored
+`bolt` is not interactive. To set up a project, run `bolt init` from your project directory. It writes `bolt.yaml` (`version: 1`). Unreal paths and targets go under the `ue` plugin in that file. `bolt.local.yaml` is optional and only overrides `vars`.
 
 Then preview and run a flow:
 
 ```bash
-bolt init                   # scaffold bolt.yaml + bolt.local.yaml
+bolt init                   # scaffold bolt.yaml
 bolt run daily --dry-run    # preview the steps
 bolt run daily              # run the flow
 ```

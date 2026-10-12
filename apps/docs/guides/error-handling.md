@@ -53,23 +53,11 @@ Behavior (`runFlow`):
 
 > `continue-on-error` (per-step) and `continue_on_fail` (per-flow) are unrelated. A step swallowed by `continue-on-error` never fails its task in the first place; `continue_on_fail` decides what happens when a whole _task_ fails inside a _flow_.
 
-## Missing bolt.local.yaml
+## bolt.local.yaml
 
-`bolt.local.yaml` holds your per-machine paths and is gitignored, so a fresh clone won't have one. If it is missing or invalid, Bolt fails **loudly** at load time and tells you how to fix it:
+`bolt.local.yaml` is optional and may only contain `vars`. A missing file is fine. Invalid YAML, or any key other than `vars`, fails at load time.
 
-```
-bolt.local.yaml missing or invalid — copy bolt.local.example.yaml or run bolt init
-```
-
-Fix it by either:
-
-```bash
-cp bolt.local.example.yaml bolt.local.yaml   # then edit the paths
-# or
-bolt init                                     # scaffolds it for you
-```
-
-This is intentional — Bolt does not silently fall back to defaults for machine paths.
+Unreal paths are not in that file. They belong on the `ue` plugin in `bolt.yaml`. A task that uses a `ue/` handler without that plugin config fails with `ue plugin config is missing`.
 
 ## Handling Timeouts
 
@@ -129,14 +117,15 @@ notifications:
 
 Bolt provides clear error messages with context.
 
-| Error                                | Cause                            | Solution                                                          |
-| ------------------------------------ | -------------------------------- | ----------------------------------------------------------------- |
-| `bolt.yaml not found`                | No config file in directory tree | Run `bolt init` or navigate to project root                       |
-| `bolt.local.yaml missing or invalid` | Per-machine config absent        | Copy `bolt.local.example.yaml` or run `bolt init`, then set paths |
-| `Unknown task: foo`                  | Task name not defined            | Run `bolt list` to see available tasks/flows                      |
-| `Unknown flow: foo`                  | Flow name not defined            | Run `bolt list` to see available flows                            |
-| `Command failed (exit N)`            | Shell command returned non-zero  | Check output; fix, or add `continue-on-error`                     |
-| `Build timed out after Nh`           | Run exceeded `timeout_hours`     | Increase `timeout_hours` or optimize                              |
+| Error                         | Cause                                              | Solution                                                                           |
+| ----------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `bolt.yaml not found`         | No config file in directory tree                   | Run `bolt init` or navigate to project root                                        |
+| `bolt.local.yaml` invalid     | Local file has keys other than `vars`, or bad YAML | Keep only a `vars` map, or delete the file                                         |
+| `ue plugin config is missing` | A task uses `ue/` without ue metadata              | Add `plugins: [{ namespace: ue, config: { engine, project, uproject, targets } }]` |
+| `Unknown task: foo`           | Task name not defined                              | Run `bolt list` to see available tasks/flows                                       |
+| `Unknown flow: foo`           | Flow name not defined                              | Run `bolt list` to see available flows                                             |
+| `Command failed (exit N)`     | Shell command returned non-zero                    | Check output; fix, or add `continue-on-error`                                      |
+| `Build timed out after Nh`    | Run exceeded `timeout_hours`                       | Increase `timeout_hours` or optimize                                               |
 
 ## See Also
 
