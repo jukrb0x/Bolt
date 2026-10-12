@@ -9,7 +9,7 @@ import pc from "picocolors";
 import { RELEASE_BINARIES } from "../../scripts/release-targets";
 
 const GITHUB_REPO = "jukrb0x/Bolt";
-const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
+const PUBLIC_RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
 
 interface GHRelease {
   tag_name: string;
@@ -222,10 +222,18 @@ export function cleanupStaleBinary(execPath: string): void {
   }
 }
 
+/** Public GitHub releases API, unless BOLT_RELEASES_API points at a local release. */
+export function releasesApiBase(override: string | undefined): string {
+  const trimmed = override?.trim();
+  if (!trimmed) return PUBLIC_RELEASES_API;
+  return trimmed.replace(/\/+$/, "");
+}
+
 function releaseApiUrl(version: string | undefined): string {
-  if (!version) return `${RELEASES_API}/latest`;
+  const base = releasesApiBase(process.env.BOLT_RELEASES_API);
+  if (!version) return `${base}/latest`;
   const tag = version.startsWith("v") ? version : `v${version}`;
-  return `${RELEASES_API}/tags/${encodeURIComponent(tag)}`;
+  return `${base}/tags/${encodeURIComponent(tag)}`;
 }
 
 async function fetchRelease(version: string | undefined): Promise<GHRelease> {

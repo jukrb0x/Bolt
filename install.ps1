@@ -7,7 +7,10 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $Repo = 'jukrb0x/Bolt'
+# Download directory containing SHA256SUMS and bolt-win-x64.exe.
+# Unset, this is the public GitHub latest release. A local release sets BOLT_INSTALL_BASE.
 $Base = "https://github.com/$Repo/releases/latest/download"
+if ($env:BOLT_INSTALL_BASE) { $Base = $env:BOLT_INSTALL_BASE.TrimEnd('/') }
 $Asset = 'bolt-win-x64.exe'
 
 # A 32-bit PowerShell on 64-bit Windows reports x86 in PROCESSOR_ARCHITECTURE.
@@ -48,6 +51,7 @@ try {
     throw "Checksum mismatch for $Asset. bolt was not installed."
   }
 
+  Unblock-File -LiteralPath $DownloadPath
   $Version = (& $DownloadPath version | Out-String).Trim()
   if ($LASTEXITCODE -ne 0 -or $Version -notmatch '^[0-9A-Za-z.+-]+$') {
     throw "Downloaded bolt printed an unexpected version (exit $LASTEXITCODE). The existing bolt was not replaced."
@@ -71,6 +75,7 @@ try {
     }
     throw
   }
+  Unblock-File -LiteralPath $Dest
 
   $Json = (@{
       channel = 'github'

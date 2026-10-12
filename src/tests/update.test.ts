@@ -11,6 +11,7 @@ import {
   parseSha256Sums,
   planSelfUpdate,
   releaseAssetName,
+  releasesApiBase,
   replaceInstalledBinary,
   sha256Hex,
 } from "../commands/update";
@@ -95,6 +96,14 @@ test("acceptedBinaryVersion rejects a binary that does not print a version", () 
   expect(acceptedBinaryVersion(0, '2.1.0"; rm')).toBeNull();
   expect(acceptedBinaryVersion(0, "")).toBeNull();
   expect(acceptedBinaryVersion(null, "")).toBeNull();
+});
+
+test("releasesApiBase stays on GitHub unless a local release is set", () => {
+  expect(releasesApiBase(undefined)).toBe("https://api.github.com/repos/jukrb0x/Bolt/releases");
+  expect(releasesApiBase("  ")).toBe("https://api.github.com/repos/jukrb0x/Bolt/releases");
+  expect(releasesApiBase("http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases/")).toBe(
+    "http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases",
+  );
 });
 
 test("parseInstallReceipt accepts a github receipt and strips a BOM", () => {
