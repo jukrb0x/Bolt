@@ -60,6 +60,32 @@ jobs:
       - name: End-to-end
         run: bun run test:e2e
 
+  # Two compiled builds, served locally. The public `irm | iex` run is not here:
+  # it has to hit a real GitHub Release, and that tag does not exist yet.
+  windows-install:
+    name: windows install
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.3"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install from a local release and self-update
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-e2e.ps1
+
   # Pull requests and main. Tag pushes are built by the Release workflow.
   binaries:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
