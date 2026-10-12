@@ -33,10 +33,7 @@ cd /path/to/your/ue/project
 bolt init
 ```
 
-`bolt init` scaffolds **two** files:
-
-- `bolt.yaml` — the shared, committed contract (project identity, targets, tasks, flows). Commit this.
-- `bolt.local.yaml` — your per-machine paths (engine/project/uproject). This is gitignored.
+`bolt init` scaffolds `bolt.yaml` (`version: 1`, a project name, and a sample task). Commit it. `bolt.local.yaml` is optional and only overrides `vars`.
 
 3. Preview, then run your workflow:
 
@@ -48,22 +45,33 @@ bolt run daily              # run the flow for real
 ## Example bolt.yaml
 
 ```yaml
+version: 1
+
 project:
   name: MyGame
-  engine: # repo identity only — path lives in bolt.local.yaml
-    vcs: git
-    branch: main
-  project:
-    vcs: svn
 
-targets:
-  editor:
-    kind: editor
-    config: development
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: D:/UE
+        vcs: git
+        branch: main
+      project:
+        path: D:/Games/MyGame
+        vcs: svn
+      uproject: D:/Games/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
+  - namespace: svn
+    config:
+      use_tortoise: true
 
 tasks:
   kill: [{ uses: ue/kill }]
@@ -78,14 +86,7 @@ flows:
     continue_on_fail: [start] # update/build failures abort; start may fail
 ```
 
-Machine-specific paths live in `bolt.local.yaml` (gitignored):
-
-```yaml
-engine_path: D:/UE
-project_path: D:/Games/MyGame
-uproject: D:/Games/MyGame/MyGame.uproject
-use_tortoise: true
-```
+Relative `engine.path`, `project.path`, and `uproject` values resolve against the directory containing `bolt.yaml`. Optional `bolt.local.yaml` may only override `vars`.
 
 Run `bolt run build` to compile the editor. Pass `bolt run build --target=client` to build a different target — params override the step's `with:` values.
 

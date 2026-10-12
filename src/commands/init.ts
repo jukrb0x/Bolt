@@ -1,76 +1,32 @@
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import path from "path";
-import { existsSync, readdirSync, writeFileSync, statSync } from "fs";
+import { existsSync, writeFileSync } from "fs";
 
-const STARTER_YAML = `# bolt.yaml - shared project contract (commit this; no machine paths here)
+// Mirrors bolt.template.yaml. Inlined so the published binary does not need the file.
+const STARTER_YAML = `# bolt.yaml — pipeline contract (commit this)
+#
+# Generic metadata only. Unreal Engine settings belong to the ue plugin.
+# See the ue plugin example (src/plugins/ue.example.yaml in the bolt repo).
+
+version: 1
+
 project:
   name: MyProject
-  engine:
-    vcs: git
-    # url: https://github.com/EpicGames/UnrealEngine.git
-    branch: main
-  project:
-    vcs: svn
-    # url: svn://svn.example.com/project/trunk
 
-targets:
-  editor: { kind: editor, config: development }
-
-# tasks: named step sequences (the only building block)
 tasks:
-  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:  [{ uses: ue/build, with: { target: editor } }]
-  start:  [{ uses: ue/start }]
+  hello:
+    - run: echo "hello from \${{ project.name }}"
 
-# flows: named, ordered goals (bolt run <flow>)
 flows:
-  daily:
-    description: Update, build, launch editor
-    steps: [update, build, start]
-    continue_on_fail: [start]
+  demo:
+    description: Say hello
+    steps: [hello]
 `;
-
-function starterLocal(uproject: string, projectPath: string): string {
-  return `# bolt.local.yaml - per-machine paths (gitignored; do NOT commit)
-engine_path:  CHANGE_ME/path/to/engine
-project_path: ${projectPath}
-uproject:     ${uproject}
-use_tortoise: false
-`;
-}
-
-/** Find a single *.uproject in cwd or one level down. Returns absolute path or null. */
-function detectUproject(root: string): string | null {
-  const matches: string[] = [];
-  const scan = (dir: string) => {
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (e.endsWith(".uproject")) matches.push(path.join(dir, e));
-    }
-  };
-  scan(root);
-  if (matches.length === 0) {
-    for (const e of readdirSync(root)) {
-      const full = path.join(root, e);
-      try {
-        if (statSync(full).isDirectory()) scan(full);
-      } catch {
-        /* skip unreadable entries */
-      }
-    }
-  }
-  return matches.length === 1 ? matches[0] : null;
-}
 
 export default defineCommand({
   meta: {
-    description: "Scaffold bolt.yaml (shared) + bolt.local.yaml (per-machine)",
+    description: "Scaffold a generic bolt.yaml",
   },
   args: {
     force: {
@@ -94,25 +50,11 @@ export default defineCommand({
       wrote.push("bolt.yaml");
     }
 
-    const localPath = path.join(root, "bolt.local.yaml");
-    if (existsSync(localPath) && !force) {
-      skipped.push("bolt.local.yaml");
-    } else {
-      const detected = detectUproject(root);
-      const uproject = detected
-        ? path.relative(root, detected).split(path.sep).join("/")
-        : "CHANGE_ME/path/to/Project.uproject";
-      const projectPath = detected
-        ? path.relative(root, path.dirname(detected)).split(path.sep).join("/") || "."
-        : "CHANGE_ME/path/to/project";
-      writeFileSync(localPath, starterLocal(uproject, projectPath));
-      wrote.push(
-        detected ? `bolt.local.yaml (detected ${path.basename(detected)})` : "bolt.local.yaml",
-      );
-    }
-
     for (const f of wrote) console.log(pc.green(`✓ wrote ${f}`));
     for (const f of skipped) console.log(pc.yellow(`• skipped ${f} (exists; use --force)`));
-    console.log(pc.dim("\nEdit bolt.local.yaml paths, then run: bolt check"));
+    console.log(
+      pc.dim("\nCommit bolt.yaml. Put machine-specific vars in bolt.local.yaml (gitignored)."),
+    );
+    console.log(pc.dim("Then run: bolt check"));
   },
 });

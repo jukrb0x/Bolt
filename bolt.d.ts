@@ -33,24 +33,23 @@ declare module "boltstack" {
     debug(msg: string): void;
     cmd(msg: string): void;
   }
-  export interface RepoConfig {
-    path: string;
-    vcs: "git" | "svn";
-    url?: string;
-    branch?: string;
-  }
   export interface Project {
     name: string;
-    engine_repo: RepoConfig;
-    project_repo: RepoConfig;
-    uproject: string;
-    use_tortoise?: boolean;
-    [key: string]: string | boolean | undefined | RepoConfig;
+  }
+  /**
+   * One `plugins[]` entry. Same shape `loadConfig` returns.
+   * Omit `path` for a builtin. `config` is that plugin's own metadata.
+   */
+  export interface BoltPluginEntry {
+    namespace: string;
+    path?: string;
+    config?: Record<string, unknown>;
   }
   /** Subset of BoltConfig exposed to external plugin/library consumers. */
   export interface BoltPluginConfig {
     project: Project;
     vars: Record<string, string>;
+    plugins: BoltPluginEntry[];
   }
   /** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
   export interface BoltPluginContext {

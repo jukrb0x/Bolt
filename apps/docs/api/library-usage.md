@@ -17,7 +17,7 @@ bun add boltstack
 The public entry point is `run(taskName, opts)`, which runs a named **task** (via `runTask`). Params are applied to every step and override the step's `with:` values.
 
 ```typescript
-import { run, createContext } from "boltstack";
+import { run, createContext, loadConfig } from "boltstack";
 
 // Run a named task
 await run("build", {
@@ -31,14 +31,13 @@ await run("build", {
   params: { target: "client", config: "shipping" },
 });
 
-// Create a context for direct plugin calls (see below)
+// Create a context for direct plugin calls (see below).
+// plugins is the same array loadConfig returns. An empty list does not read bolt.yaml.
+const config = await loadConfig("./bolt.yaml");
 const ctx = createContext({
-  project: {
-    name: "MyGame",
-    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
-    uproject: "C:/Projects/MyGame/MyGame.uproject",
-  },
+  project: config.project,
+  plugins: config.plugins,
+  configDir: config.configDir,
   dryRun: false,
 });
 ```
@@ -61,15 +60,13 @@ const ctx = createContext({
 
 ```typescript
 import { git, fs, ue } from "boltstack/plugins";
-import { createContext } from "boltstack";
+import { createContext, loadConfig } from "boltstack";
 
+const config = await loadConfig("./bolt.yaml");
 const ctx = createContext({
-  project: {
-    name: "MyGame",
-    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
-    uproject: "C:/Projects/MyGame/MyGame.uproject",
-  },
+  project: config.project,
+  plugins: config.plugins,
+  configDir: config.configDir,
 });
 
 // Call plugin handlers directly
@@ -89,13 +86,13 @@ const config = await loadConfig("./bolt.yaml");
 const logger = new Logger();
 const runtime = createRuntime(); // Auto-detects Bun vs Node.js
 
-const runner = new Runner(config, { logger, runtime });
+const runner = new Runner(config, { logger, runtime, configDir: config.configDir });
 
 await runner.runTask("build", { target: "client" }); // a task, with params
 await runner.runFlow("daily"); // a flow (fail-fast)
 ```
 
-> `loadConfig` reads `bolt.yaml` **and** merges the sibling `bolt.local.yaml`; a missing/invalid local file throws. Use `checkConfig` to validate both without throwing.
+> `loadConfig` reads `bolt.yaml` and, when present, merges `vars` from the sibling `bolt.local.yaml`. A missing local file is fine. An invalid one throws. `loadConfig` also sets `configDir` to the directory containing `bolt.yaml`. Use `checkConfig` to validate without throwing.
 
 ## Public Exports
 
@@ -105,11 +102,11 @@ From `boltstack`:
 | -------------------------------------------------------------------- | ----------------- | ---------------------------------------------------- |
 | `run`                                                                | function          | Run a task by name                                   |
 | `createContext`                                                      | function          | Build a `BoltPluginContext` for direct handler calls |
-| `loadConfig`                                                         | function          | Load + merge `bolt.yaml` and `bolt.local.yaml`       |
+| `loadConfig`                                                         | function          | Load `bolt.yaml`; merge optional local `vars`        |
 | `checkConfig`                                                        | function          | Validate config, returning errors (never throws)     |
 | `PluginBase`, `handler`                                              | class / decorator | Author class-based plugins                           |
 | `RunOptions`, `CreateContextOptions`                                 | type              | Option shapes                                        |
-| `BoltConfig`, `Project`, `RepoConfig`, `Target`, `Flow`, `Step`      | type              | Config types                                         |
+| `BoltConfig`, `PluginEntry`, `Project`, `Flow`, `Step`               | type              | Config types                                         |
 | `BoltPlugin`, `BoltPluginHandler`, `BoltPluginContext`, `BoltLogger` | type              | Plugin types                                         |
 
 ## Subpath Exports

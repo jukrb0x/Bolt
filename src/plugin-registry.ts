@@ -252,7 +252,7 @@ export class PluginRegistry {
 }
 
 export async function buildRegistry(
-  cfg: { plugins?: { namespace: string; path: string; config?: Record<string, unknown> }[] },
+  cfg: { plugins?: { namespace: string; path?: string; config?: Record<string, unknown> }[] },
   configDir: string,
   builtins: BoltPlugin[],
 ): Promise<PluginRegistry> {
@@ -269,8 +269,10 @@ export async function buildRegistry(
   const projectPluginsDir = path.join(configDir, ".bolt", "plugins");
   await reg.loadDirectory(projectPluginsDir, configDir);
 
-  // 4. Project-scope explicit declarations (highest priority)
+  // 4. Project-scope explicit declarations (highest priority).
+  // Pathless entries are builtin config (for example ue metadata) and are not imported.
   for (const entry of cfg.plugins ?? []) {
+    if (!entry.path) continue;
     const resolved = path.resolve(configDir, entry.path);
     const dir = pluginDirectory(resolved);
     try {

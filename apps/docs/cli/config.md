@@ -45,4 +45,4 @@ bolt config -e vim
 ## See Also
 
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
-- [bolt check](./check.md) - Validate bolt.yaml and bolt.local.yaml
+- [bolt check](./check.md) - Validate bolt.yaml

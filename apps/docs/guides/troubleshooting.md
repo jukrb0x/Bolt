@@ -23,27 +23,21 @@ cd /path/to/project
 bolt init
 ```
 
-### bolt.local.yaml missing or invalid
+### bolt.local.yaml invalid
 
-**Error**: `bolt.local.yaml missing or invalid — copy bolt.local.example.yaml or run bolt init`
+**Error**: a schema error whose path starts with `bolt.local.yaml`.
 
-**Cause**: `bolt.local.yaml` holds your per-machine paths and is gitignored, so a fresh clone won't have one. Bolt fails loudly rather than guessing paths.
+**Cause**: The file exists but is not a `vars` map. A missing `bolt.local.yaml` is fine.
 
-**Solution**: Create it and set your paths.
-
-```bash
-cp bolt.local.example.yaml bolt.local.yaml   # then edit engine_path/project_path/uproject
-# or
-bolt init                                     # scaffolds it for you
-```
+**Solution**: Keep only variable overrides, or delete the file.
 
 ```yaml
 # bolt.local.yaml
-engine_path: D:/UE
-project_path: D:/Games/MyGame
-uproject: D:/Games/MyGame/MyGame.uproject
-use_tortoise: true
+vars:
+  region: eu
 ```
+
+Unreal engine, project, and uproject paths belong on the `ue` plugin in `bolt.yaml`, not here.
 
 ### Unknown task or flow
 
@@ -113,7 +107,7 @@ timeout_hours: 12 # Increase from 6 to 12
 **Cause**: Version control conflicts in the engine or project working copy.
 
 **Solution**: Resolve them, then re-run. Bolt ships handlers for the common SVN
-cases (both honor `use_tortoise` from `bolt.local.yaml`):
+cases (both honor `use_tortoise` on the `svn` plugin):
 
 ```yaml
 tasks:
@@ -183,9 +177,12 @@ project:
 **Solution**: Use a valid kind.
 
 ```yaml
-targets:
-  mytarget:
-    kind: editor # e.g. editor | program
+plugins:
+  - namespace: ue
+    config:
+      targets:
+        mytarget:
+          kind: editor # editor | program | game | client | server
 ```
 
 ## Performance Issues

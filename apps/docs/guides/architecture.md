@@ -11,7 +11,7 @@ src/
 ├── main.ts               # CLI entry — citty command tree
 ├── index.ts              # Library public API (run, createContext, loadConfig)
 ├── api.ts                # High-level run() implementation
-├── config.ts             # Zod schema, loadConfig (+ bolt.local.yaml merge), checkConfig
+├── config.ts             # Zod schema, loadConfig (optional local vars), checkConfig
 ├── discover.ts           # Upward bolt.yaml search
 ├── runner.ts             # Core execution engine (runTask / runFlow)
 ├── interpolate.ts        # ${{ }} template engine
@@ -32,9 +32,9 @@ bolt
 ├── run <name...>          # run tasks (typed order) or a single flow
 ├── list                   # list tasks and flows
 ├── info                   # project + VCS summary
-├── check                  # validate bolt.yaml (+ bolt.local.yaml)
+├── check                  # validate bolt.yaml (and bolt.local.yaml when present)
 ├── config                 # open bolt.yaml in $EDITOR
-├── init                   # scaffold bolt.yaml + bolt.local.yaml
+├── init                   # scaffold bolt.yaml
 ├── inspect <name...>      # show resolved steps without executing
 ├── plugin
 │   ├── list               # active plugins + handlers
@@ -52,7 +52,7 @@ Commands are registered in `main.ts` via citty's `subCommands`. citty handles `-
 CLI args
   └── citty routes to command
         └── discover(cwd)          # walk up to find bolt.yaml
-              └── loadConfig()      # parse bolt.yaml + merge bolt.local.yaml + Zod
+              └── loadConfig()      # parse bolt.yaml, merge optional local vars, Zod
                     └── resolveRunPlan()      # resolve tasks/calls/params once
                           └── Runner.executePlan()
                                 ├── call      # recursively owned task nodes
@@ -66,12 +66,7 @@ CLI args
 
 ## Config Split Loader
 
-`loadConfig` reads two files and merges them:
-
-- `bolt.yaml` — the committed shared contract: project identity, `targets`, `tasks`, `flows`. No machine paths.
-- `bolt.local.yaml` — per-machine paths (`engine_path`, `project_path`, `uproject`, `use_tortoise`), gitignored.
-
-The loader merges them into the runtime `project.engine_repo` / `project_repo` / `uproject` shape. A missing or invalid `bolt.local.yaml` is a loud error, not a silent fallback.
+`loadConfig` reads `bolt.yaml` (`version: 1`, project name, plugins, tasks, flows). Unreal engine, project, uproject, and targets live on the `ue` plugin. `bolt.local.yaml` is optional and may only override `vars`. A missing local file is fine; invalid content is an error. `loadConfig` records `configDir` as the directory containing `bolt.yaml`, and relative plugin paths resolve against it.
 
 ## Plugin Scopes (resolution priority)
 

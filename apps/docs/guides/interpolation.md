@@ -18,7 +18,7 @@ tasks:
     - uses: ue/build
       with:
         target: ${{ params.target }}
-    - run: echo "Built ${{ project.name }} from ${{ project.engine_repo.path }}"
+    - run: echo "Built ${{ project.name }} for ${{ vars.region }}"
 ```
 
 Values are resolved just before the step executes. An expression that can't be resolved is left **unchanged** (safe passthrough).
@@ -27,26 +27,20 @@ Values are resolved just before the step executes. An expression that can't be r
 
 Four namespaces are available in every step:
 
-| Namespace          | Resolves to                           | Source                                         |
-| ------------------ | ------------------------------------- | ---------------------------------------------- |
-| `${{ project.* }}` | The merged runtime `project`          | `bolt.yaml` identity + `bolt.local.yaml` paths |
-| `${{ vars.* }}`    | Shared vars (local overrides applied) | `bolt.yaml` `vars` + `bolt.local.yaml` `vars`  |
-| `${{ env.* }}`     | Environment variables                 | `process.env`                                  |
-| `${{ params.* }}`  | Run parameters                        | `--key=value` on `bolt run`                    |
+| Namespace          | Resolves to                           | Source                                        |
+| ------------------ | ------------------------------------- | --------------------------------------------- |
+| `${{ project.* }}` | The `project` object                  | `bolt.yaml` `project` (`name` only)           |
+| `${{ vars.* }}`    | Shared vars (local overrides applied) | `bolt.yaml` `vars` + `bolt.local.yaml` `vars` |
+| `${{ env.* }}`     | Environment variables                 | `process.env`                                 |
+| `${{ params.* }}`  | Run parameters                        | `--key=value` on `bolt run`                   |
 
 ### project
 
-`project` is the **merged** runtime shape (see [merged runtime shape](/api/config-schema.md#merged-runtime-shape)), so machine paths authored in `bolt.local.yaml` are available here:
+`project` is `{ name }`. Engine, project, and uproject paths live on the `ue` plugin and are not interpolated from `project`.
 
-| Expression                          | Resolves to                              |
-| ----------------------------------- | ---------------------------------------- |
-| `${{ project.name }}`               | Project name                             |
-| `${{ project.engine_repo.path }}`   | Local engine path (from `engine_path`)   |
-| `${{ project.engine_repo.branch }}` | Engine branch                            |
-| `${{ project.project_repo.path }}`  | Local project path (from `project_path`) |
-| `${{ project.uproject }}`           | Absolute `.uproject` path                |
-
-Extra scalar fields on the `bolt.yaml` `project` block also pass through as `${{ project.<key> }}`.
+| Expression            | Resolves to  |
+| --------------------- | ------------ |
+| `${{ project.name }}` | Project name |
 
 ### vars
 
@@ -118,4 +112,4 @@ If a path doesn't resolve to a scalar value (missing key, or it points at an obj
 ## See Also
 
 - [bolt.yaml Guide](./bolt-yaml.md) — configuration walkthrough
-- [Config Schema](/api/config-schema.md) — field reference and merged runtime shape
+- [Config Schema](/api/config-schema.md) — field reference

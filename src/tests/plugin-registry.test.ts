@@ -71,6 +71,16 @@ test("loadDirectory silently skips missing directory", async () => {
   await expect(reg.loadDirectory("/nonexistent/path/xyz")).resolves.toBeUndefined();
 });
 
+test("buildRegistry skips plugin entries that have no path", async () => {
+  const builtinUe: BoltPlugin = { namespace: "ue", handlers: { build: async () => {} } };
+  const reg = await buildRegistry(
+    { plugins: [{ namespace: "ue", config: { kept: true } }] },
+    tmpDir,
+    [builtinUe],
+  );
+  expect(reg.get("ue")).toBe(builtinUe);
+});
+
 test("buildRegistry applies priority: explicit > project > user > builtins", async () => {
   // Create a project plugin that overrides builtin "ue"
   const projectPluginDir = path.join(tmpDir, ".bolt", "plugins", "ue");

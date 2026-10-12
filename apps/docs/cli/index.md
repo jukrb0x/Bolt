@@ -11,8 +11,8 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 | [`bolt run`](./run.md)                 | Run tasks (in typed order) or a flow         |
 | [`bolt list`](./list.md)               | List all tasks and flows                     |
 | [`bolt info`](./info.md)               | Show project and VCS configuration           |
-| [`bolt check`](./check.md)             | Validate bolt.yaml and bolt.local.yaml       |
-| [`bolt init`](./init.md)               | Scaffold bolt.yaml + bolt.local.yaml         |
+| [`bolt check`](./check.md)             | Validate bolt.yaml                           |
+| [`bolt init`](./init.md)               | Scaffold bolt.yaml                           |
 | [`bolt config`](./config.md)           | Manage configuration                         |
 | [`bolt plugin`](./plugin.md)           | Manage plugins                               |
 | [`bolt inspect`](./inspect.md)         | Preview resolved steps for a task or flow    |
@@ -66,8 +66,8 @@ bolt run build --config=debug
 ## Configuration Discovery
 
 Bolt searches for `bolt.yaml` by walking up the directory tree from the current
-working directory. The first file found is used. Per-machine paths are read from
-`bolt.local.yaml` next to it.
+working directory. The first file found is used. Optional `vars` overrides are
+read from `bolt.local.yaml` next to it.
 
 ```
 /current/working/dir/bolt.yaml     # Found first, used

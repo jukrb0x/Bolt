@@ -67,26 +67,34 @@ interface BoltPluginContext {
 
 ### cfg
 
-The merged runtime configuration (`bolt.yaml` + `bolt.local.yaml`).
+The loaded configuration. `project` is a name. Plugin metadata, including Unreal engine, project, uproject, and targets, is on `plugins`.
 
 ```typescript
 cfg: {
   project: {
     name: "MyGame";
-    engine_repo:  { path: "C:/UnrealEngine", vcs: "git" };
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" };
-    uproject: "C:/Projects/MyGame/MyGame.uproject";
-    // ... other merged project fields
-  };
-  targets: { /* ... */ };
-  tasks: { /* ... */ };
-  flows: { /* ... */ };
+  }
+  vars: {
+  }
+  plugins: [
+    {
+      namespace: "ue",
+      config: {
+        engine: { path: "C:/UnrealEngine", vcs: "git" },
+        project: { path: "C:/Projects/MyGame", vcs: "svn" },
+        uproject: "C:/Projects/MyGame/MyGame.uproject",
+        targets: {
+          editor: { kind: "editor", config: "development" },
+        },
+      },
+    },
+  ];
 }
 ```
 
 ### configDir
 
-Directory containing `bolt.yaml`. Use it to resolve relative paths.
+Directory containing `bolt.yaml`. Relative plugin paths resolve against it.
 
 ### runtime
 

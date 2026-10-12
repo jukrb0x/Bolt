@@ -1,18 +1,17 @@
 // src/plugins/git.ts
-import type { BoltPlugin, BoltPluginContext } from "../plugin";
+import type { BoltPlugin } from "../plugin";
 
-function resolvePath(params: Record<string, string>, ctx: BoltPluginContext): string {
-  const p = params.path ?? (ctx.cfg.project as any).engine_root;
-  if (!p) throw new Error("git handler requires with: path: or project.engine_root in config");
-  return p;
+function resolvePath(params: Record<string, string>): string {
+  if (!params.path) throw new Error("git handler requires with: path:");
+  return params.path;
 }
 
 const plugin: BoltPlugin = {
   namespace: "git",
   handlers: {
     pull: async (params, ctx) => {
-      const p = resolvePath(params, ctx);
-      const branch = params.branch ?? (ctx.cfg.project as any).git_branch ?? "main";
+      const p = resolvePath(params);
+      const branch = params.branch ?? "main";
       ctx.logger.cmd(`git -C "${p}" pull origin ${branch} --autostash --no-edit`);
       if (!ctx.dryRun) {
         const result = await ctx.runtime.spawn([
@@ -30,7 +29,7 @@ const plugin: BoltPlugin = {
     },
 
     status: async (params, ctx) => {
-      const p = resolvePath(params, ctx);
+      const p = resolvePath(params);
       ctx.logger.cmd(`git -C "${p}" status`);
       if (!ctx.dryRun) {
         const result = await ctx.runtime.spawn(["git", "-C", p, "status"]);
@@ -39,7 +38,7 @@ const plugin: BoltPlugin = {
     },
 
     info: async (params, ctx) => {
-      const p = resolvePath(params, ctx);
+      const p = resolvePath(params);
       // Read-only query — intentionally runs in dry-run mode
       const logResult = ctx.runtime.spawnSync([
         "git",
@@ -70,7 +69,7 @@ const plugin: BoltPlugin = {
 
     checkout: async (params, ctx) => {
       if (!params.branch) throw new Error("git/checkout requires with: branch:");
-      const p = resolvePath(params, ctx);
+      const p = resolvePath(params);
       ctx.logger.cmd(`git -C "${p}" checkout ${params.branch}`);
       if (!ctx.dryRun) {
         const result = await ctx.runtime.spawn(["git", "-C", p, "checkout", params.branch]);

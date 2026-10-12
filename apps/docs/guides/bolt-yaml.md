@@ -2,18 +2,16 @@
 title: "Bolt YAML"
 ---
 
-How to author a Bolt project's configuration. Bolt v2 splits config across two files — a shared committed contract and a per-machine local file — that Bolt merges at load.
+How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 1`. `project` is a name. Unreal metadata belongs to the `ue` plugin.
 
 ## The two files
 
-| File              | Committed?          | Contains                                                                 | Why                                                                  |
-| ----------------- | ------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)        | Project identity, targets, tasks, flows, vars, plugins, notifications    | The team's automation contract. Everyone runs the same tasks/flows.  |
-| `bolt.local.yaml` | No (**gitignored**) | Machine paths: `engine_path`, `project_path`, `uproject`, `use_tortoise` | Paths differ per developer/machine, so they must never be committed. |
+| File              | Committed?    | Contains                                                | Why                                                                 |
+| ----------------- | ------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows. |
+| `bolt.local.yaml` | No (optional) | `vars` overrides only                                   | Per-machine variable overrides. A missing file is fine.             |
 
-Run `bolt init` to scaffold both (it also tries to auto-detect the `.uproject`). If `bolt.local.yaml` is missing or invalid, Bolt fails loudly — copy `bolt.local.example.yaml` to `bolt.local.yaml` and set the paths.
-
-Why split? The shared contract stays identical for the whole team, while each machine keeps its own engine/project locations. This keeps `bolt.yaml` clean of secrets and machine specifics, and makes the same tasks/flows reproducible everywhere.
+`bolt init` writes `bolt.yaml` only. Relative paths inside plugin config resolve against the directory containing `bolt.yaml`.
 
 ## Model in one minute
 
@@ -24,29 +22,38 @@ Why split? The shared contract stays identical for the whole team, while each ma
 ## bolt.yaml — annotated walkthrough
 
 ```yaml
+version: 1
+
 # Optional: abort the whole run if it exceeds this duration
 # timeout_hours: 6
 
-# Project identity only — NO machine paths (those live in bolt.local.yaml)
 project:
   name: MyProject
-  engine: # repo identity for the engine
-    vcs: git # git | svn (default: git)
-    # url: https://github.com/EpicGames/UnrealEngine.git
-    branch: main
-  project: # repo identity for the game project
-    vcs: svn
-    # url: svn://svn.example.com/project/trunk
 
-# Build targets referenced by ue/build via --target=<name>
-targets:
-  editor:
-    kind: editor # editor | program | game | client | server
-    config: development # development | debug | debuggame | shipping | test
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: D:/UE # relative paths resolve against this file's directory
+        vcs: git # git | svn
+        # url: https://github.com/EpicGames/UnrealEngine.git
+        branch: main
+      project:
+        path: D:/Games/MyProject
+        vcs: svn
+        # url: svn://svn.example.com/project/trunk
+      uproject: D:/Games/MyProject/MyProject.uproject
+      targets:
+        editor:
+          kind: editor # editor | program | game | client | server
+          config: development # development | debug | debuggame | shipping | test
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
+  - namespace: svn
+    config:
+      use_tortoise: true
 
 # tasks: the only building block — a task is a named list of steps.
 # Steps: `uses` = plugin/local action, `call` = reusable task, `run` = shell command.
@@ -73,7 +80,7 @@ flows:
 # vars:
 #   region: us-east-1
 
-# Optional: explicit project-scope plugins (also auto-discovered from .bolt/plugins/)
+# A plugin with a path is loaded from that file. Builtins omit path.
 # plugins:
 #   - namespace: myplugin
 #     path: ./bolt-plugins/myplugin/index.ts
@@ -94,29 +101,14 @@ flows:
 
 ## bolt.local.yaml — annotated walkthrough
 
-Gitignored. Relative paths resolve against the directory containing `bolt.yaml`.
+Optional. A missing file is fine. Only `vars` is read, and those keys shallow-override `bolt.yaml` `vars`.
 
 ```yaml
-engine_path: D:/UE # local Unreal Engine root
-project_path: D:/Games/MyProject # local project working copy
-uproject: D:/Games/MyProject/MyProject.uproject # path to the .uproject file
-use_tortoise: true # use TortoiseSVN/Proc for SVN ops
-
-# Optional per-machine variable overrides (shallow-merged over bolt.yaml vars)
-# vars:
-#   some_key: some_local_value
+vars:
+  region: eu
 ```
 
-## How the two files merge
-
-At load Bolt combines identity (`bolt.yaml`) with paths (`bolt.local.yaml`) into a single runtime `project` that handlers and interpolation read:
-
-- `engine_repo` = `project.engine` identity + `engine_path` → `{ path, vcs, url?, branch? }`
-- `project_repo` = `project.project` identity + `project_path` → `{ path, vcs, url?, branch? }`
-- `uproject`, `use_tortoise` come from `bolt.local.yaml`
-- `vars` = `bolt.yaml` vars shallow-merged with `bolt.local.yaml` vars (local wins)
-
-So a handler reads `ctx.cfg.project.engine_repo.path`, and interpolation can use `${{ project.engine_repo.path }}` — even though the path was authored in a different file. See [Config Schema](/api/config-schema.md#merged-runtime-shape).
+Engine, project, and uproject paths stay on the `ue` plugin in `bolt.yaml`. `use_tortoise` stays on the `svn` plugin. See [Config Schema](/api/config-schema.md).
 
 ## Running
 
@@ -131,7 +123,7 @@ bolt run reset --dry-run             # preview without executing
 
 ## Migration from v1
 
-`ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` and `flows`; reuse tasks with `call: <name>`. The legacy `uses: task/name` form is rejected and must be changed to `call: name`. Replace `bolt go`/`bolt help` with `bolt run`. Machine paths that used to sit under `project` (e.g. `engine_repo.path`) now live in `bolt.local.yaml`.
+`ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` and `flows`; reuse tasks with `call: <name>`. The legacy `uses: task/name` form is rejected and must be changed to `call: name`. Replace `bolt go`/`bolt help` with `bolt run`. Engine, project, uproject, and target metadata now live on the `ue` plugin. `use_tortoise` lives on the `svn` plugin. `project` is only a name, and `bolt.yaml` requires `version: 1`.
 
 Multi-task start notifications are sent once per invocation and show the top-level task list plus recursively owned actions.
 
