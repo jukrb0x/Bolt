@@ -10,11 +10,11 @@ The manifest is built in memory from `@handler` or `defineHandler`. Bolt does no
 
 Later layers replace an earlier plugin with the same namespace.
 
-| Priority | Scope | Location |
-| --- | --- | --- |
-| 1 (lowest) | Built-in | Compiled into the bolt binary |
-| 2 | User | `~/.bolt/plugins/<namespace>/` |
-| 3 | Project | `<project>/.bolt/plugins/<namespace>/` |
+| Priority    | Scope    | Location                                      |
+| ----------- | -------- | --------------------------------------------- |
+| 1 (lowest)  | Built-in | Compiled into the bolt binary                 |
+| 2           | User     | `~/.bolt/plugins/<namespace>/`                |
+| 3           | Project  | `<project>/.bolt/plugins/<namespace>/`        |
 | 4 (highest) | Explicit | `plugins:` entry in `bolt.yaml` with a `path` |
 
 A `plugins:` entry with no `path` is config for a builtin. The `ue` entry is that kind of record. It is not imported.

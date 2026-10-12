@@ -16,11 +16,11 @@ irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 
 Open a new terminal. The script adds the install directory to your user Path, and the terminal you already have open does not see that change.
 
-| | |
-| --- | --- |
-| Binary | `%LOCALAPPDATA%\bolt\bin\bolt.exe` |
-| Receipt | `%USERPROFILE%\.bolt\install.json` |
-| Release asset | `bolt-win-x64.exe` |
+|               |                                    |
+| ------------- | ---------------------------------- |
+| Binary        | `%LOCALAPPDATA%\bolt\bin\bolt.exe` |
+| Receipt       | `%USERPROFILE%\.bolt\install.json` |
+| Release asset | `bolt-win-x64.exe`                 |
 
 Re-running the script renames a running `bolt.exe` to `bolt.exe.old` before writing the new file.
 
@@ -32,11 +32,11 @@ curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 
 Open a new shell, then run `bolt version`. The script appends `~/.bolt/bin` to `~/.zshrc`, `~/.bashrc`, or `~/.profile`.
 
-| Machine | Release asset | Installed path |
-| --- | --- | --- |
-| Intel macOS (`x86_64`) | `bolt-mac-x64` | `~/.bolt/bin/bolt` |
+| Machine                 | Release asset    | Installed path     |
+| ----------------------- | ---------------- | ------------------ |
+| Intel macOS (`x86_64`)  | `bolt-mac-x64`   | `~/.bolt/bin/bolt` |
 | Apple Silicon (`arm64`) | `bolt-mac-arm64` | `~/.bolt/bin/bolt` |
-| Linux x64 (`x86_64`) | `bolt-linux-x64` | `~/.bolt/bin/bolt` |
+| Linux x64 (`x86_64`)    | `bolt-linux-x64` | `~/.bolt/bin/bolt` |
 
 Linux ARM is not published. On Windows this script prints the PowerShell command and exits.
 
@@ -60,14 +60,14 @@ The file lists the four binaries and `bolt.d.ts`. On macOS, if `sha256sum` is no
 
 [GitHub Releases](https://github.com/jukrb0x/Bolt/releases) publishes:
 
-| File | Platform |
-| --- | --- |
-| `bolt-win-x64.exe` | Windows x64 |
-| `bolt-linux-x64` | Linux x64 |
-| `bolt-mac-arm64` | Apple Silicon |
-| `bolt-mac-x64` | Intel macOS |
-| `bolt.d.ts` | Plugin typings (`declare module "boltstack"`) |
-| `SHA256SUMS` | Checksums for the files above |
+| File               | Platform                                      |
+| ------------------ | --------------------------------------------- |
+| `bolt-win-x64.exe` | Windows x64                                   |
+| `bolt-linux-x64`   | Linux x64                                     |
+| `bolt-mac-arm64`   | Apple Silicon                                 |
+| `bolt-mac-x64`     | Intel macOS                                   |
+| `bolt.d.ts`        | Plugin typings (`declare module "boltstack"`) |
+| `SHA256SUMS`       | Checksums for the files above                 |
 
 ## Update
 

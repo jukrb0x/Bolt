@@ -37,14 +37,14 @@ export default definePlugin({
 });
 ```
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `namespace` | yes | Used as `uses: namespace/handler` |
-| `version` | yes | Plugin version string, not the CLI version |
-| `description` | yes | Plugin summary |
-| `apiVersion` | no | Must be `1` when set. Omitted means `1` |
-| `metadata` | no | Zod schema for this plugin's `bolt.yaml` config. The runner does not check it |
-| `handlers` | yes | At least one `defineHandler()` result |
+| Field         | Required | Notes                                                                         |
+| ------------- | -------- | ----------------------------------------------------------------------------- |
+| `namespace`   | yes      | Used as `uses: namespace/handler`                                             |
+| `version`     | yes      | Plugin version string, not the CLI version                                    |
+| `description` | yes      | Plugin summary                                                                |
+| `apiVersion`  | no       | Must be `1` when set. Omitted means `1`                                       |
+| `metadata`    | no       | Zod schema for this plugin's `bolt.yaml` config. The runner does not check it |
+| `handlers`    | yes      | At least one `defineHandler()` result                                         |
 
 `definePlugin` used to return a descriptor for `withDescriptor`. It now returns the plugin object.
 
@@ -56,11 +56,11 @@ A plugin that exposes a `manifest` getter without `Symbol.for("boltstack.plugin"
 defineHandler(meta, fn);
 ```
 
-| Field | Default | Notes |
-| --- | --- | --- |
-| `description` | none | Task line. `${name}` is replaced from params |
-| `ai` | `false` | `false`, `true`, or `"confirm"`. `"confirm"` does not prompt |
-| `params` | none | Flat zod object. Checked before `fn` runs |
+| Field         | Default | Notes                                                        |
+| ------------- | ------- | ------------------------------------------------------------ |
+| `description` | none    | Task line. `${name}` is replaced from params                 |
+| `ai`          | `false` | `false`, `true`, or `"confirm"`. `"confirm"` does not prompt |
+| `params`      | none    | Flat zod object. Checked before `fn` runs                    |
 
 Allowed param fields: `z.string()`, `z.enum()`, `z.coerce.number()`, `z.coerce.boolean()`, with `.optional()`, `.default()`, and `.describe()` only.
 
