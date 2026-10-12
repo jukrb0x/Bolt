@@ -16,21 +16,21 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          # The expected version is the latest public tag with the leading v removed.
           $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest"
-          $tag = [string]$release.tag_name
+          # install.ps1 runs in this scope and assigns $Expected, so keep the tag in the environment.
+          $env:BOLT_RELEASE_TAG = [string]$release.tag_name
           Write-Host "Release URL: $($release.html_url)"
-          if (-not $tag.StartsWith("v") -or $tag.Length -lt 2) {
-            throw "latest release tag '$tag' has no version after v"
+          if (-not $env:BOLT_RELEASE_TAG.StartsWith("v") -or $env:BOLT_RELEASE_TAG.Length -lt 2) {
+            throw "latest release tag '$($env:BOLT_RELEASE_TAG)' has no version after v"
           }
-          $expected = $tag.Substring(1)
           irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
           # install.ps1 updates the user Path and says to open a new terminal.
           $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
           Write-Host "bolt: $((Get-Command bolt).Source)"
-          $version = (bolt --version | Out-String).Trim()
-          Write-Host "bolt --version: $version"
-          if ($version -cne $expected) {
-            throw "bolt --version '$version' did not match tag $tag"
+          $got = (bolt --version | Out-String).Trim()
+          $want = $env:BOLT_RELEASE_TAG.Substring(1)
+          Write-Host "bolt --version: $got"
+          if ($got -cne $want) {
+            throw "bolt --version '$got' did not match '$want' from tag $($env:BOLT_RELEASE_TAG)"
           }
-          Write-Host "bolt --version matched tag $tag"
+          Write-Host "bolt --version matched tag $($env:BOLT_RELEASE_TAG)"
