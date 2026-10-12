@@ -65,5 +65,4 @@ bolt.yaml: /path/to/bolt.yaml
 ## See Also
 
 - [bolt info](./info.md) - Show project configuration
-- [bolt init](./init.md) - Scaffold bolt.yaml
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
