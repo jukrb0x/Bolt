@@ -236,6 +236,34 @@ test("omits the plugins section when every handler is ai false", () => {
   expect(context).not.toContain("Secret");
 });
 
+test("lists UE targets from the ue plugin config", () => {
+  const registry = new PluginRegistry();
+  const context = generateAiContext(
+    {
+      ...cfg,
+      plugins: [
+        {
+          namespace: "ue",
+          config: {
+            engine: { path: "D:/UE", vcs: "git" },
+            project: { path: "D:/Game", vcs: "svn" },
+            uproject: "D:/Game/Game.uproject",
+            targets: {
+              editor: { kind: "editor", config: "DebugGame" },
+              client: { kind: "program", name: "MyClient", config: "shipping" },
+            },
+          },
+        },
+      ],
+    },
+    import.meta.path,
+    registry,
+  );
+
+  expect(context).toContain("**editor**: editor · debuggame");
+  expect(context).toContain("**client**: program · MyClient · shipping");
+});
+
 test("ai command uses builtinPlugins instead of a hard-coded list", () => {
   const src = readFileSync(new URL("../commands/ai.ts", import.meta.url), "utf8");
   expect(src).toContain("builtinPlugins");

@@ -31,11 +31,17 @@ export const ueConfigSchema = z.object({
   targets: z.record(TargetSchema).default({}),
 });
 
+export interface UeTarget {
+  kind: "editor" | "program" | "game" | "client" | "server";
+  name?: string;
+  config: BuildConfig;
+}
+
 export interface UeConfig {
   engine: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
   project: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
   uproject: string;
-  targets: Record<string, { kind: string; name?: string; config: BuildConfig }>;
+  targets: Record<string, UeTarget>;
 }
 
 function resolveAgainst(configDir: string, value: string): string {
@@ -70,6 +76,20 @@ export function tasksReferenceUe(tasks: unknown): boolean {
   return false;
 }
 
+/**
+ * Targets from the ue plugin entry. `config` is the canonical build config
+ * (`debuggame`, not `DebugGame`). A missing or invalid ue config yields {}.
+ */
+export function resolveUeTargets(
+  plugins: ReadonlyArray<{ namespace: string; config?: unknown }> | undefined,
+): Record<string, UeTarget> {
+  const raw = plugins?.find((entry) => entry.namespace === "ue")?.config;
+  if (raw === undefined) return {};
+  const result = ueConfigSchema.safeParse(raw);
+  if (!result.success) return {};
+  return result.data.targets;
+}
+
 function formatIssues(error: z.ZodError): string {
   return error.issues
     .map((issue) => `  ${issue.path.join(".") || "<root>"}: ${issue.message}`)
@@ -92,7 +112,7 @@ function ueConfig(ctx: BoltPluginContext): UeConfig {
     engine: { ...data.engine, path: resolveAgainst(ctx.configDir, data.engine.path) },
     project: { ...data.project, path: resolveAgainst(ctx.configDir, data.project.path) },
     uproject: resolveAgainst(ctx.configDir, data.uproject),
-    targets: data.targets,
+    targets: resolveUeTargets(ctx.cfg.plugins),
   };
 }
 
@@ -176,10 +196,10 @@ class UEPlugin extends PluginBase.withDescriptor({
     }
 
     const projFile = ueConfig(ctx).uproject;
-    const target = ueConfig(ctx).targets[targetName];
+    const target = resolveUeTargets(ctx.cfg.plugins)[targetName];
 
     if (target) {
-      // Known target from cfg.targets
+      // Known alias from the ue plugin target map.
       const effectiveConfig = requireUnrealBuildConfig(params.config ?? target.config);
       const projectName = getProjectName(projFile);
       const targetBin =
@@ -190,7 +210,7 @@ class UEPlugin extends PluginBase.withDescriptor({
           : `${buildBat} ${targetBin} ${platform} ${effectiveConfig} -Project="${projFile}" -WaitMutex`;
       await run(cmd, ctx);
     } else {
-      // Raw program target name (not in cfg.targets)
+      // Raw program target name (not an alias in the ue plugin).
       const buildType = requireUnrealBuildConfig(params.config ?? "development");
       const cmd = `${buildBat} ${targetName} ${platform} ${buildType} -project="${projFile}" -WaitMutex -FromMsBuild`;
       await run(cmd, ctx);

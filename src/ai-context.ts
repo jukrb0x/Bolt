@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import type { BoltConfig } from "./config";
 import { getParamMap, type BoltPlugin } from "./plugin";
 import type { PluginRegistry } from "./plugin-registry";
+import { resolveUeTargets } from "./plugins/ue";
 import { resolveRunPlan, type PlanNode } from "./run-plan";
 
 /** Describe a resolved plugin/local action using the plugin's describe() if available. */
@@ -158,11 +159,12 @@ export function generateAiContext(
 
   lines.push(...renderPlugins(catalog));
 
-  // --- Targets ---
-  if (Object.keys(cfg.targets).length > 0) {
+  // --- Targets (ue plugin; config is already canonical) ---
+  const targets = resolveUeTargets(cfg.plugins);
+  if (Object.keys(targets).length > 0) {
     lines.push(`## Targets`);
     lines.push(``);
-    for (const [name, t] of Object.entries(cfg.targets)) {
+    for (const [name, t] of Object.entries(targets)) {
       const detail = t.name ? `${t.kind} · ${t.name} · ${t.config}` : `${t.kind} · ${t.config}`;
       lines.push(`- **${name}**: ${detail}`);
     }
