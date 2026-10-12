@@ -40,12 +40,19 @@ jobs:
           }
           if (Test-Path -LiteralPath $old) { throw "bolt.exe.old existed before self-update" }
 
-          $sums = (Invoke-WebRequest -Uri "https://github.com/jukrb0x/Bolt/releases/download/v2.1.0/SHA256SUMS" -UseBasicParsing).Content
+          $sumsFile = Join-Path $env:TEMP "bolt-v210-SHA256SUMS"
+          Invoke-WebRequest -Uri "https://github.com/jukrb0x/Bolt/releases/download/v2.1.0/SHA256SUMS" -OutFile $sumsFile -UseBasicParsing
           $expected210 = $null
-          foreach ($line in ($sums -split '\r?\n')) {
-            if ($line -match '^([a-fA-F0-9]{64})  bolt-win-x64\.exe$') { $expected210 = $Matches[1].ToLower() }
+          foreach ($line in @(Get-Content -LiteralPath $sumsFile)) {
+            if ($line -match '^([a-fA-F0-9]{64})  (\S+)$' -and $Matches[2] -eq "bolt-win-x64.exe") {
+              $expected210 = $Matches[1].ToLower()
+            }
           }
-          if (-not $expected210) { throw "v2.1.0 SHA256SUMS has no bolt-win-x64.exe entry" }
+          if (-not $expected210) {
+            Write-Host "---- v2.1.0 SHA256SUMS ----"
+            Get-Content -LiteralPath $sumsFile | ForEach-Object { Write-Host $_ }
+            throw "v2.1.0 SHA256SUMS has no bolt-win-x64.exe entry"
+          }
           $installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $boltDest).Hash.ToLower()
           Write-Host "installed sha256: $installedHash"
           if ($installedHash -ne $expected210) {
@@ -100,12 +107,19 @@ jobs:
           if (Test-Path -LiteralPath $old) { throw "the later launch left bolt.exe.old in place" }
           Write-Host "later launch removed bolt.exe.old"
 
-          $newSums = (Invoke-WebRequest -Uri "https://github.com/jukrb0x/Bolt/releases/download/$updateTag/SHA256SUMS" -UseBasicParsing).Content
+          $newSumsFile = Join-Path $env:TEMP "bolt-updated-SHA256SUMS"
+          Invoke-WebRequest -Uri "https://github.com/jukrb0x/Bolt/releases/download/$updateTag/SHA256SUMS" -OutFile $newSumsFile -UseBasicParsing
           $expectedNew = $null
-          foreach ($line in ($newSums -split '\r?\n')) {
-            if ($line -match '^([a-fA-F0-9]{64})  bolt-win-x64\.exe$') { $expectedNew = $Matches[1].ToLower() }
+          foreach ($line in @(Get-Content -LiteralPath $newSumsFile)) {
+            if ($line -match '^([a-fA-F0-9]{64})  (\S+)$' -and $Matches[2] -eq "bolt-win-x64.exe") {
+              $expectedNew = $Matches[1].ToLower()
+            }
           }
-          if (-not $expectedNew) { throw "$updateTag SHA256SUMS has no bolt-win-x64.exe entry" }
+          if (-not $expectedNew) {
+            Write-Host "---- $updateTag SHA256SUMS ----"
+            Get-Content -LiteralPath $newSumsFile | ForEach-Object { Write-Host $_ }
+            throw "$updateTag SHA256SUMS has no bolt-win-x64.exe entry"
+          }
           $newHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $boltDest).Hash.ToLower()
           Write-Host "updated sha256: $newHash"
           if ($newHash -ne $expectedNew) {
