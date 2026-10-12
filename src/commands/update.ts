@@ -1,17 +1,38 @@
+import { createHash } from "crypto";
 import { defineCommand } from "citty";
 import { VERSION } from "../version";
-import { writeFileSync, renameSync, chmodSync, existsSync, unlinkSync } from "fs";
+import { chmodSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
+import { homedir } from "os";
 import path from "path";
 import pc from "picocolors";
 import { RELEASE_BINARIES } from "../../scripts/release-targets";
 
 const GITHUB_REPO = "jukrb0x/Bolt";
-const API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
 
 interface GHRelease {
   tag_name: string;
   assets: Array<{ name: string; browser_download_url: string }>;
 }
+
+export interface InstallReceipt {
+  channel: string;
+  asset?: string;
+}
+
+export type SelfUpdatePlan =
+  | { kind: "update"; asset: string }
+  | { kind: "delegate"; manager: string; command: string }
+  | { kind: "refuse"; message: string };
+
+const RELEASE_ASSET_NAMES = new Set<string>(RELEASE_BINARIES.map((binary) => binary.filename));
+
+const PACKAGE_MANAGER_COMMANDS: Record<string, string> = {
+  npm: "npm install -g boltstack@latest",
+  winget: "winget upgrade",
+  scoop: "scoop update",
+  brew: "brew upgrade",
+};
 
 export function isNewer(current: string, latest: string): boolean {
   // Strip "v" prefix and any pre-release suffix (e.g. "0.1.0-dev" → "0.1.0")
@@ -28,13 +49,10 @@ export function isNewer(current: string, latest: string): boolean {
   return lc > cc;
 }
 
-const RELEASE_ASSET_NAMES = new Set<string>(RELEASE_BINARIES.map((binary) => binary.filename));
-
 /**
- * Release asset to download.
- * An executable that is already named as a release asset keeps that name,
- * so an Intel macOS install is not replaced with the arm64 asset.
- * Otherwise the name comes from platform and arch.
+ * Release asset to download when the running file was renamed.
+ * An executable that is already a release asset keeps that name,
+ * so an Intel macOS binary is not replaced with the arm64 asset.
  */
 export function releaseAssetName(
   platform: string,
@@ -49,24 +67,209 @@ export function releaseAssetName(
   return undefined;
 }
 
-function platformAssetName(): string {
-  const name = releaseAssetName(process.platform, process.arch, path.basename(process.execPath));
-  if (!name) {
-    console.error(
-      pc.red(`self-update is not supported on platform: ${process.platform} ${process.arch}`),
-    );
-    process.exit(1);
+/** GNU sha256sum lines: 64 hex chars, two spaces, then the file name. */
+export function parseSha256Sums(text: string): Map<string, string> {
+  const sums = new Map<string, string>();
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^([a-fA-F0-9]{64})  (\S+)$/.exec(line.trim());
+    if (!match) continue;
+    sums.set(match[2], match[1].toLowerCase());
   }
-  return name;
+  return sums;
+}
+
+export function sha256Hex(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+export function parseInstallReceipt(text: string): InstallReceipt | null {
+  try {
+    const value = JSON.parse(text.replace(/^\uFEFF/, "")) as {
+      channel?: unknown;
+      asset?: unknown;
+    };
+    if (!value || typeof value.channel !== "string" || !value.channel) return null;
+    return {
+      channel: value.channel,
+      asset: typeof value.asset === "string" ? value.asset : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function installReceiptPath(home: string): string {
+  return path.join(home, ".bolt", "install.json");
+}
+
+/** Package manager that owns this executable, judged from its path. */
+export function packageManagerForPath(execPath: string): string | undefined {
+  const normalized = execPath.replace(/\\/g, "/").toLowerCase();
+  if (normalized.includes("/node_modules/")) return "npm";
+  if (normalized.includes("/winget/packages/") || normalized.includes("/microsoft/winget/")) {
+    return "winget";
+  }
+  if (normalized.includes("/scoop/apps/") || normalized.includes("/scoop/shims/")) return "scoop";
+  if (
+    normalized.includes("/cellar/") ||
+    normalized.includes("/homebrew/") ||
+    normalized.includes("/linuxbrew/")
+  ) {
+    return "brew";
+  }
+  return undefined;
+}
+
+function managerCommand(manager: string): string {
+  return PACKAGE_MANAGER_COMMANDS[manager] ?? manager;
+}
+
+/**
+ * Decide whether self-update may replace this executable.
+ * A package-manager path wins over the receipt so npm, winget, scoop, and
+ * Homebrew copies are not overwritten. A github receipt's asset is kept,
+ * which is how an Intel macOS install stays on bolt-mac-x64.
+ */
+export function planSelfUpdate(input: {
+  execPath: string;
+  platform: string;
+  arch: string;
+  receipt: InstallReceipt | null;
+}): SelfUpdatePlan {
+  const manager = packageManagerForPath(input.execPath);
+  if (manager) {
+    return { kind: "delegate", manager, command: managerCommand(manager) };
+  }
+
+  const channel = input.receipt?.channel;
+  if (channel && channel !== "github") {
+    return { kind: "delegate", manager: channel, command: managerCommand(channel) };
+  }
+  if (channel !== "github") {
+    return {
+      kind: "refuse",
+      message:
+        "self-update only replaces a copy installed by install.ps1 or install.sh. Reinstall with that script, or upgrade the package manager that owns this bolt.",
+    };
+  }
+
+  const recorded = input.receipt?.asset;
+  const asset =
+    recorded && RELEASE_ASSET_NAMES.has(recorded)
+      ? recorded
+      : releaseAssetName(input.platform, input.arch, path.basename(input.execPath));
+  if (!asset) {
+    return {
+      kind: "refuse",
+      message: `self-update is not supported on platform: ${input.platform} ${input.arch}`,
+    };
+  }
+  return { kind: "update", asset };
+}
+
+/**
+ * Replace the running binary. Windows cannot overwrite a running exe, so the
+ * current file is renamed to `*.old` and the new file takes its place.
+ * The next launch deletes `*.old`.
+ */
+export function replaceInstalledBinary(platform: string, execPath: string, nextPath: string): void {
+  if (platform !== "win32") {
+    chmodSync(nextPath, 0o755);
+    renameSync(nextPath, execPath);
+    return;
+  }
+
+  const oldPath = `${execPath}.old`;
+  if (existsSync(oldPath)) {
+    try {
+      unlinkSync(oldPath);
+    } catch {
+      // A previous .old can still be locked. The rename below fails clearly if so.
+    }
+  }
+  renameSync(execPath, oldPath);
+  try {
+    renameSync(nextPath, execPath);
+  } catch (error) {
+    try {
+      renameSync(oldPath, execPath);
+    } catch {
+      // The new file is still at nextPath. The caller reports both paths.
+    }
+    throw error;
+  }
+}
+
+/** Delete the previous Windows executable left behind by self-update. */
+export function cleanupStaleBinary(execPath: string): void {
+  const oldPath = `${execPath}.old`;
+  if (!existsSync(oldPath)) return;
+  try {
+    unlinkSync(oldPath);
+  } catch {
+    // Still locked. The next launch tries again.
+  }
+}
+
+function releaseApiUrl(version: string | undefined): string {
+  if (!version) return `${RELEASES_API}/latest`;
+  const tag = version.startsWith("v") ? version : `v${version}`;
+  return `${RELEASES_API}/tags/${encodeURIComponent(tag)}`;
+}
+
+async function fetchRelease(version: string | undefined): Promise<GHRelease> {
+  const res = await fetch(releaseApiUrl(version), {
+    headers: { "User-Agent": "bolt-self-update", Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+  return (await res.json()) as GHRelease;
+}
+
+async function download(url: string): Promise<Uint8Array> {
+  const res = await fetch(url, { headers: { "User-Agent": "bolt-self-update" } });
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+function readReceiptFile(): InstallReceipt | null {
+  const receiptPath = installReceiptPath(homedir());
+  if (!existsSync(receiptPath)) return null;
+  try {
+    return parseInstallReceipt(readFileSync(receiptPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeReceiptVersion(version: string, asset: string): void {
+  const receiptPath = installReceiptPath(homedir());
+  if (!existsSync(receiptPath)) return;
+  try {
+    const current = JSON.parse(readFileSync(receiptPath, "utf8").replace(/^\uFEFF/, "")) as Record<
+      string,
+      unknown
+    >;
+    current.channel = "github";
+    current.asset = asset;
+    current.version = version;
+    writeFileSync(receiptPath, `${JSON.stringify(current, null, 2)}\n`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(pc.yellow(`Updated the binary, but could not write ${receiptPath}: ${message}`));
+  }
 }
 
 export default defineCommand({
-  meta: { description: "Update bolt to the latest release" },
+  meta: { description: "Update a script-installed bolt to a GitHub release" },
   args: {
     force: {
       type: "boolean",
       default: false,
       description: "Re-download even if already up to date",
+    },
+    version: {
+      type: "string",
+      description: "Install this version instead of the latest, for example 2.1.0",
     },
   },
   async run({ args }) {
@@ -76,84 +279,94 @@ export default defineCommand({
       process.exit(1);
     }
 
-    console.log(pc.dim(`Current version: ${VERSION}`));
-    console.log(pc.dim("Checking for updates..."));
-
-    let release: GHRelease;
-    try {
-      const res = await fetch(API_URL, {
-        headers: { "User-Agent": "bolt-self-update" },
-      });
-      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
-      release = await res.json();
-    } catch (e: any) {
-      console.error(pc.red(`Failed to fetch release info: ${e.message}`));
+    const plan = planSelfUpdate({
+      execPath: process.execPath,
+      platform: process.platform,
+      arch: process.arch,
+      receipt: readReceiptFile(),
+    });
+    if (plan.kind === "delegate") {
+      console.error(pc.red(`This bolt is managed by ${plan.manager}.`));
+      console.error(`Upgrade it with: ${plan.command}`);
+      process.exit(1);
+    }
+    if (plan.kind === "refuse") {
+      console.error(pc.red(plan.message));
       process.exit(1);
     }
 
-    const latestTag: string = release!.tag_name ?? "";
+    const requested = typeof args.version === "string" && args.version ? args.version : undefined;
+    console.log(pc.dim(`Current version: ${VERSION}`));
+    console.log(pc.dim(requested ? `Fetching ${requested}...` : "Checking for updates..."));
+
+    let release: GHRelease;
+    try {
+      release = await fetchRelease(requested);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(pc.red(`Failed to fetch release info: ${message}`));
+      process.exit(1);
+    }
+
+    const latestTag = release.tag_name ?? "";
     if (!latestTag) {
       console.error(pc.red("Invalid release response: missing tag_name"));
       process.exit(1);
     }
     const latestVersion = latestTag.replace(/^v/, "");
-
-    if (!args.force && !isNewer(VERSION, latestVersion)) {
+    if (!requested && !args.force && !isNewer(VERSION, latestVersion)) {
       console.log(pc.green(`Already up to date (v${VERSION})`));
       return;
     }
 
-    const assetName = platformAssetName();
-    const asset = release!.assets.find((a) => a.name === assetName);
-    if (!asset) {
-      console.error(pc.red(`No asset named "${assetName}" found in release ${latestTag}`));
+    const sumsAsset = release.assets.find((asset) => asset.name === "SHA256SUMS");
+    const asset = release.assets.find((item) => item.name === plan.asset);
+    if (!sumsAsset || !asset) {
+      console.error(
+        pc.red(`Release ${latestTag} is missing ${plan.asset} or SHA256SUMS. Not replacing bolt.`),
+      );
       process.exit(1);
     }
 
-    console.log(pc.dim(`Downloading ${assetName} v${latestVersion}...`));
-    let downloadRes: Response;
+    console.log(pc.dim(`Downloading ${plan.asset} v${latestVersion}...`));
+    let sumsText: string;
+    let bytes: Uint8Array;
     try {
-      downloadRes = await fetch(asset.browser_download_url);
-    } catch (e: any) {
-      console.error(pc.red(`Download failed: ${e.message}`));
+      sumsText = new TextDecoder().decode(await download(sumsAsset.browser_download_url));
+      bytes = await download(asset.browser_download_url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(pc.red(message));
       process.exit(1);
     }
-    if (!downloadRes!.ok) {
-      console.error(pc.red(`Download failed: ${downloadRes!.status}`));
+
+    const expected = parseSha256Sums(sumsText).get(plan.asset);
+    if (!expected) {
+      console.error(
+        pc.red(`SHA256SUMS has no entry for ${plan.asset}. The installed bolt was not changed.`),
+      );
+      process.exit(1);
+    }
+    if (sha256Hex(bytes) !== expected) {
+      console.error(
+        pc.red(`Checksum mismatch for ${plan.asset}. The installed bolt was not changed.`),
+      );
       process.exit(1);
     }
 
-    const buf = Buffer.from(await downloadRes!.arrayBuffer());
-    const tmpPath = path.join(path.dirname(process.execPath), assetName + ".new");
-    writeFileSync(tmpPath, buf);
-
-    if (process.platform !== "win32") {
-      chmodSync(tmpPath, 0o755);
-    }
-
+    const tmpPath = path.join(path.dirname(process.execPath), `${plan.asset}.new`);
     try {
-      if (process.platform === "win32") {
-        // Windows: can't replace running exe directly
-        // Rename old first (allowed), then place new
-        const oldPath = process.execPath + ".old";
-        if (existsSync(oldPath)) {
-          try {
-            unlinkSync(oldPath);
-          } catch {
-            // Ignore if we can't delete old backup
-          }
-        }
-        renameSync(process.execPath, oldPath);
-        renameSync(tmpPath, process.execPath);
-      } else {
-        renameSync(tmpPath, process.execPath);
-      }
-      console.log(pc.green(`Updated to v${latestVersion}`));
-    } catch (e: any) {
-      console.error(pc.red(`Could not replace binary: ${e.message}`));
+      writeFileSync(tmpPath, bytes);
+      replaceInstalledBinary(process.platform, process.execPath, tmpPath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(pc.red(`Could not replace binary: ${message}`));
       console.error(pc.dim(`New binary is at: ${tmpPath}`));
       console.error(pc.dim(`Manually replace: ${process.execPath}`));
       process.exit(1);
     }
+
+    writeReceiptVersion(latestVersion, plan.asset);
+    console.log(pc.green(`Updated to v${latestVersion}`));
   },
 });

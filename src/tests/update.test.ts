@@ -1,5 +1,18 @@
 import { expect, test } from "bun:test";
-import { isNewer, releaseAssetName } from "../commands/update";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import path from "path";
+import {
+  cleanupStaleBinary,
+  isNewer,
+  packageManagerForPath,
+  parseInstallReceipt,
+  parseSha256Sums,
+  planSelfUpdate,
+  releaseAssetName,
+  replaceInstalledBinary,
+  sha256Hex,
+} from "../commands/update";
 
 test("isNewer: same version is not newer", () => {
   expect(isNewer("1.2.3", "1.2.3")).toBe(false);
@@ -54,4 +67,166 @@ test("releaseAssetName: linux and windows x64 use their release assets", () => {
 
 test("releaseAssetName: unknown platform has no asset", () => {
   expect(releaseAssetName("freebsd", "x64", "bolt")).toBeUndefined();
+});
+
+const SUM_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const SUM_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+test("parseSha256Sums reads GNU checksum lines and ignores anything else", () => {
+  const sums = parseSha256Sums(
+    `${SUM_A.toUpperCase()}  bolt-mac-x64\r\n${SUM_B}  bolt-mac-arm64\nnot a checksum\n`,
+  );
+  expect(sums.get("bolt-mac-x64")).toBe(SUM_A);
+  expect(sums.get("bolt-mac-arm64")).toBe(SUM_B);
+  expect(sums.has("not")).toBe(false);
+});
+
+test("sha256Hex matches a known digest", () => {
+  expect(sha256Hex(new TextEncoder().encode("abc"))).toBe(
+    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+  );
+});
+
+test("parseInstallReceipt accepts a github receipt and strips a BOM", () => {
+  expect(parseInstallReceipt('\uFEFF{"channel":"github","asset":"bolt-mac-x64"}')).toEqual({
+    channel: "github",
+    asset: "bolt-mac-x64",
+  });
+  expect(parseInstallReceipt("not json")).toBeNull();
+  expect(parseInstallReceipt('{"asset":"bolt-mac-x64"}')).toBeNull();
+});
+
+test("planSelfUpdate keeps an Intel receipt asset on an arm64 report", () => {
+  expect(
+    planSelfUpdate({
+      execPath: "/Users/me/.bolt/bin/bolt",
+      platform: "darwin",
+      arch: "arm64",
+      receipt: { channel: "github", asset: "bolt-mac-x64" },
+    }),
+  ).toEqual({ kind: "update", asset: "bolt-mac-x64" });
+});
+
+test("planSelfUpdate uses arch when a github receipt has no asset", () => {
+  expect(
+    planSelfUpdate({
+      execPath: "/Users/me/.bolt/bin/bolt",
+      platform: "darwin",
+      arch: "x64",
+      receipt: { channel: "github" },
+    }),
+  ).toEqual({ kind: "update", asset: "bolt-mac-x64" });
+});
+
+test("planSelfUpdate refuses a script install with no receipt", () => {
+  const plan = planSelfUpdate({
+    execPath: "/Users/me/.bolt/bin/bolt",
+    platform: "darwin",
+    arch: "x64",
+    receipt: null,
+  });
+  expect(plan.kind).toBe("refuse");
+});
+
+test("planSelfUpdate lets a package-manager path win over a github receipt", () => {
+  expect(packageManagerForPath("/opt/homebrew/bin/bolt")).toBe("brew");
+  expect(packageManagerForPath("/home/linuxbrew/.linuxbrew/bin/bolt")).toBe("brew");
+  expect(
+    planSelfUpdate({
+      execPath: "/proj/node_modules/.bin/bolt",
+      platform: "linux",
+      arch: "x64",
+      receipt: { channel: "github", asset: "bolt-linux-x64" },
+    }),
+  ).toEqual({ kind: "delegate", manager: "npm", command: "npm install -g boltstack@latest" });
+  expect(
+    planSelfUpdate({
+      execPath: "C:/Users/me/scoop/shims/bolt.exe",
+      platform: "win32",
+      arch: "x64",
+      receipt: { channel: "github", asset: "bolt-win-x64.exe" },
+    }),
+  ).toEqual({ kind: "delegate", manager: "scoop", command: "scoop update" });
+});
+
+test("planSelfUpdate delegates a non-github receipt", () => {
+  expect(
+    planSelfUpdate({
+      execPath: "/Users/me/.bolt/bin/bolt",
+      platform: "darwin",
+      arch: "arm64",
+      receipt: { channel: "winget" },
+    }),
+  ).toEqual({ kind: "delegate", manager: "winget", command: "winget upgrade" });
+});
+
+test("replaceInstalledBinary on win32 renames the running exe aside", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-update-"));
+  try {
+    const execPath = path.join(dir, "bolt.exe");
+    const nextPath = path.join(dir, "bolt-win-x64.exe.new");
+    writeFileSync(execPath, "old");
+    writeFileSync(nextPath, "new");
+    replaceInstalledBinary("win32", execPath, nextPath);
+    expect(readFileSync(execPath, "utf8")).toBe("new");
+    expect(readFileSync(`${execPath}.old`, "utf8")).toBe("old");
+    cleanupStaleBinary(execPath);
+    expect(readFileSync(execPath, "utf8")).toBe("new");
+    expect(() => readFileSync(`${execPath}.old`)).toThrow();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("replaceInstalledBinary on win32 restores the exe if the new file cannot be moved", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-update-"));
+  try {
+    const execPath = path.join(dir, "bolt.exe");
+    writeFileSync(execPath, "old");
+    expect(() => replaceInstalledBinary("win32", execPath, path.join(dir, "missing"))).toThrow();
+    expect(readFileSync(execPath, "utf8")).toBe("old");
+    expect(() => readFileSync(`${execPath}.old`)).toThrow();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function installAsset(
+  osName: string,
+  arch: string,
+): { status: number; stdout: string; stderr: string } {
+  const result = Bun.spawnSync(["sh", "./install.sh"], {
+    env: {
+      ...process.env,
+      BOLT_INSTALL_PRINT_ASSET: "1",
+      BOLT_INSTALL_OS: osName,
+      BOLT_INSTALL_ARCH: arch,
+    },
+  });
+  return {
+    status: result.exitCode ?? 1,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  };
+}
+
+test("install.sh selects bolt-mac-x64 for Intel macOS", () => {
+  const intel = installAsset("Darwin", "x86_64");
+  expect(intel.status).toBe(0);
+  expect(intel.stdout.trim()).toBe("bolt-mac-x64");
+  expect(installAsset("Darwin", "arm64").stdout.trim()).toBe("bolt-mac-arm64");
+  expect(installAsset("Linux", "x86_64").stdout.trim()).toBe("bolt-linux-x64");
+  const windows = installAsset("Windows_NT", "x86_64");
+  expect(windows.status).not.toBe(0);
+  expect(windows.stderr).toContain("install.ps1");
+});
+
+test("install.ps1 targets the windows x64 asset and renames a running exe", () => {
+  const text = readFileSync("install.ps1", "utf8");
+  expect(text).toContain("$Asset = 'bolt-win-x64.exe'");
+  expect(text).not.toContain("bolt-mac-");
+  expect(text).toContain("Get-FileHash");
+  expect(text).toContain("Rename-Item");
+  expect(text).toContain("LOCALAPPDATA");
+  expect(text.indexOf("Get-FileHash")).toBeLessThan(text.indexOf("Rename-Item"));
 });
