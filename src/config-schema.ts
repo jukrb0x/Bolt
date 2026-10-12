@@ -3,6 +3,7 @@
  * Core fields are generic and `version` is 1. Unreal metadata is `$defs.ueConfig`,
  * referenced only from a `plugins[]` entry whose namespace is `ue`. There is no root `targets`.
  */
+import { buildConfigSchemaPattern } from "./build-config";
 const repo = {
   type: "object",
   additionalProperties: false,
@@ -24,8 +25,9 @@ const ueTarget = {
     name: { type: "string" },
     config: {
       type: "string",
-      enum: ["development", "dev", "debug", "dbg", "debuggame", "dbggame", "shipping", "test"],
-      description: "Build configuration. Bolt also accepts these names in any case.",
+      pattern: buildConfigSchemaPattern(),
+      description:
+        "Build configuration. Same names bolt check accepts, in any case, with surrounding space allowed.",
     },
   },
 };

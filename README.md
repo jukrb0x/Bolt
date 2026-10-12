@@ -280,11 +280,11 @@ bolt plugin new myplugin --user    # user-scope (~/.bolt/plugins/)
 
 ```
 cd .bolt/plugins/myplugin
-bun install    # sets up IDE type support
+bolt types
 ```
 
 ```typescript
-import type { BoltPlugin } from "bolt";
+import type { BoltPlugin } from "boltstack";
 
 const plugin: BoltPlugin = {
   namespace: "myplugin",
