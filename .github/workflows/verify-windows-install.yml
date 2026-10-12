@@ -16,7 +16,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest"
+          $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest" -Headers @{ Authorization = "Bearer ${{ github.token }}" }
           # install.ps1 runs in this scope and assigns $Expected, so keep the tag in the environment.
           $env:BOLT_RELEASE_TAG = [string]$release.tag_name
           Write-Host "Release URL: $($release.html_url)"
