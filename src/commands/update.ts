@@ -1,3 +1,4 @@
+import { spawnSync } from "child_process";
 import { createHash } from "crypto";
 import { defineCommand } from "citty";
 import { VERSION } from "../version";
@@ -28,10 +29,12 @@ export type SelfUpdatePlan =
 const RELEASE_ASSET_NAMES = new Set<string>(RELEASE_BINARIES.map((binary) => binary.filename));
 
 const PACKAGE_MANAGER_COMMANDS: Record<string, string> = {
-  npm: "npm install -g boltstack@latest",
-  winget: "winget upgrade",
-  scoop: "scoop update",
-  brew: "brew upgrade",
+  npm: "Upgrade it with: npm install -g boltstack@latest",
+  // winget upgrade and scoop update do nothing for one app unless it is named.
+  // Those packages are not published, so this cannot invent an id.
+  winget: "No winget package id is published yet. Upgrade the package that installed this bolt.",
+  scoop: "No Scoop app name is published yet. Upgrade the app that installed this bolt.",
+  brew: "Upgrade it with: brew upgrade",
 };
 
 export function isNewer(current: string, latest: string): boolean {
@@ -80,6 +83,14 @@ export function parseSha256Sums(text: string): Map<string, string> {
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** Version printed by a downloaded binary, or null when that file must not be installed. */
+export function acceptedBinaryVersion(status: number | null, stdout: string): string | null {
+  if (status !== 0) return null;
+  const version = stdout.replace(/\s+/g, "");
+  if (!/^[0-9A-Za-z.+-]+$/.test(version)) return null;
+  return version;
 }
 
 export function parseInstallReceipt(text: string): InstallReceipt | null {
@@ -287,7 +298,7 @@ export default defineCommand({
     });
     if (plan.kind === "delegate") {
       console.error(pc.red(`This bolt is managed by ${plan.manager}.`));
-      console.error(`Upgrade it with: ${plan.command}`);
+      console.error(plan.command);
       process.exit(1);
     }
     if (plan.kind === "refuse") {
@@ -354,9 +365,32 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const tmpPath = path.join(path.dirname(process.execPath), `${plan.asset}.new`);
+    // Windows will not start a staged file unless the name ends in .exe.
+    const tmpName = process.platform === "win32" ? `${plan.asset}.new.exe` : `${plan.asset}.new`;
+    const tmpPath = path.join(path.dirname(process.execPath), tmpName);
     try {
       writeFileSync(tmpPath, bytes);
+      if (process.platform !== "win32") chmodSync(tmpPath, 0o755);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(pc.red(`Could not write the downloaded bolt: ${message}`));
+      process.exit(1);
+    }
+
+    const probe = spawnSync(tmpPath, ["version"], { encoding: "utf8" });
+    if (!acceptedBinaryVersion(probe.status, probe.stdout ?? "")) {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        console.error(pc.dim(`Downloaded file left at: ${tmpPath}`));
+      }
+      console.error(
+        pc.red("Downloaded bolt did not print a version. The installed bolt was not changed."),
+      );
+      process.exit(1);
+    }
+
+    try {
       replaceInstalledBinary(process.platform, process.execPath, tmpPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

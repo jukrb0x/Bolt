@@ -69,18 +69,23 @@ if [ "$expected" != "$actual" ]; then
   exit 1
 fi
 
-# Copy then rename in the install directory. Replacing the inode keeps a running bolt alive.
+# Run the download before replacing a working bolt. A bad version leaves the old file in place.
 cp "${TMP}/${ASSET}" "${DEST}/bolt.new"
 chmod 755 "${DEST}/bolt.new"
-mv -f "${DEST}/bolt.new" "${DEST}/bolt"
-version=$("${DEST}/bolt" version)
+if ! version=$("${DEST}/bolt.new" version); then
+  rm -f "${DEST}/bolt.new"
+  echo "Downloaded bolt failed to run. The existing bolt was not replaced." >&2
+  exit 1
+fi
 version=$(printf '%s' "$version" | tr -d '[:space:]')
 case "$version" in
   "" | *[!0-9A-Za-z.+-]*)
-    echo "Installed binary printed an unexpected version" >&2
+    rm -f "${DEST}/bolt.new"
+    echo "Downloaded bolt printed an unexpected version. The existing bolt was not replaced." >&2
     exit 1
     ;;
 esac
+mv -f "${DEST}/bolt.new" "${DEST}/bolt"
 
 cat >"$RECEIPT" <<EOF
 {
