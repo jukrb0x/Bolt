@@ -31,7 +31,7 @@ export default defineCommand({
 
     if (!editor) {
       console.error(
-        "No editor configured. Set $EDITOR or $VISUAL environment variable, or use --editor flag."
+        "No editor configured. Set $EDITOR or $VISUAL environment variable, or use --editor flag.",
       );
       process.exit(1);
     }

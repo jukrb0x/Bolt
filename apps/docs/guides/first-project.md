@@ -7,6 +7,7 @@ This guide walks through setting up a new Bolt project using `bolt init`.
 ## Prerequisites
 
 Before starting, make sure you have:
+
 - A Unreal Engine project directory
 - Git or SVN repository (for version control)
 - Basic familiarity with command line
@@ -22,10 +23,10 @@ bolt init
 
 `bolt init` is non-interactive. It scaffolds **two** files and auto-detects a single `.uproject` in the directory. Pass `--force` to overwrite existing files.
 
-| File | Committed? | Contents |
-|------|-----------|----------|
-| `bolt.yaml` | Yes (shared contract) | Project identity, targets, tasks, flows |
-| `bolt.local.yaml` | No (gitignored) | Per-machine paths: engine/project/uproject |
+| File              | Committed?            | Contents                                   |
+| ----------------- | --------------------- | ------------------------------------------ |
+| `bolt.yaml`       | Yes (shared contract) | Project identity, targets, tasks, flows    |
+| `bolt.local.yaml` | No (gitignored)       | Per-machine paths: engine/project/uproject |
 
 ## Step 2: Review bolt.yaml
 
@@ -34,7 +35,7 @@ bolt init
 ```yaml
 project:
   name: MyGame
-  engine:                    # repo identity only — no path here
+  engine: # repo identity only — no path here
     vcs: git
     branch: main
   project:
@@ -46,9 +47,9 @@ targets:
     config: development
 
 tasks:
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
-  start:   [{ uses: ue/start }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
@@ -62,10 +63,10 @@ flows:
 `bolt.local.yaml` holds the paths that differ per machine. It is gitignored, so each teammate sets their own. Relative paths resolve against the directory containing `bolt.yaml`.
 
 ```yaml
-engine_path:  D:/UE                                  # local Unreal Engine root
-project_path: D:/Games/MyGame                        # local project working copy
-uproject:     D:/Games/MyGame/MyGame.uproject        # path to the .uproject file
-use_tortoise: true                                   # use TortoiseSVN for SVN ops
+engine_path: D:/UE # local Unreal Engine root
+project_path: D:/Games/MyGame # local project working copy
+uproject: D:/Games/MyGame/MyGame.uproject # path to the .uproject file
+use_tortoise: true # use TortoiseSVN for SVN ops
 ```
 
 If `bolt.local.yaml` is missing or invalid, Bolt fails loudly and tells you to copy `bolt.local.example.yaml` or run `bolt init`.
@@ -84,7 +85,7 @@ targets:
 
 # Add a task that reuses another task and appends a plugin action
 tasks:
-  build:      [{ uses: ue/build, with: { target: editor } }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build-both: [{ call: build }, { uses: ue/build, with: { target: client } }]
 
 # Add a flow (fail-fast; list tasks that may fail in continue_on_fail)
@@ -92,7 +93,7 @@ flows:
   reset:
     description: Kill, update, regenerate, rebuild
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]    # kill may fail (nothing running) without aborting
+    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
 ```
 
 ## Step 5: Run Your Workflow

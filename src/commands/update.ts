@@ -37,7 +37,11 @@ function platformAssetName(): string {
 export default defineCommand({
   meta: { description: "Update bolt to the latest release" },
   args: {
-    force: { type: "boolean", default: false, description: "Re-download even if already up to date" },
+    force: {
+      type: "boolean",
+      default: false,
+      description: "Re-download even if already up to date",
+    },
   },
   async run({ args }) {
     const execName = path.basename(process.execPath).toLowerCase();

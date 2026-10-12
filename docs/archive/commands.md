@@ -67,8 +67,8 @@ Ops not in the pipeline order run last, preserving their relative order.
 
 ### Flags
 
-| Flag | Description |
-|---|---|
+| Flag        | Description                            |
+| ----------- | -------------------------------------- |
 | `--dry-run` | Print what would run without executing |
 
 ---
@@ -141,8 +141,8 @@ Download and replace the bolt binary with the latest GitHub release.
 bolt self-update [--force]
 ```
 
-| Flag | Description |
-|---|---|
+| Flag      | Description                            |
+| --------- | -------------------------------------- |
 | `--force` | Re-download even if already up to date |
 
 Only works in the compiled binary (not `bun run src/main.ts`). Replaces the binary in-place via atomic rename. The temp file is written to the same directory as the binary to avoid cross-device rename errors.
@@ -169,8 +169,8 @@ Scaffold a new plugin.
 bolt plugin new <name> [--user]
 ```
 
-| Flag | Description |
-|---|---|
+| Flag     | Description                                                        |
+| -------- | ------------------------------------------------------------------ |
 | `--user` | Create in user scope (`~/.bolt/plugins/`) instead of project scope |
 
 Name must match `/^[a-z0-9_-]+$/`.

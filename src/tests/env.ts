@@ -16,6 +16,13 @@ const optional = (key: string, defaultVal: string): string => {
   return Bun.env[key] || defaultVal;
 };
 
+/** True when TortoiseProc.exe is on PATH. `where` is Windows-only; other OSes count as absent. */
+export function tortoiseProcOnPath(): boolean {
+  if (process.platform !== "win32") return false;
+  const found = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
+  return found.exitCode === 0;
+}
+
 export const ENGINE_ROOT = optional("ENGINE_ROOT", "C:/UnrealEngine");
 export const PROJECT_ROOT = optional("PROJECT_ROOT", "C:/Projects/MyProject");
 export const PROJECT_NAME = optional("PROJECT_NAME", "MyProject");

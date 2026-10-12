@@ -99,12 +99,16 @@ export default defineCommand({
       skipped.push("bolt.local.yaml");
     } else {
       const detected = detectUproject(root);
-      const uproject = detected ? path.relative(root, detected).split(path.sep).join("/") : "CHANGE_ME/path/to/Project.uproject";
+      const uproject = detected
+        ? path.relative(root, detected).split(path.sep).join("/")
+        : "CHANGE_ME/path/to/Project.uproject";
       const projectPath = detected
         ? path.relative(root, path.dirname(detected)).split(path.sep).join("/") || "."
         : "CHANGE_ME/path/to/project";
       writeFileSync(localPath, starterLocal(uproject, projectPath));
-      wrote.push(detected ? `bolt.local.yaml (detected ${path.basename(detected)})` : "bolt.local.yaml");
+      wrote.push(
+        detected ? `bolt.local.yaml (detected ${path.basename(detected)})` : "bolt.local.yaml",
+      );
     }
 
     for (const f of wrote) console.log(pc.green(`✓ wrote ${f}`));

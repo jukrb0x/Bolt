@@ -100,6 +100,7 @@ bolt --version
 ### "bolt.yaml not found" error
 
 Make sure you:
+
 1. Are in a directory with a `bolt.yaml` file (or a subdirectory of one)
 2. Bolt looks for `bolt.yaml` by walking up the directory tree from the current directory
 

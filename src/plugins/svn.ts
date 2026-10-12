@@ -34,7 +34,13 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);
       if (!ctx.dryRun) {
-        const result = await ctx.runtime.spawn(["svn", "update", p, "--non-interactive", "--trust-server-cert"]);
+        const result = await ctx.runtime.spawn([
+          "svn",
+          "update",
+          p,
+          "--non-interactive",
+          "--trust-server-cert",
+        ]);
         if (result.exitCode !== 0) throw new Error(`svn update failed (exit ${result.exitCode})`);
       }
     },
@@ -43,18 +49,31 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        ctx.logger.cmd(`TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`);
+        ctx.logger.cmd(
+          `TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`,
+        );
         if (!ctx.dryRun) {
           const result = ctx.runtime.spawnSync([
-            tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/externals", "/fixtimestamps", "/vacuum", "/breaklocks", "/refreshshell"
+            tortoiseProc,
+            "/command:cleanup",
+            `/path:${p}`,
+            "/noui",
+            "/nodlg",
+            "/externals",
+            "/fixtimestamps",
+            "/vacuum",
+            "/breaklocks",
+            "/refreshshell",
           ]);
-          if (result.exitCode !== 0) throw new Error(`TortoiseProc cleanup failed (exit ${result.exitCode})`);
+          if (result.exitCode !== 0)
+            throw new Error(`TortoiseProc cleanup failed (exit ${result.exitCode})`);
         }
       } else {
         ctx.logger.cmd(`svn cleanup "${p}"`);
         if (!ctx.dryRun) {
           const result = await ctx.runtime.spawn(["svn", "cleanup", p]);
-          if (result.exitCode !== 0) throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
+          if (result.exitCode !== 0)
+            throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
         }
       }
     },
@@ -63,12 +82,23 @@ const plugin: BoltPlugin = {
       const p = resolvePath(params, ctx);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
-        ctx.logger.cmd(`TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /revert /breaklocks /vacuum /fixtimestamps`);
+        ctx.logger.cmd(
+          `TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /revert /breaklocks /vacuum /fixtimestamps`,
+        );
         if (!ctx.dryRun) {
           const result = ctx.runtime.spawnSync([
-            tortoiseProc, "/command:cleanup", `/path:${p}`, "/noui", "/nodlg", "/revert", "/breaklocks", "/vacuum", "/fixtimestamps"
+            tortoiseProc,
+            "/command:cleanup",
+            `/path:${p}`,
+            "/noui",
+            "/nodlg",
+            "/revert",
+            "/breaklocks",
+            "/vacuum",
+            "/fixtimestamps",
           ]);
-          if (result.exitCode !== 0) throw new Error(`TortoiseProc revert failed (exit ${result.exitCode})`);
+          if (result.exitCode !== 0)
+            throw new Error(`TortoiseProc revert failed (exit ${result.exitCode})`);
         }
       } else {
         ctx.logger.cmd(`svn revert -R "${p}"`);
@@ -85,7 +115,11 @@ const plugin: BoltPlugin = {
       const result = ctx.runtime.spawnSync(["svn", "info", p]);
       if (result.exitCode === 0) {
         for (const line of result.stdout.split("\n")) {
-          if (line.startsWith("URL:") || line.startsWith("Revision:") || line.startsWith("Last Changed Rev:")) {
+          if (
+            line.startsWith("URL:") ||
+            line.startsWith("Revision:") ||
+            line.startsWith("Last Changed Rev:")
+          ) {
             ctx.logger.info(`SVN: ${line.trim()}`);
           }
         }
@@ -101,10 +135,12 @@ const plugin: BoltPlugin = {
         ctx.logger.cmd(`TortoiseProc /command:commit /path:"${p}"`);
         if (!ctx.dryRun) {
           const result = ctx.runtime.spawnSync([tortoiseProc, "/command:commit", `/path:${p}`]);
-          if (result.exitCode !== 0) throw new Error(`TortoiseProc commit failed (exit ${result.exitCode})`);
+          if (result.exitCode !== 0)
+            throw new Error(`TortoiseProc commit failed (exit ${result.exitCode})`);
         }
       } else {
-        if (!params.message) throw new Error("svn/commit requires with: message: when not using TortoiseSVN");
+        if (!params.message)
+          throw new Error("svn/commit requires with: message: when not using TortoiseSVN");
         ctx.logger.cmd(`svn commit "${p}" -m "${params.message}"`);
         if (!ctx.dryRun) {
           const result = await ctx.runtime.spawn(["svn", "commit", p, "-m", params.message]);

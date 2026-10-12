@@ -24,8 +24,8 @@ That runs the `update`, `build`, then `start` tasks, in that order. Each is a na
 ```yaml
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:  [{ uses: ue/build, with: { target: editor } }]
-  start:  [{ uses: ue/start }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
 ```
 
 ## Goal Flows
@@ -82,13 +82,15 @@ bolt run update build --dry-run
 Flows are **fail-fast**: the first failing task aborts the flow and nothing after it runs. To let a specific task fail without aborting, list it in the flow's `continue_on_fail` allowlist.
 
 In the `daily` flow above:
+
 - If `update` or `build` fails, the flow aborts immediately — `start` never runs.
 - `start` is in `continue_on_fail`, so if launching the editor fails, Bolt logs a warning and the flow still completes.
 
 In the `reset` flow:
+
 - `kill` is in `continue_on_fail` because it may fail when nothing is running — that failure is expected and does not abort the flow.
 
-> Note: `continue_on_fail` (per-flow, underscore) is an allowlist of *task names*. It is different from `continue-on-error` (per-step, hyphen), which lets a single step inside a task fail. See [Error Handling](./error-handling.md).
+> Note: `continue_on_fail` (per-flow, underscore) is an allowlist of _task names_. It is different from `continue-on-error` (per-step, hyphen), which lets a single step inside a task fail. See [Error Handling](./error-handling.md).
 
 ## Configuring Notifications
 
@@ -128,11 +130,11 @@ targets:
     config: shipping
 
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   genproj: [{ uses: ue/generate_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
-  start:   [{ uses: ue/start }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
@@ -168,10 +170,11 @@ bolt list                 # list all tasks and flows
 flows:
   daily:
     steps: [update, build, start]
-    continue_on_fail: [start]   # a failed launch won't abort the flow
+    continue_on_fail: [start] # a failed launch won't abort the flow
 ```
 
 ## See Also
+
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
 - [Error Handling](/guides/error-handling.md) - Fail-fast, continue_on_fail, continue-on-error
 - [Project Structure](/guides/project-structure.md) - Config split and layout

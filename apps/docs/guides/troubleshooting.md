@@ -13,8 +13,9 @@ Common issues and solutions for Bolt.
 **Cause**: Bolt couldn't find a `bolt.yaml` file in the directory tree.
 
 **Solution**:
+
 1. `cd` into your project root (or any subdirectory of it)
-2. Bolt walks *up* from the current directory looking for `bolt.yaml`
+2. Bolt walks _up_ from the current directory looking for `bolt.yaml`
 3. If the project isn't set up yet, run `bolt init`
 
 ```bash
@@ -38,9 +39,9 @@ bolt init                                     # scaffolds it for you
 
 ```yaml
 # bolt.local.yaml
-engine_path:  D:/UE
+engine_path: D:/UE
 project_path: D:/Games/MyGame
-uproject:     D:/Games/MyGame/MyGame.uproject
+uproject: D:/Games/MyGame/MyGame.uproject
 use_tortoise: true
 ```
 
@@ -64,6 +65,7 @@ bolt inspect <name...>    # show the resolved steps for a task or flow
 **Cause**: Plugin not loaded, or the namespace/handler name is wrong.
 
 **Solution**:
+
 1. Check the plugin is active: `bolt plugin list`
 2. Verify the `ns/handler` name in your step's `uses:`
 3. For explicit plugins, check the path in the `plugins:` section
@@ -80,6 +82,7 @@ bolt plugin list
 **Cause**: A `run:` shell step returned a non-zero exit code.
 
 **Solution**:
+
 1. Preview with `--dry-run` to see the exact command
 2. Check the command output for errors
 3. Add `continue-on-error: true` to the step if the failure is acceptable
@@ -95,11 +98,12 @@ bolt run daily --dry-run
 **Cause**: The run exceeded the configured `timeout_hours`.
 
 **Solution**:
+
 1. Increase `timeout_hours` in `bolt.yaml`
 2. Optimize the long-running task
 
 ```yaml
-timeout_hours: 12  # Increase from 6 to 12
+timeout_hours: 12 # Increase from 6 to 12
 ```
 
 ### SVN/Git Errors
@@ -149,6 +153,7 @@ bolt run fix-dll build     # clean the bad DLLs, then rebuild
 **Cause**: Malformed YAML in `bolt.yaml` or `bolt.local.yaml`.
 
 **Solution**:
+
 1. Run `bolt check` to validate
 2. Fix indentation and quoting
 
@@ -166,7 +171,7 @@ bolt check
 
 ```yaml
 project:
-  name: MyGame  # Add this
+  name: MyGame # Add this
 ```
 
 ### Invalid Target Kind
@@ -180,7 +185,7 @@ project:
 ```yaml
 targets:
   mytarget:
-    kind: editor   # e.g. editor | program
+    kind: editor # e.g. editor | program
 ```
 
 ## Performance Issues
@@ -190,6 +195,7 @@ targets:
 **Cause**: Large projects, slow networks, many steps.
 
 **Solution**:
+
 1. Use `--dry-run` to verify the plan first
 2. Split large tasks into smaller composable tasks
 3. Add `continue-on-error` to non-critical `run:` steps
@@ -207,6 +213,7 @@ bolt run daily --dry-run
 ```
 
 ### Check Logs
+
 Execution logs are stored in `.bolt/logs/`:
 
 ```bash
@@ -218,7 +225,9 @@ tail -f .bolt/logs/bolt_*.log
 ```
 
 ### Report Issues
+
 If you encounter a bug:
+
 1. Check existing issues: [GitHub Issues](https://github.com/jukrb0x/Bolt/issues)
 2. Include in your report:
    - Bolt version (`bolt --version`)
@@ -227,5 +236,6 @@ If you encounter a bug:
    - Your configuration (omit sensitive data)
 
 ## See Also
+
 - [bolt check](/cli/check.md) - Validate bolt.yaml
 - [Error Handling](/guides/error-handling.md) - Fail-fast, continue_on_fail, continue-on-error

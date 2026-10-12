@@ -16,10 +16,12 @@ brainstorm → spec → plan cycle. Candidate directions (to be refined):
 ## Backlog (ported from TODO.md)
 
 ### Docs
+
 - [ ] current docs are worse, written in AI, no taste and ugly, overwhelming
 - [ ] update `bolt help`
 
 ### Basic
+
 - [x] [DX] oxc
 - [x] [FEAT] chatbot webhook
 - [ ] [FEAT] common tools
@@ -39,10 +41,13 @@ brainstorm → spec → plan cycle. Candidate directions (to be refined):
 - [x] parse relative path to absolute path in yaml
 
 ### Dist
+
 - [ ] config version management, bolt.yaml should be compatibility versioned
 
 ### Setup && Pull
+
 Let people start and set up their working environment easily.
+
 - [x] `bolt init` will initialize a bolt.yaml to the current folder with Q&A and the provided template yaml OR the remote repo.
 - [ ] `bolt init` input box cannot paste..
 - [ ] `bolt init` template options are not universal, make the code platform-agnostic
@@ -51,28 +56,36 @@ Let people start and set up their working environment easily.
   - [-] `bolt pull` — pull engine and project from bolt.yaml, set up desired directory structure, and start building the editor — opt in with Q&A — make this go-ops + actions to be clear
 
 ### Ecosystem
+
 - [ ] project-shared bolt.yaml — merge bolt.yaml with project-defined settings; no personal info like local project paths
 - [x] npm package — make the library useful, let other code call it
 - [ ] Python SDK for Bolt plugin
 
 ### Cross-platform
+
 > Win is first-class supported
+
 - [x] bolt itself
 - [ ] ue/build
 
 ### Agentic
+
 - [x] `bolt ai` — generate a dynamic and maintainable SKILL.md for LLMs to use bolt
 
 ### Project scope
+
 - [ ] support community svn — project scope todo
 - [ ] move fillddc to project plugin
 
 ### Security
+
 - [ ] security checks, high level and unsafe rm
 
 ### Misc
+
 - [ ] broken yaml check — check before runs when command depends on yaml
 - [ ] better installer script
 
 ### VCS
+
 - [ ] IMPORTANT — the template or ue/update plugin still assumes git+svn for engine+project; separate into `ue/update_engine` and `ue/update_project`

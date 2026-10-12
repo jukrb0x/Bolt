@@ -7,7 +7,13 @@ import { Logger } from "../../logger";
 
 const tmp = "/tmp/bolt-json-plugin-test";
 const file = `${tmp}/data.json`;
-const ctx: BoltPluginContext = { cfg: testCfg, configDir: tmp, dryRun: false, logger: new Logger(), runtime: mockRuntime };
+const ctx: BoltPluginContext = {
+  cfg: testCfg,
+  configDir: tmp,
+  dryRun: false,
+  logger: new Logger(),
+  runtime: mockRuntime,
+};
 
 beforeEach(() => {
   mkdirSync(tmp, { recursive: true });

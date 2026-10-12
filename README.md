@@ -15,11 +15,13 @@ Stop running Build.bat by hand. Stop context-switching between TortoiseSVN, the 
 ## Install
 
 **Windows**
+
 ```powershell
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
 **macOS (Apple Silicon)**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
 ```
@@ -68,24 +70,24 @@ project:
   project: { vcs: svn }
 
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build }]
-  start:   [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]    # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
 ```
 
 ```yaml
 # bolt.local.yaml — per-machine paths, gitignored
-engine_path:  C:/UnrealEngine
+engine_path: C:/UnrealEngine
 project_path: C:/Projects/MyGame
-uproject:     C:/Projects/MyGame/MyGame.uproject
+uproject: C:/Projects/MyGame/MyGame.uproject
 use_tortoise: true
 ```
 
@@ -101,20 +103,20 @@ bolt run daily                       # run the predefined flow
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `bolt run <names...>` | Run tasks in the typed order, or a single flow |
-| `bolt list` | List all tasks and flows |
-| `bolt inspect <names...>` | Show the resolved steps for a task or flow |
-| `bolt info` | Show project and VCS status |
-| `bolt check` | Validate `bolt.yaml` and `bolt.local.yaml` |
-| `bolt init` | Scaffold `bolt.yaml` + `bolt.local.yaml` |
-| `bolt config` | Open the current `bolt.yaml` in `$EDITOR` |
-| `bolt ai` | Generate `.bolt/ai-context.md` for LLM agents |
-| `bolt version` | Print version |
-| `bolt self-update` | Update to the latest release |
-| `bolt plugin list` | List active plugins and their handlers |
-| `bolt plugin new <name>` | Scaffold a new plugin |
+| Command                   | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `bolt run <names...>`     | Run tasks in the typed order, or a single flow |
+| `bolt list`               | List all tasks and flows                       |
+| `bolt inspect <names...>` | Show the resolved steps for a task or flow     |
+| `bolt info`               | Show project and VCS status                    |
+| `bolt check`              | Validate `bolt.yaml` and `bolt.local.yaml`     |
+| `bolt init`               | Scaffold `bolt.yaml` + `bolt.local.yaml`       |
+| `bolt config`             | Open the current `bolt.yaml` in `$EDITOR`      |
+| `bolt ai`                 | Generate `.bolt/ai-context.md` for LLM agents  |
+| `bolt version`            | Print version                                  |
+| `bolt self-update`        | Update to the latest release                   |
+| `bolt plugin list`        | List active plugins and their handlers         |
+| `bolt plugin new <name>`  | Scaffold a new plugin                          |
 
 ## Configuration
 
@@ -125,18 +127,18 @@ Config is split in two: a shared `bolt.yaml` you commit, and a per-machine `bolt
 ```yaml
 project:
   name: MyGame
-  engine:                    # repo identity only — path lives in bolt.local.yaml
-    vcs: git                 # git | svn
-    url: ""                  # optional: remote URL
-    branch: main             # optional: for git repos
+  engine: # repo identity only — path lives in bolt.local.yaml
+    vcs: git # git | svn
+    url: "" # optional: remote URL
+    branch: main # optional: for git repos
   project:
-    vcs: svn                 # git | svn
-    url: ""                  # optional: remote URL
+    vcs: svn # git | svn
+    url: "" # optional: remote URL
 
 targets:
   editor:
-    kind: editor             # editor | program | game | client | server
-    config: development      # development | debug | debuggame | shipping | test
+    kind: editor # editor | program | game | client | server
+    config: development # development | debug | debuggame | shipping | test
   client:
     kind: program
     name: MyClient
@@ -144,25 +146,25 @@ targets:
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:  [{ uses: ue/build, with: { target: editor } }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build }]
-  start:  [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     steps: [update, build, start]
     continue_on_fail: [start]
 
-timeout_hours: 6             # optional: abort a run that exceeds this
+timeout_hours: 6 # optional: abort a run that exceeds this
 ```
 
 ### bolt.local.yaml (per-machine, gitignored)
 
 ```yaml
-engine_path:  C:/UnrealEngine                       # local UE root
-project_path: C:/Projects/MyGame                    # local project working copy
-uproject:     C:/Projects/MyGame/MyGame.uproject    # .uproject file
-use_tortoise: true                                  # optional: TortoiseSVN/Proc for SVN
+engine_path: C:/UnrealEngine # local UE root
+project_path: C:/Projects/MyGame # local project working copy
+uproject: C:/Projects/MyGame/MyGame.uproject # .uproject file
+use_tortoise: true # optional: TortoiseSVN/Proc for SVN
 ```
 
 Relative paths in `bolt.local.yaml` resolve against the directory containing `bolt.yaml`.
@@ -179,8 +181,8 @@ tasks:
         target: editor
   reset:
     - uses: ue/kill
-      continue-on-error: true    # per-step: don't fail the run if this errors
-    - call: update               # reuse another task inline
+      continue-on-error: true # per-step: don't fail the run if this errors
+    - call: update # reuse another task inline
     - call: build
   notify:
     - run: echo "done at ${{ env.TIME }}"
@@ -206,10 +208,10 @@ flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]    # update/build abort; start may fail
+    continue_on_fail: [start] # update/build abort; start may fail
   reset:
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]     # kill may fail (nothing running) without aborting
+    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
 ```
 
 ```
@@ -238,23 +240,23 @@ For a multi-task invocation, the start notification is sent once. It shows the t
 
 ## Built-in Handlers
 
-| Handler | Description |
-|---------|-------------|
-| `ue/build` | Build editor, program, or game target |
-| `ue/build_engine` | Build the UE engine itself |
-| `ue/build_program` | Build a standalone program target |
-| `ue/start` | Launch UE editor or a built binary |
-| `ue/kill` | Kill all running UE processes |
-| `ue/update_engine` | Update the engine repo (git/svn) |
-| `ue/update_project` | Update the project repo (git/svn) |
-| `ue/setup` | Run the engine `Setup.bat` |
-| `ue/svn_cleanup` | Run SVN cleanup (TortoiseSVN-aware) |
-| `ue/svn_revert` | Revert SVN changes |
-| `ue/generate_project` | Regenerate project files |
-| `ue/fillddc` | Fill Derived Data Cache |
-| `ue/fix_dll` | Remove zero-byte DLLs causing linker errors |
-| `ue/info` | Print project and VCS info |
-| `ue/ini_set`, `ue/ini_get`, `ue/ini_remove`, `ue/ini_override`, `ue/ini_read_all` | Edit UE `.ini` config |
+| Handler                                                                           | Description                                 |
+| --------------------------------------------------------------------------------- | ------------------------------------------- |
+| `ue/build`                                                                        | Build editor, program, or game target       |
+| `ue/build_engine`                                                                 | Build the UE engine itself                  |
+| `ue/build_program`                                                                | Build a standalone program target           |
+| `ue/start`                                                                        | Launch UE editor or a built binary          |
+| `ue/kill`                                                                         | Kill all running UE processes               |
+| `ue/update_engine`                                                                | Update the engine repo (git/svn)            |
+| `ue/update_project`                                                               | Update the project repo (git/svn)           |
+| `ue/setup`                                                                        | Run the engine `Setup.bat`                  |
+| `ue/svn_cleanup`                                                                  | Run SVN cleanup (TortoiseSVN-aware)         |
+| `ue/svn_revert`                                                                   | Revert SVN changes                          |
+| `ue/generate_project`                                                             | Regenerate project files                    |
+| `ue/fillddc`                                                                      | Fill Derived Data Cache                     |
+| `ue/fix_dll`                                                                      | Remove zero-byte DLLs causing linker errors |
+| `ue/info`                                                                         | Print project and VCS info                  |
+| `ue/ini_set`, `ue/ini_get`, `ue/ini_remove`, `ue/ini_override`, `ue/ini_read_all` | Edit UE `.ini` config                       |
 
 ## Plugins
 
@@ -299,12 +301,12 @@ tasks:
 
 ### Plugin scopes
 
-| Scope | Location | Priority |
-|-------|----------|----------|
-| Built-in | Compiled into bolt | Lowest |
-| User | `~/.bolt/plugins/<name>/` | ↑ |
-| Project auto | `.bolt/plugins/<name>/` | ↑ |
-| Project explicit | Declared in `bolt.yaml` `plugins:` | Highest |
+| Scope            | Location                           | Priority |
+| ---------------- | ---------------------------------- | -------- |
+| Built-in         | Compiled into bolt                 | Lowest   |
+| User             | `~/.bolt/plugins/<name>/`          | ↑        |
+| Project auto     | `.bolt/plugins/<name>/`            | ↑        |
+| Project explicit | Declared in `bolt.yaml` `plugins:` | Highest  |
 
 Higher-priority plugins override lower ones for the same namespace, so you can override any built-in behaviour.
 
@@ -381,8 +383,8 @@ import { loadConfig } from "boltstack";
 const config = await loadConfig("./bolt.yaml", createRuntime());
 const runner = new Runner(config, { logger: new Logger() });
 
-await runner.runTask("build", {});   // run a task
-await runner.runFlow("daily");        // run a flow
+await runner.runTask("build", {}); // run a task
+await runner.runFlow("daily"); // run a flow
 ```
 
 ### Subpath Exports
@@ -394,6 +396,7 @@ await runner.runFlow("daily");        // run a flow
 ### Runtime Compatibility
 
 The library uses a runtime abstraction layer:
+
 - **Bun**: Uses native APIs (Bun.spawn, Bun.YAML)
 - **Node.js**: Uses child_process and yaml package
 
