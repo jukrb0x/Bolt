@@ -12,10 +12,10 @@ bolt plugin <command>
 
 ## Subcommands
 
-| Command | Description |
-| --- | --- |
-| `list` | List loaded plugins and their handlers |
-| `new <name>` | Scaffold a plugin |
+| Command      | Description                            |
+| ------------ | -------------------------------------- |
+| `list`       | List loaded plugins and their handlers |
+| `new <name>` | Scaffold a plugin                      |
 
 ## bolt plugin list
 
@@ -35,8 +35,8 @@ Prints the namespace and handler names for:
 bolt plugin new <name> [--user]
 ```
 
-| Flag | Description |
-| --- | --- |
+| Flag     | Description                                                         |
+| -------- | ------------------------------------------------------------------- |
 | `--user` | Create `~/.bolt/plugins/<name>/` instead of `.bolt/plugins/<name>/` |
 
 The name must match `/^[a-z0-9_-]+$/`. Without `--user`, Bolt must find a `bolt.yaml` by walking up from the current directory.

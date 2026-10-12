@@ -34,10 +34,10 @@ When the executable path is under `node_modules`, WinGet, Scoop, or Homebrew, se
 
 ## Options
 
-| Flag | Description |
-| --- | --- |
-| `--force` | Download and replace even when the current version is already the latest |
-| `--version` | Install this version instead of the latest, for example `2.1.0` |
+| Flag        | Description                                                              |
+| ----------- | ------------------------------------------------------------------------ |
+| `--force`   | Download and replace even when the current version is already the latest |
+| `--version` | Install this version instead of the latest, for example `2.1.0`          |
 
 Without `--force` or `--version`, a current version that is not older than the latest release prints `Already up to date` and does not download.
 
