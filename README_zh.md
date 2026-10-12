@@ -419,7 +419,8 @@ bun install
 bun run dev          # 从源码运行
 bun test             # 运行测试
 bun run build:types  # 重新生成 bolt.d.ts
-bun run release:dry  # 预览发布流程
+# 在 main 上打标签发布：git tag vX.Y.Z && git push origin vX.Y.Z
+# 见 docs/ops/release.md。不会发布到 npm。
 ```
 
 ## 许可证

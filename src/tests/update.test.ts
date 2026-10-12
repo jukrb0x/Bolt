@@ -39,11 +39,12 @@ test("releaseAssetName: Apple Silicon downloads bolt-mac-arm64", () => {
   expect(releaseAssetName("darwin", "arm64", "bolt")).toBe("bolt-mac-arm64");
 });
 
-test("releaseAssetName: keeps the installed release asset name", () => {
+test("releaseAssetName: keeps an installed Intel asset even if arch differs", () => {
   expect(releaseAssetName("darwin", "arm64", "bolt-mac-x64")).toBe("bolt-mac-x64");
-  expect(releaseAssetName("win32", "x64", "bolt-win-x64-baseline.exe")).toBe(
-    "bolt-win-x64-baseline.exe",
-  );
+});
+
+test("releaseAssetName: the dropped baseline filename is not a separate asset", () => {
+  expect(releaseAssetName("win32", "x64", "bolt-win-x64-baseline.exe")).toBe("bolt-win-x64.exe");
 });
 
 test("releaseAssetName: linux and windows x64 use their release assets", () => {

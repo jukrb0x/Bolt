@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import type { Build, BunPlugin } from "bun";
-import { RELEASE_BINARIES } from "./release-targets";
+import { RELEASE_BINARIES, releaseUploadNames } from "./release-targets";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -107,6 +107,15 @@ if (args[0] === "--all") {
   }
   files.push(declaration);
   writeChecksums(files);
+  const names = releaseUploadNames();
+  for (const name of names) {
+    if (name === "SHA256SUMS") continue;
+    if (!existsSync(join(ROOT, "build", name))) {
+      console.error(`missing release asset ${name}`);
+      process.exit(1);
+    }
+  }
+  writeFileSync(join(ROOT, "build", "assets.txt"), `${names.join("\n")}\n`);
 } else {
   const target = args[0] || (process.platform === "win32" ? "bun-windows-x64" : "bun-darwin-arm64");
   const outfile =

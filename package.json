@@ -54,7 +54,6 @@
     "build:binaries": "bun run build:types && mkdir -p build && cp bolt.d.ts build/bolt.d.ts && bun run scripts/build-binary.ts --all",
     "build:all": "bun run build:binaries",
     "release": "bun run scripts/release.ts",
-    "release:pre": "bun run scripts/release.ts --pre-release",
     "release:dry": "bun run scripts/release.ts --dry-run",
     "lint": "oxlint src",
     "lint:fix": "oxlint --fix src",

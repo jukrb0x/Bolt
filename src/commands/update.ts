@@ -32,8 +32,9 @@ const RELEASE_ASSET_NAMES = new Set<string>(RELEASE_BINARIES.map((binary) => bin
 
 /**
  * Release asset to download.
- * An executable that is already named as a release asset keeps that flavor
- * (baseline, Intel macOS). Otherwise the name comes from platform and arch.
+ * An executable that is already named as a release asset keeps that name,
+ * so an Intel macOS install is not replaced with the arm64 asset.
+ * Otherwise the name comes from platform and arch.
  */
 export function releaseAssetName(
   platform: string,
