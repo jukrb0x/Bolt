@@ -46,15 +46,23 @@ The receipt is `~/.bolt/install.json`.
 
 Each release includes `SHA256SUMS` (GNU format: 64 hex digits, two spaces, file name) next to the binaries and `bolt.d.ts`.
 
-`install.ps1` and `install.sh` download `SHA256SUMS` with the binary and compare the hash before anything is installed. A missing line or a mismatch leaves any existing `bolt` in place. They then run the downloaded file's `version` command and install only when that print is a version token.
+`install.ps1` and `install.sh` download `SHA256SUMS` with the one asset for this machine. Each script hashes that file and compares the digest to the asset's line. A missing line or a mismatch leaves any existing `bolt` in place. They then run the downloaded file's `version` command and install only when that print is a version token.
 
-To check a manual download yourself, put `SHA256SUMS` in the same directory as the files it names and run:
+`install.sh` runs `sha256sum` on that asset when the command exists, and `shasum -a 256` on that asset otherwise. `install.ps1` hashes `bolt-win-x64.exe` with `Get-FileHash`. Neither script passes `-c`.
+
+The sums file lists the four binaries and `bolt.d.ts`. To check one downloaded file, hash it and compare the digest to that file's line:
 
 ```bash
-sha256sum -c SHA256SUMS
+sha256sum bolt-linux-x64
 ```
 
-The file lists the four binaries and `bolt.d.ts`. On macOS, if `sha256sum` is not installed, `shasum -a 256 -c SHA256SUMS` reads the same lines. That is what `install.sh` uses when `sha256sum` is absent.
+On macOS, if `sha256sum` is not installed:
+
+```bash
+shasum -a 256 bolt-mac-arm64
+```
+
+`sha256sum -c SHA256SUMS` checks every line in the file. Use it only when the directory contains every name those sums list. The same full set works with `shasum -a 256 -c SHA256SUMS`.
 
 ## Release assets
 
@@ -133,7 +141,7 @@ See [bolt.yaml](./bolt-yaml.md) and [First Project](./first-project.md).
 
 ## Manual installation
 
-Download the asset for your machine from [GitHub Releases](https://github.com/jukrb0x/Bolt/releases), check it with `sha256sum -c SHA256SUMS`, and put it on your PATH. This does not write `install.json`. `bolt self-update` will refuse to replace that file until you install with `install.ps1` or `install.sh`.
+Download the asset for your machine from [GitHub Releases](https://github.com/jukrb0x/Bolt/releases), hash that one file, and compare the digest to its line in `SHA256SUMS`. Then put the binary on your PATH. This does not write `install.json`. `bolt self-update` will refuse to replace that file until you install with `install.ps1` or `install.sh`.
 
 **Windows**
 

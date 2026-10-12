@@ -123,12 +123,14 @@ bolt run ci --dry-run
 The runner prints the task and each resolved step. Params are `key=value`, separated by two spaces:
 
 ```text
-Tasks: ci (dry-run)
+[INFO] Tasks: ci (dry-run)
 >> ci
    · ue/build  target=editor
    · myplugin/run  input=npm test
-<< ci: SUCCESS
+<< ci: SUCCESS (0.1s)
 ```
+
+`<< ci: SUCCESS` includes the elapsed seconds with one decimal. The sample uses `0.1s`.
 
 The handler still runs. The scaffold logs `[INFO] myplugin/run called with: {"input":"npm test"}`. `ue/build` logs the command it would run and does not launch it while `--dry-run` is set.
 
