@@ -43,10 +43,12 @@ Install Bolt:
   </Tab>
   <Tab title="macOS/Linux">
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
     ```
   </Tab>
 </Tabs>
+
+Windows installs `bolt.exe` to `%LOCALAPPDATA%\bolt\bin`. macOS and Linux install `bolt` to `~/.bolt/bin`. Intel macOS uses `bolt-mac-x64`. Apple Silicon uses `bolt-mac-arm64`.
 
 Initialize your project. `bolt init` writes `bolt.yaml`:
 

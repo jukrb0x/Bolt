@@ -59,6 +59,19 @@ try {
 
   $Dest = Join-Path $DestDir 'bolt.exe'
   $Old = "$Dest.old"
+  $Staged = Join-Path $DestDir 'bolt.exe.new'
+  # Copy onto the install volume before the live exe is renamed.
+  if (Test-Path -LiteralPath $Staged) {
+    Remove-Item -LiteralPath $Staged -Force -ErrorAction SilentlyContinue
+  }
+  Copy-Item -LiteralPath $DownloadPath -Destination $Staged -Force
+  Unblock-File -LiteralPath $Staged
+  $StagedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Staged).Hash.ToLower()
+  if ($StagedHash -ne $Expected) {
+    Remove-Item -LiteralPath $Staged -Force -ErrorAction SilentlyContinue
+    throw "Staged bolt.exe did not match SHA256SUMS. The existing bolt was not replaced."
+  }
+
   $RenamedAside = $false
   if (Test-Path -LiteralPath $Dest) {
     if (Test-Path -LiteralPath $Old) {
@@ -68,10 +81,16 @@ try {
     $RenamedAside = $true
   }
   try {
-    Move-Item -LiteralPath $DownloadPath -Destination $Dest -Force
+    Rename-Item -LiteralPath $Staged -NewName 'bolt.exe'
   } catch {
+    if (Test-Path -LiteralPath $Dest) {
+      Remove-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+    }
     if ($RenamedAside -and -not (Test-Path -LiteralPath $Dest) -and (Test-Path -LiteralPath $Old)) {
       Rename-Item -LiteralPath $Old -NewName 'bolt.exe'
+    }
+    if (Test-Path -LiteralPath $Staged) {
+      Remove-Item -LiteralPath $Staged -Force -ErrorAction SilentlyContinue
     }
     throw
   }
@@ -81,6 +100,7 @@ try {
       channel = 'github'
       asset   = $Asset
       version = $Version
+      path    = $Dest
     } | ConvertTo-Json)
   $Utf8 = New-Object System.Text.UTF8Encoding $false
   [System.IO.File]::WriteAllText((Join-Path $ReceiptDir 'install.json'), ($Json.Trim() + "`n"), $Utf8)

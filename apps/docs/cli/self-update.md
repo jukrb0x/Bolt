@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
 ```
 :::
 
-Updates are installed to `~/.bolt/bin/` and added to your PATH.
+A Windows script install lives at `%LOCALAPPDATA%\bolt\bin\bolt.exe`. macOS and Linux script installs live at `~/.bolt/bin/bolt`. `bolt self-update` replaces only that recorded file. Intel macOS stays on `bolt-mac-x64`.
 
 ## See Also
 

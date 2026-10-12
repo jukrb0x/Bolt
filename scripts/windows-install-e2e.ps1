@@ -75,8 +75,20 @@ function Write-Sums([string]$ExePath, [string]$SumsPath) {
 
 function Build-One([string]$Version, [string]$RelOut) {
   Set-BoltVersion $Version
-  & bun run scripts/build-binary.ts bun-windows-x64 $RelOut
-  if ($LASTEXITCODE -ne 0) { throw "build $Version failed with exit $LASTEXITCODE" }
+  $buildOut = Join-Path $env:TEMP "bolt-build-$Version.out"
+  $buildErr = Join-Path $env:TEMP "bolt-build-$Version.err"
+  $bunExe = (Get-Command bun -ErrorAction Stop).Source
+  # Start-Process keeps the compiler log out of this function's return value.
+  $proc = Start-Process -FilePath $bunExe -WorkingDirectory $Root -ArgumentList @(
+    "run", "scripts/build-binary.ts", "bun-windows-x64", $RelOut
+  ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $buildOut -RedirectStandardError $buildErr
+  if ($proc.ExitCode -ne 0) {
+    Write-Host "---- build $Version stdout ----"
+    if (Test-Path -LiteralPath $buildOut) { Get-Content -LiteralPath $buildOut -Tail 40 | Out-Host }
+    Write-Host "---- build $Version stderr ----"
+    if (Test-Path -LiteralPath $buildErr) { Get-Content -LiteralPath $buildErr -Tail 40 | Out-Host }
+    throw "build $Version failed with exit $($proc.ExitCode)"
+  }
   $abs = Join-Path $Root ($RelOut -replace '/', '\')
   if (-not (Test-Path -LiteralPath $abs)) {
     if (Test-Path -LiteralPath "$abs.exe") { $abs = "$abs.exe" } else { throw "missing build output $abs" }
@@ -107,8 +119,13 @@ try {
   New-Item -ItemType Directory -Force -Path (Join-Path $ServeRoot "current") | Out-Null
   New-Item -ItemType Directory -Force -Path (Join-Path $ServeRoot "newer") | Out-Null
 
-  $currentExe = Build-One "2.0.0" "build/e2e/bolt-2.0.0.exe"
-  $newerExe = Build-One "2.0.1" "build/e2e/bolt-2.0.1.exe"
+  $currentExe = [string](Build-One "2.0.0" "build/e2e/bolt-2.0.0.exe")
+  $newerExe = [string](Build-One "2.0.1" "build/e2e/bolt-2.0.1.exe")
+  if ($currentExe -notmatch '\.exe$' -or $newerExe -notmatch '\.exe$') {
+    throw "build did not return an exe path. current='$currentExe' newer='$newerExe'"
+  }
+  Write-Host "current exe path: $currentExe"
+  Write-Host "newer exe path: $newerExe"
   $currentHash = Get-Sha256 $currentExe
   $newerHash = Get-Sha256 $newerExe
   if ($currentHash -eq $newerHash) { throw "the two builds are the same file" }
@@ -147,6 +164,9 @@ try {
   if ($receipt.channel -ne "github" -or $receipt.asset -ne "bolt-win-x64.exe" -or $receipt.version -ne "2.0.0") {
     throw "unexpected receipt: $(Get-Content -Raw -LiteralPath $ReceiptPath)"
   }
+  if ($receipt.path.TrimEnd("\").ToLower() -ne $Dest.TrimEnd("\").ToLower()) {
+    throw "receipt path is '$($receipt.path)', expected '$Dest'"
+  }
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
   $onPath = $false
   foreach ($entry in ($userPath -split ";")) {
@@ -167,6 +187,7 @@ try {
   if (-not (Test-Path -LiteralPath $Old)) { throw "self-update did not rename the running exe to bolt.exe.old" }
   if ((Get-Sha256 $Old) -ne $currentHash) { throw "bolt.exe.old is not the exe that was running" }
   if ((Get-Sha256 $Dest) -ne $newerHash) { throw "bolt.exe on PATH is not the newer build" }
+  Write-Host "self-update renamed the running exe to bolt.exe.old"
   $receipt = Get-Content -Raw -LiteralPath $ReceiptPath | ConvertFrom-Json
   if ($receipt.version -ne "2.0.1" -or $receipt.asset -ne "bolt-win-x64.exe") {
     throw "self-update left receipt $(Get-Content -Raw -LiteralPath $ReceiptPath)"
@@ -174,6 +195,7 @@ try {
 
   Invoke-Probe "2.0.1"
   if (Test-Path -LiteralPath $Old) { throw "the next launch left bolt.exe.old in place" }
+  Write-Host "later launch removed bolt.exe.old"
   if ((Get-Sha256 $Dest) -ne $newerHash) { throw "cleanup replaced or removed the newer bolt.exe" }
 
   Write-Host "windows install and self-update ok"

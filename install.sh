@@ -87,11 +87,14 @@ case "$version" in
 esac
 mv -f "${DEST}/bolt.new" "${DEST}/bolt"
 
+installed_path="${DEST}/bolt"
+escaped_path=$(printf '%s' "$installed_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
 cat >"$RECEIPT" <<EOF
 {
   "channel": "github",
   "asset": "${ASSET}",
-  "version": "${version}"
+  "version": "${version}",
+  "path": "${escaped_path}"
 }
 EOF
 

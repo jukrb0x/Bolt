@@ -19,6 +19,7 @@ interface GHRelease {
 export interface InstallReceipt {
   channel: string;
   asset?: string;
+  path?: string;
 }
 
 export type SelfUpdatePlan =
@@ -34,7 +35,7 @@ const PACKAGE_MANAGER_COMMANDS: Record<string, string> = {
   // Those packages are not published, so this cannot invent an id.
   winget: "No winget package id is published yet. Upgrade the package that installed this bolt.",
   scoop: "No Scoop app name is published yet. Upgrade the app that installed this bolt.",
-  brew: "Upgrade it with: brew upgrade",
+  brew: "No Homebrew formula is published yet. Upgrade the formula that installed this bolt.",
 };
 
 export function isNewer(current: string, latest: string): boolean {
@@ -98,12 +99,13 @@ export function parseInstallReceipt(text: string): InstallReceipt | null {
     const value = JSON.parse(text.replace(/^\uFEFF/, "")) as {
       channel?: unknown;
       asset?: unknown;
+      path?: unknown;
     };
     if (!value || typeof value.channel !== "string" || !value.channel) return null;
-    return {
-      channel: value.channel,
-      asset: typeof value.asset === "string" ? value.asset : undefined,
-    };
+    const receipt: InstallReceipt = { channel: value.channel };
+    if (typeof value.asset === "string") receipt.asset = value.asset;
+    if (typeof value.path === "string" && value.path) receipt.path = value.path;
+    return receipt;
   } catch {
     return null;
   }
@@ -164,6 +166,15 @@ export function planSelfUpdate(input: {
     };
   }
 
+  const installed = input.receipt?.path;
+  if (!installed || !sameInstallPath(input.execPath, installed, input.platform)) {
+    return {
+      kind: "refuse",
+      message:
+        "self-update only replaces the bolt recorded in ~/.bolt/install.json. This executable is a different file.",
+    };
+  }
+
   const recorded = input.receipt?.asset;
   const asset =
     recorded && RELEASE_ASSET_NAMES.has(recorded)
@@ -211,15 +222,45 @@ export function replaceInstalledBinary(platform: string, execPath: string, nextP
   }
 }
 
-/** Delete the previous Windows executable left behind by self-update. */
-export function cleanupStaleBinary(execPath: string): void {
-  const oldPath = `${execPath}.old`;
+/** Compare two install paths. Windows paths are case-insensitive. */
+export function sameInstallPath(left: string, right: string, platform: string): boolean {
+  const normalize = (filePath: string) => {
+    const resolved = path.resolve(filePath).replace(/^\\\\\?\\/, "");
+    return platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return normalize(left) === normalize(right);
+}
+
+/**
+ * Delete this install's bolt.exe.old.
+ * A normal Windows start does not delete bun.exe.old or any other *.exe.old.
+ */
+export function cleanupStaleBinary(execPath: string, installedPath: string | undefined): void {
+  if (!installedPath) return;
+  if (path.basename(installedPath).toLowerCase() !== "bolt.exe") return;
+  if (path.basename(execPath).toLowerCase() !== "bolt.exe") return;
+  if (!sameInstallPath(execPath, installedPath, "win32")) return;
+  const oldPath = `${installedPath}.old`;
   if (!existsSync(oldPath)) return;
   try {
     unlinkSync(oldPath);
   } catch {
     // Still locked. The next launch tries again.
   }
+}
+
+/** On Windows, delete bolt.exe.old only when this process is the receipt's bolt.exe. */
+export function cleanupInstalledBolt(execPath: string): void {
+  let installed: string | undefined;
+  try {
+    const receiptPath = installReceiptPath(homedir());
+    if (existsSync(receiptPath)) {
+      installed = parseInstallReceipt(readFileSync(receiptPath, "utf8"))?.path;
+    }
+  } catch {
+    installed = undefined;
+  }
+  cleanupStaleBinary(execPath, installed);
 }
 
 /** Public GitHub releases API, unless BOLT_RELEASES_API points at a local release. */

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import {
@@ -121,7 +121,11 @@ test("planSelfUpdate keeps an Intel receipt asset on an arm64 report", () => {
       execPath: "/Users/me/.bolt/bin/bolt",
       platform: "darwin",
       arch: "arm64",
-      receipt: { channel: "github", asset: "bolt-mac-x64" },
+      receipt: {
+        channel: "github",
+        asset: "bolt-mac-x64",
+        path: "/Users/me/.bolt/bin/bolt",
+      },
     }),
   ).toEqual({ kind: "update", asset: "bolt-mac-x64" });
 });
@@ -132,9 +136,33 @@ test("planSelfUpdate uses arch when a github receipt has no asset", () => {
       execPath: "/Users/me/.bolt/bin/bolt",
       platform: "darwin",
       arch: "x64",
-      receipt: { channel: "github" },
+      receipt: { channel: "github", path: "/Users/me/.bolt/bin/bolt" },
     }),
   ).toEqual({ kind: "update", asset: "bolt-mac-x64" });
+});
+
+test("planSelfUpdate refuses a github receipt for a different bolt", () => {
+  const plan = planSelfUpdate({
+    execPath: "/usr/local/bin/bolt",
+    platform: "darwin",
+    arch: "x64",
+    receipt: {
+      channel: "github",
+      asset: "bolt-mac-x64",
+      path: "/Users/me/.bolt/bin/bolt",
+    },
+  });
+  expect(plan.kind).toBe("refuse");
+});
+
+test("planSelfUpdate refuses a github receipt that does not record a path", () => {
+  const plan = planSelfUpdate({
+    execPath: "/Users/me/.bolt/bin/bolt",
+    platform: "darwin",
+    arch: "x64",
+    receipt: { channel: "github", asset: "bolt-mac-x64" },
+  });
+  expect(plan.kind).toBe("refuse");
 });
 
 test("planSelfUpdate refuses a script install with no receipt", () => {
@@ -150,6 +178,18 @@ test("planSelfUpdate refuses a script install with no receipt", () => {
 test("planSelfUpdate lets a package-manager path win over a github receipt", () => {
   expect(packageManagerForPath("/opt/homebrew/bin/bolt")).toBe("brew");
   expect(packageManagerForPath("/home/linuxbrew/.linuxbrew/bin/bolt")).toBe("brew");
+  expect(
+    planSelfUpdate({
+      execPath: "/opt/homebrew/bin/bolt",
+      platform: "darwin",
+      arch: "arm64",
+      receipt: null,
+    }),
+  ).toEqual({
+    kind: "delegate",
+    manager: "brew",
+    command: "No Homebrew formula is published yet. Upgrade the formula that installed this bolt.",
+  });
   expect(
     planSelfUpdate({
       execPath: "/proj/node_modules/.bin/bolt",
@@ -201,9 +241,38 @@ test("replaceInstalledBinary on win32 renames the running exe aside", () => {
     replaceInstalledBinary("win32", execPath, nextPath);
     expect(readFileSync(execPath, "utf8")).toBe("new");
     expect(readFileSync(`${execPath}.old`, "utf8")).toBe("old");
-    cleanupStaleBinary(execPath);
+    cleanupStaleBinary(execPath, execPath);
     expect(readFileSync(execPath, "utf8")).toBe("new");
     expect(() => readFileSync(`${execPath}.old`)).toThrow();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("cleanupStaleBinary deletes only the installed bolt.exe.old", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-update-"));
+  try {
+    const bolt = path.join(dir, "bolt.exe");
+    const bunExe = path.join(dir, "bun.exe");
+    const otherDir = path.join(dir, "other");
+    writeFileSync(bolt, "new");
+    writeFileSync(`${bolt}.old`, "old");
+    writeFileSync(`${bunExe}.old`, "bun-old");
+    mkdirSync(otherDir);
+    const other = path.join(otherDir, "bolt.exe");
+    writeFileSync(other, "other");
+    writeFileSync(`${other}.old`, "other-old");
+
+    cleanupStaleBinary(bunExe, bolt);
+    cleanupStaleBinary(other, bolt);
+    expect(readFileSync(`${bolt}.old`, "utf8")).toBe("old");
+    expect(readFileSync(`${bunExe}.old`, "utf8")).toBe("bun-old");
+    expect(readFileSync(`${other}.old`, "utf8")).toBe("other-old");
+
+    cleanupStaleBinary(bolt, bolt);
+    expect(readFileSync(bolt, "utf8")).toBe("new");
+    expect(() => readFileSync(`${bolt}.old`)).toThrow();
+    expect(readFileSync(`${bunExe}.old`, "utf8")).toBe("bun-old");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
