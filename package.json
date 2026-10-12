@@ -51,7 +51,7 @@
     "build:types": "bunx dts-bundle-generator --no-banner --project tsconfig.json -o bolt.d.ts src/plugin-api.ts && bun run scripts/wrap-dts.ts bolt.d.ts",
     "build:win": "bun run build:types && bun run scripts/build-binary.ts bun-windows-x64 build/bolt-win-x64.exe && cp bolt.d.ts build/bolt.d.ts",
     "build:mac": "bun run build:types && bun run scripts/build-binary.ts bun-darwin-arm64 build/bolt-mac-arm64 && cp bolt.d.ts build/bolt.d.ts",
-    "build:binaries": "bun run scripts/build-binary.ts --all",
+    "build:binaries": "bun run build:types && mkdir -p build && cp bolt.d.ts build/bolt.d.ts && bun run scripts/build-binary.ts --all",
     "build:all": "bun run build:binaries",
     "release": "bun run scripts/release.ts",
     "release:pre": "bun run scripts/release.ts --pre-release",
