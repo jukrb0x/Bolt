@@ -119,6 +119,46 @@ function ueConfig(ctx: BoltPluginContext): UeConfig {
 /** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
 const w = (p: string) => p.replace(/\//g, "\\");
 
+/**
+ * Production commands target Windows batch files (.bat / .exe, backslashes).
+ * End-to-end tests set BOLT_E2E_UE_SHELL so those handlers can execute a fake
+ * script instead of a PE binary. Unset, the strings stay the Windows forms.
+ * - posix: forward slashes and .sh
+ * - cmd: backslashes, .bat unchanged, .exe rewritten to .cmd
+ */
+function e2eUeShell(): "posix" | "cmd" | undefined {
+  const value = process.env.BOLT_E2E_UE_SHELL;
+  if (value === "posix" || value === "cmd") return value;
+  return undefined;
+}
+
+/** Engine-relative script. Unset matches the historical `w(root)/rel` form. */
+function ueScript(root: string, winRel: string): string {
+  const mode = e2eUeShell();
+  if (mode === "posix") {
+    const rel = winRel.replace(/\.bat$/i, ".sh").replace(/\.exe$/i, ".sh");
+    return `${root}/${rel}`;
+  }
+  const rel = mode === "cmd" ? winRel.replace(/\.exe$/i, ".cmd") : winRel;
+  return `${w(root)}/${rel}`;
+}
+
+/** Setup.bat is joined with a backslash, unlike the other batch paths. */
+function setupScript(root: string): string {
+  if (e2eUeShell() === "posix") return `${root}/Setup.sh`;
+  return `${w(root)}\\Setup.bat`;
+}
+
+function hostSep(): string {
+  return e2eUeShell() === "posix" ? "/" : "\\";
+}
+
+function hostExt(): string {
+  if (e2eUeShell() === "posix") return ".sh";
+  if (e2eUeShell() === "cmd") return ".cmd";
+  return ".exe";
+}
+
 /** Omit an unset branch so git/pull keeps its default (`main`). */
 function gitPullArgs(repo: { path: string; branch?: string }): Record<string, string> {
   const args: Record<string, string> = { path: repo.path };
@@ -179,16 +219,17 @@ class UEPlugin extends PluginBase.withDescriptor({
 
     const uePath = ueConfig(ctx).engine.path;
     const platform = params.platform ?? "Win64";
-    const buildBat = `"${w(uePath)}/Engine/Build/BatchFiles/Build.bat"`;
+    const buildBat = `"${ueScript(uePath, "Engine/Build/BatchFiles/Build.bat")}"`;
 
     // "engine" is a reserved target that builds the engine from source
     if (targetName === "engine") {
       const buildType = requireUnrealBuildConfig(params.config ?? "development");
       await this.setup({ force: "true" }, ctx);
-      const genCmd = `"${w(uePath)}/GenerateProjectFiles.bat"`;
+      const genFile = ueScript(uePath, "GenerateProjectFiles.bat");
+      const genCmd = `"${genFile}"`;
       ctx.logger.cmd(genCmd);
       if (!ctx.dryRun) {
-        if (existsSync(`${w(uePath)}/GenerateProjectFiles.bat`)) await exec(genCmd, ctx);
+        if (existsSync(genFile)) await exec(genCmd, ctx);
       }
       const cmd = `${buildBat} -Target="UE4Editor ${platform} ${buildType}" -Target="ShaderCompileWorker ${platform} Development -Quiet" -WaitMutex -FromMsBuild`;
       await run(cmd, ctx);
@@ -253,7 +294,7 @@ class UEPlugin extends PluginBase.withDescriptor({
   @handler("Run engine Setup.bat")
   async setup(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ueConfig(ctx).engine.path;
-    const setupBat = `${w(uePath)}\\Setup.bat`;
+    const setupBat = setupScript(uePath);
     if (!existsSync(setupBat)) {
       ctx.logger.warn(`Setup.bat not found at ${setupBat}, skipping`);
       return;
@@ -268,7 +309,7 @@ class UEPlugin extends PluginBase.withDescriptor({
     const uePath = ueConfig(ctx).engine.path;
     const projFile = ueConfig(ctx).uproject;
     await run(
-      `"${w(uePath)}/Engine/Build/BatchFiles/GenerateProjectFiles.bat" "${projFile}" -Game`,
+      `"${ueScript(uePath, "Engine/Build/BatchFiles/GenerateProjectFiles.bat")}" "${projFile}" -Game`,
       ctx,
     );
   }
@@ -293,7 +334,7 @@ class UEPlugin extends PluginBase.withDescriptor({
 
     if (params.target) {
       const t = params.target as string;
-      const binName = `${t}${suffix}.exe`;
+      const binName = `${t}${suffix}${hostExt()}`;
       const candidates = [
         path.join(projectDir, "Binaries", platform, binName),
         path.join(uePath, "Engine", "Binaries", platform, binName),
@@ -303,15 +344,20 @@ class UEPlugin extends PluginBase.withDescriptor({
       if (!exePath)
         throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
     } else {
-      const binDir = w(`${uePath}/Engine/Binaries/Win64`);
+      const binDir =
+        e2eUeShell() === "posix"
+          ? `${uePath}/Engine/Binaries/Win64`
+          : w(`${uePath}/Engine/Binaries/Win64`);
+      const sep = hostSep();
+      const ext = hostExt();
       const candidates = suffix
         ? [
-            `${binDir}\\UE4Editor${suffix}.exe`,
-            `${binDir}\\UnrealEditor${suffix}.exe`,
-            `${binDir}\\UE4Editor.exe`,
-            `${binDir}\\UnrealEditor.exe`,
+            `${binDir}${sep}UE4Editor${suffix}${ext}`,
+            `${binDir}${sep}UnrealEditor${suffix}${ext}`,
+            `${binDir}${sep}UE4Editor${ext}`,
+            `${binDir}${sep}UnrealEditor${ext}`,
           ]
-        : [`${binDir}\\UE4Editor.exe`, `${binDir}\\UnrealEditor.exe`];
+        : [`${binDir}${sep}UE4Editor${ext}`, `${binDir}${sep}UnrealEditor${ext}`];
       exePath = ctx.dryRun ? candidates[0] : candidates.find(existsSync);
       if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
     }
@@ -344,7 +390,7 @@ class UEPlugin extends PluginBase.withDescriptor({
     const uePath = ueConfig(ctx).engine.path;
     const projFile = ueConfig(ctx).uproject;
     await run(
-      `"${w(uePath)}/Engine/Binaries/Win64/UE4Editor-Cmd.exe" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
+      `"${ueScript(uePath, "Engine/Binaries/Win64/UE4Editor-Cmd.exe")}" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
       ctx,
     );
   }
