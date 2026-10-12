@@ -5,7 +5,14 @@ import { PluginRegistry, buildRegistry } from "../plugin-registry";
 import { Runner } from "../runner";
 import { fs as fsPlugin, git as gitPlugin, json as jsonPlugin, svn as svnPlugin } from "../plugins";
 import ue from "../plugins/ue";
-import { defineHandler, definePlugin } from "../plugin";
+import {
+  PLUGIN_API_VERSION,
+  PLUGIN_BRAND,
+  brandPlugin,
+  defineHandler,
+  definePlugin,
+  isBrandedPlugin,
+} from "../plugin";
 import { z } from "zod";
 import { testCfg } from "./env";
 
@@ -264,7 +271,7 @@ test("definePlugin metadata is on the manifest and unused by this file's registr
   expect("deps" in (reg.get("meta")?.manifest ?? {})).toBe(false);
 });
 
-test("a class plugin from another PluginBase copy keeps its manifest getter", () => {
+test("a branded plugin from another copy keeps its manifest without instanceof", () => {
   const manifest = {
     namespace: "foreign",
     version: "1.2.3",
@@ -281,11 +288,68 @@ test("a class plugin from another PluginBase copy keeps its manifest getter", ()
     namespace: "foreign",
     handlers: { run: async () => {} },
   });
+  brandPlugin(plugin, PLUGIN_API_VERSION);
 
   const reg = new PluginRegistry();
   reg.register(plugin);
   expect(reg.get("foreign")).toBe(plugin);
   expect(reg.get("foreign")?.manifest).toBe(manifest);
+  expect(isBrandedPlugin(plugin)).toBe(true);
+  expect(plugin.apiVersion).toBe(PLUGIN_API_VERSION);
+});
+
+test("a manifest getter without the plugin brand is rejected", () => {
+  const proto = {};
+  Object.defineProperty(proto, "manifest", {
+    get() {
+      return { namespace: "foreign", version: "1", description: "", handlers: {} };
+    },
+  });
+  const plugin = Object.assign(Object.create(proto), {
+    namespace: "foreign",
+    handlers: { run: async () => {} },
+  });
+  const reg = new PluginRegistry();
+  expect(() => reg.register(plugin)).toThrow(/Symbol\.for\("boltstack\.plugin"\)/);
+  expect(() => reg.register(plugin)).toThrow(/apiVersion 1/);
+});
+
+test("an incompatible plugin apiVersion is rejected", () => {
+  const plugin = {
+    namespace: "foreign",
+    handlers: { run: async () => {} },
+    manifest: {
+      namespace: "foreign",
+      version: "1",
+      description: "",
+      handlers: { run: { ai: false as const } },
+    },
+  };
+  Object.defineProperty(plugin, PLUGIN_BRAND, { value: true });
+  (plugin as { apiVersion?: number }).apiVersion = 2;
+  const reg = new PluginRegistry();
+  expect(() => reg.register(plugin)).toThrow(/plugin API v2/);
+});
+
+test("definePlugin stamps the host apiVersion", () => {
+  const plugin = definePlugin({
+    namespace: "branded",
+    version: "1.0.0",
+    description: "branded",
+    handlers: { run: defineHandler({}, async () => {}) },
+  });
+  expect(isBrandedPlugin(plugin)).toBe(true);
+  expect(plugin.apiVersion).toBe(PLUGIN_API_VERSION);
+  expect((plugin as { [PLUGIN_BRAND]?: boolean })[PLUGIN_BRAND]).toBe(true);
+  expect(() =>
+    definePlugin({
+      namespace: "nope",
+      version: "1.0.0",
+      description: "nope",
+      apiVersion: 2,
+      handlers: { run: defineHandler({}, async () => {}) },
+    }),
+  ).toThrow(/apiVersion 2/);
 });
 
 test("string false and true parse as booleans", async () => {
