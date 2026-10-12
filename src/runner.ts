@@ -1,7 +1,7 @@
 import type { BoltConfig } from "./config";
 import { Logger } from "./logger";
 import { buildRegistry, type PluginRegistry } from "./plugin-registry";
-import type { BoltPluginContext } from "./plugin";
+import { normalizeTextualBooleans, type BoltPlugin, type BoltPluginContext } from "./plugin";
 import { createRuntime, type Runtime } from "./runtime";
 import type { SpawnOptions } from "./runtime/types";
 import uePlugin from "./plugins/ue";
@@ -13,6 +13,22 @@ import path from "path";
 import { existsSync } from "fs";
 import { Notifier, type BuildContext } from "./notify";
 import { formatPlanErrors, resolveRunPlan, type PlanNode, type RunPlan } from "./run-plan";
+
+function parseStepParams(
+  plugin: BoltPlugin,
+  ref: string,
+  operation: string,
+  raw: Record<string, string>,
+): Record<string, string> {
+  const schema = plugin.manifest?.handlers[operation]?.params;
+  if (!schema) return raw;
+  const result = schema.safeParse(normalizeTextualBooleans(schema, raw));
+  if (result.success) return result.data as Record<string, string>;
+  const issues = result.error.issues
+    .map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
+    .join("\n");
+  throw new Error(`Invalid params for "${ref}":\n${issues}`);
+}
 
 interface RunnerOptions {
   dryRun?: boolean;
@@ -232,13 +248,14 @@ export class Runner {
       const handler = plugin.handlers[operation];
       if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
 
+      const params = parseStepParams(plugin, node.ref, operation, node.params);
       const pluginCtx = this.pluginContext();
       const pluginInstance = plugin as any;
       if (typeof pluginInstance.onBeforeStep === "function") {
         await pluginInstance.onBeforeStep(operation, node.params, pluginCtx);
       }
       try {
-        await handler(node.params, pluginCtx);
+        await handler(params, pluginCtx);
       } finally {
         if (typeof pluginInstance.onAfterStep === "function") {
           await pluginInstance.onAfterStep(operation, node.params, pluginCtx);

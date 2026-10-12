@@ -8,8 +8,9 @@ describe("boltstack virtual module", () => {
     // Dynamic import to test virtual module resolution
     const mod = await import("boltstack");
     expect(mod.handler).toBeFunction();
-    expect(mod.param).toBeFunction();
+    expect(mod.defineHandler).toBeFunction();
     expect(mod.definePlugin).toBeFunction();
+    expect(mod.param).toBeUndefined();
     expect(mod.PluginBase).toBeDefined();
     expect(mod.PluginBase.withDescriptor).toBeFunction();
   });
