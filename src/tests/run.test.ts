@@ -38,16 +38,10 @@ describe("parseRunArgs", () => {
     expect(parsed.dryRun).toBe(true);
   });
 
-  test("expands config shorthand (dev/dbg)", () => {
-    expect(parseRunArgs(["build", "--config=dev"]).params).toEqual({ config: "development" });
-    expect(parseRunArgs(["build", "--config=dbg"]).params).toEqual({ config: "debug" });
-    expect(parseRunArgs(["build", "--config=shipping"]).params).toEqual({ config: "shipping" });
-  });
-
-  test("normalizes DebugGame CLI aliases", () => {
-    expect(parseRunArgs(["build", "--config=debuggame"]).params.config).toBe("debuggame");
-    expect(parseRunArgs(["build", "--config=dbggame"]).params.config).toBe("debuggame");
-    expect(parseRunArgs(["build", "--config=DebugGame"]).params.config).toBe("debuggame");
+  test("leaves --config as typed (aliases belong to ue/build)", () => {
+    expect(parseRunArgs(["build", "--config=dev"]).params).toEqual({ config: "dev" });
+    expect(parseRunArgs(["build", "--config=dbg"]).params).toEqual({ config: "dbg" });
+    expect(parseRunArgs(["build", "--config=DebugGame"]).params).toEqual({ config: "DebugGame" });
   });
 });
 

@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import uePlugin from "../../plugins/ue";
-import { testCfg, PROJECT_NAME, mockRuntime, tortoiseProcOnPath } from "../env";
+import { loadConfig } from "../../config";
+import { testCfg, PROJECT_NAME, mockRuntime, tortoiseProcOnPath, withUeConfig } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
-import { mkdirSync, writeFileSync, existsSync, rmSync } from "fs";
+import { mkdirSync, writeFileSync, existsSync, rmSync, mkdtempSync } from "fs";
 import os from "os";
+import path from "path";
 
 function makeCtx(dryRun = true): BoltPluginContext & { logged: string[] } {
   const logged: string[] = [];
@@ -170,13 +172,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
   mkdirSync(binariesDir, { recursive: true });
   writeFileSync(`${binariesDir}/zero.dll`, "");
   writeFileSync(`${binariesDir}/nonzero.dll`, "content");
-  const fakeCfg = {
-    ...testCfg,
-    project: {
-      ...testCfg.project,
-      uproject: `${fakeProject}/Test.uproject`,
-    },
-  };
+  const fakeCfg = withUeConfig({ uproject: `${fakeProject}/Test.uproject` });
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -193,13 +189,7 @@ test("fix-dll moves 0-byte DLL files to trash dir", async () => {
 test("fix-dll does not fail when no DLLs found", async () => {
   const fakeProject = `${os.tmpdir()}/bolt-fixdll-empty`;
   mkdirSync(fakeProject, { recursive: true });
-  const fakeCfg = {
-    ...testCfg,
-    project: {
-      ...testCfg.project,
-      uproject: `${fakeProject}/Test.uproject`,
-    },
-  };
+  const fakeCfg = withUeConfig({ uproject: `${fakeProject}/Test.uproject` });
   const ctx2: BoltPluginContext = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -211,9 +201,16 @@ test("fix-dll does not fail when no DLLs found", async () => {
   rmSync(fakeProject, { recursive: true, force: true });
 });
 
+function withTortoise(use_tortoise: boolean) {
+  return {
+    ...testCfg,
+    plugins: [...testCfg.plugins, { namespace: "svn", path: "test", config: { use_tortoise } }],
+  };
+}
+
 test("svn-cleanup with use_tortoise=false uses plain svn", async () => {
   const logged2: string[] = [];
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: false } };
+  const fakeCfg = withTortoise(false);
   const ctx2 = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -229,7 +226,7 @@ test("svn-cleanup with use_tortoise=false uses plain svn", async () => {
 
 test("svn-revert with use_tortoise=false uses plain svn", async () => {
   const logged2: string[] = [];
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: false } };
+  const fakeCfg = withTortoise(false);
   const ctx2 = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -245,7 +242,7 @@ test("svn-revert with use_tortoise=false uses plain svn", async () => {
 
 test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async () => {
   if (tortoiseProcOnPath()) return; // TortoiseProc present — skip this test
-  const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: true } };
+  const fakeCfg = withTortoise(true);
   const ctx2 = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -295,15 +292,9 @@ test("start with target throws when binary not found", async () => {
   ).rejects.toThrow("No binary found");
 });
 
-test("update-engine with engine_repo.vcs=svn calls svn update", async () => {
+test("update-engine with engine.vcs=svn calls svn update", async () => {
   const logged2: string[] = [];
-  const fakeCfg = {
-    ...testCfg,
-    project: {
-      ...testCfg.project,
-      engine_repo: { ...testCfg.project.engine_repo, vcs: "svn" as const },
-    },
-  };
+  const fakeCfg = withUeConfig({ engine: { vcs: "svn" } });
   const ctx2 = {
     cfg: fakeCfg,
     configDir: process.cwd(),
@@ -316,15 +307,50 @@ test("update-engine with engine_repo.vcs=svn calls svn update", async () => {
   expect(logged2.some((l) => l.includes("svn update"))).toBe(true);
 });
 
-test("update-project with project_repo.vcs=git calls git pull", async () => {
-  const logged2: string[] = [];
-  const fakeCfg = {
-    ...testCfg,
-    project: {
-      ...testCfg.project,
-      project_repo: { ...testCfg.project.project_repo, vcs: "git" as const },
-    },
+test("build accepts the dev config alias", async () => {
+  const ctx = makeCtx();
+  await uePlugin.handlers["build"]({ target: "editor", config: "dev" }, ctx);
+  const cmd = ctx.logged.find((line) => line.includes("Build.bat")) ?? "";
+  expect(cmd).toContain(`-Target="${PROJECT_NAME}Editor Win64 Development"`);
+});
+
+test("build reads pathless ue config from bolt.yaml", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-"));
+  writeFileSync(
+    path.join(dir, "bolt.yaml"),
+    [
+      "version: 1",
+      "project: { name: FromFile }",
+      "plugins:",
+      "  - namespace: ue",
+      "    config:",
+      `      engine: { path: ${JSON.stringify(path.join(dir, "engine"))}, vcs: git }`,
+      `      project: { path: ${JSON.stringify(path.join(dir, "project"))}, vcs: svn }`,
+      `      uproject: ${JSON.stringify(path.join(dir, "project", "FromFile.uproject"))}`,
+      "      targets:",
+      "        editor: { kind: editor, config: development }",
+    ].join("\n"),
+  );
+  const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
+  expect(cfg.plugins).toEqual([]);
+  const logged: string[] = [];
+  const ctx: BoltPluginContext & { logged: string[] } = {
+    cfg,
+    configDir: dir,
+    dryRun: true,
+    logger: new Logger({ sink: (line) => logged.push(line) }),
+    logged,
+    runtime: mockRuntime,
   };
+  await uePlugin.handlers["build"]({ target: "editor" }, ctx);
+  const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
+  expect(cmd).toContain("FromFileEditor");
+  expect(cmd).toContain(path.join(dir, "engine").replace(/\//g, "\\"));
+});
+
+test("update-project with project.vcs=git calls git pull", async () => {
+  const logged2: string[] = [];
+  const fakeCfg = withUeConfig({ project: { vcs: "git" } });
   const ctx2 = {
     cfg: fakeCfg,
     configDir: process.cwd(),

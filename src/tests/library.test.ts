@@ -9,9 +9,6 @@ describe("Library API", () => {
     const ctx = createContext({
       project: {
         name: "TestProject",
-        engine_repo: { path: "/engine", vcs: "git" },
-        project_repo: { path: "/project", vcs: "svn" },
-        uproject: "/project/Test.uproject",
       },
     });
 
@@ -54,9 +51,6 @@ describe("Library API", () => {
     const ctx = createContext({
       project: {
         name: "TestProject",
-        engine_repo: { path: "/engine", vcs: "git" },
-        project_repo: { path: "/project", vcs: "svn" },
-        uproject: "/project/Test.uproject",
       },
       dryRun: true,
     });
@@ -68,9 +62,6 @@ describe("Library API", () => {
     const ctx = createContext({
       project: {
         name: "TestProject",
-        engine_repo: { path: "/engine", vcs: "git" },
-        project_repo: { path: "/project", vcs: "svn" },
-        uproject: "/project/Test.uproject",
       },
       vars: { MY_VAR: "my_value" },
     });
