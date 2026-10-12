@@ -41,7 +41,8 @@ bolt
 ├── info                   # project + VCS summary
 ├── check                  # validate bolt.yaml (and bolt.local.yaml when present)
 ├── config                 # open bolt.yaml in $EDITOR
-├── init                   # scaffold bolt.yaml
+├── init                   # scaffold bolt.yaml, schema, and plugin types
+├── types                  # write version-matched plugin types and a tsconfig
 ├── inspect <name...>      # show resolved steps without executing
 ├── plugin
 │   ├── list               # active plugins + handlers
@@ -110,8 +111,9 @@ directly.
 
 **`bolt.d.ts` generation:** `dts-bundle-generator` compiles `src/plugin-api.ts`
 into a flat declaration file, then `scripts/wrap-dts.ts` wraps it in a
-`declare module` block. Published with the `boltstack` npm package. See
-`../ops/release.md`.
+`declare module` block and copies the same bytes to `src/plugin-types.txt`.
+The CLI text-imports that copy, so `bolt types` writes the declaration
+embedded in the running bolt. See `../ops/release.md`.
 
 **AI context:** `ai-context.ts` renders a per-project command reference from
 `bolt.yaml` (with a content hash for staleness). See `content-system.md`.

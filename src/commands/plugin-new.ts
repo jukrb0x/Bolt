@@ -127,9 +127,7 @@ export default defineCommand({
     );
     if (!args.user) {
       console.log("");
-      console.log(
-        pc.dim("Ensure bolt.d.ts is at the project root (download from the bolt release page)."),
-      );
+      console.log(pc.dim("Run `bolt types` so the editor uses this bolt's types."));
     }
   },
 });
