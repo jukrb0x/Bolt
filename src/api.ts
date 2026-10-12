@@ -1,4 +1,5 @@
 // src/api.ts
+import path from "path";
 import { loadConfig, type BoltConfig } from "./config";
 import { Runner } from "./runner";
 import { Logger } from "./logger";
@@ -32,13 +33,15 @@ export async function run(
 ): Promise<void> {
   const runtime = opts.runtime ?? createRuntime();
   let config = opts.config;
+  let configDir = opts.cwd;
   if (!config) {
     const configPath = opts.configPath ?? (await findConfig(opts.cwd ?? process.cwd()));
     if (!configPath) throw new Error("bolt.yaml not found (searched up from cwd)");
     config = await loadConfig(configPath, runtime);
+    configDir = path.dirname(path.resolve(configPath));
   }
   const logger = opts.logger ?? new Logger();
-  const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime });
+  const runner = new Runner(config, { logger, dryRun: opts.dryRun, runtime, configDir });
   await runner.runTask(taskName, opts.params ?? {});
 }
 

@@ -33,19 +33,8 @@ declare module "boltstack" {
     debug(msg: string): void;
     cmd(msg: string): void;
   }
-  export interface RepoConfig {
-    path: string;
-    vcs: "git" | "svn";
-    url?: string;
-    branch?: string;
-  }
   export interface Project {
     name: string;
-    engine_repo: RepoConfig;
-    project_repo: RepoConfig;
-    uproject: string;
-    use_tortoise?: boolean;
-    [key: string]: string | boolean | undefined | RepoConfig;
   }
   /** Subset of BoltConfig exposed to external plugin/library consumers. */
   export interface BoltPluginConfig {

@@ -39,20 +39,15 @@ bolt self-update
 安装后，在你的项目中生成配置：
 
 ```bash
-cd /path/to/your/ue/project
+cd /path/to/your/project
 bolt init
 ```
 
-`bolt init` 会写入两个文件：
-
-1. `bolt.yaml`——共享、提交到版本库的契约（项目标识、tasks、flows）。不含机器路径。
-2. `bolt.local.yaml`——本机路径（引擎/项目/uproject），已 gitignore。`bolt init` 会尝试自动探测你的 `.uproject`。
-
-编辑 `bolt.local.yaml` 里的路径，然后运行：
+`bolt init` 会写入 `bolt.yaml`：一个 `hello` task 和一个 `demo` flow。它不会写入 `bolt.local.yaml`。
 
 ```bash
-bolt run daily --dry-run     # 预览
-bolt run daily               # 执行
+bolt run demo --dry-run
+bolt run demo
 ```
 
 ## 工作原理
@@ -65,11 +60,23 @@ Bolt 只有两个构建块：
 一切都通过一个动词 `bolt run` 执行。传入任务名按你输入的顺序运行，或传入单个 flow 名运行预定义目标。你输入什么就运行什么——没有隐藏的重排序。
 
 ```yaml
-# bolt.yaml——共享契约，提交到版本库（不含机器路径）
+# bolt.yaml
+version: 1
+
 project:
   name: MyGame
-  engine: { vcs: git, branch: main }
-  project: { vcs: svn }
+
+plugins:
+  - namespace: ue
+    config:
+      engine: { path: C:/UnrealEngine, vcs: git, branch: main }
+      project: { path: C:/Projects/MyGame, vcs: svn }
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor: { kind: editor, config: development }
+  - namespace: svn
+    config:
+      use_tortoise: true
 
 tasks:
   kill: [{ uses: ue/kill }]
@@ -83,14 +90,6 @@ flows:
     description: 更新、构建并启动编辑器
     steps: [update, build, start]
     continue_on_fail: [start] # update/build 失败则中止；start 允许失败
-```
-
-```yaml
-# bolt.local.yaml——本机路径，已 gitignore
-engine_path: C:/UnrealEngine
-project_path: C:/Projects/MyGame
-uproject: C:/Projects/MyGame/MyGame.uproject
-use_tortoise: true
 ```
 
 然后在一条命令中运行任意组合：
@@ -111,8 +110,8 @@ bolt run daily                       # 运行预定义 flow
 | `bolt list`               | 列出所有 task 和 flow                   |
 | `bolt inspect <names...>` | 显示某个 task 或 flow 解析后的步骤      |
 | `bolt info`               | 显示项目和 VCS 状态                     |
-| `bolt check`              | 校验 `bolt.yaml` 和 `bolt.local.yaml`   |
-| `bolt init`               | 生成 `bolt.yaml` + `bolt.local.yaml`    |
+| `bolt check`              | 校验 `bolt.yaml`                        |
+| `bolt init`               | 生成 `bolt.yaml`                        |
 | `bolt config`             | 在 `$EDITOR` 中打开当前 `bolt.yaml`     |
 | `bolt ai`                 | 为 LLM agent 生成 `.bolt/ai-context.md` |
 | `bolt version`            | 打印版本                                |
@@ -122,29 +121,38 @@ bolt run daily                       # 运行预定义 flow
 
 ## 配置
 
-配置分成两部分：你提交的共享 `bolt.yaml`，以及你 gitignore 的本机 `bolt.local.yaml`。Bolt 在加载时将两者合并，因此插件处理器看到的是统一的 project。
+共享配置在 `bolt.yaml` 中，并以 `version: 1` 开头。`project` 只是名称。虚幻引擎、项目和 target 元数据属于 `ue` 插件。`bolt.local.yaml` 是可选的，只能覆盖 `vars`。
 
 ### bolt.yaml（共享，提交）
 
 ```yaml
+version: 1
+
 project:
   name: MyGame
-  engine: # 仅仓库标识——路径在 bolt.local.yaml 中
-    vcs: git # git | svn
-    url: "" # 可选：远程 URL
-    branch: main # 可选：用于 git 仓库
-  project:
-    vcs: svn # git | svn
-    url: "" # 可选：远程 URL
 
-targets:
-  editor:
-    kind: editor # editor | program | game | client | server
-    config: development # development | debug | debuggame | shipping | test
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: C:/UnrealEngine # 本机 UE 根目录
+        vcs: git # git | svn
+        branch: main
+      project:
+        path: C:/Projects/MyGame
+        vcs: svn # git | svn
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor # editor | program | game | client | server
+          config: development # development | debug | debuggame | shipping | test
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
+  - namespace: svn
+    config:
+      use_tortoise: true # 可选：SVN 操作使用 TortoiseSVN/Proc
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
@@ -160,16 +168,14 @@ flows:
 timeout_hours: 6 # 可选：运行超过该时长则中止
 ```
 
-### bolt.local.yaml（本机，gitignore）
+### bolt.local.yaml（可选，gitignore）
 
 ```yaml
-engine_path: C:/UnrealEngine # 本机 UE 根目录
-project_path: C:/Projects/MyGame # 本机项目工作副本
-uproject: C:/Projects/MyGame/MyGame.uproject # .uproject 文件
-use_tortoise: true # 可选：SVN 操作使用 TortoiseSVN/Proc
+vars:
+  region: eu # 覆盖 bolt.yaml 中的同名键
 ```
 
-`bolt.local.yaml` 中的相对路径以 `bolt.yaml` 所在目录为基准解析。
+插件配置中的相对路径以 `bolt.yaml` 所在目录为基准解析。
 
 ### 任务 (Tasks)
 
@@ -348,12 +354,7 @@ await run("build", {
 
 // 创建上下文用于直接调用插件
 const ctx = createContext({
-  project: {
-    name: "MyGame",
-    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
-    uproject: "C:/Projects/MyGame/MyGame.uproject",
-  },
+  project: { name: "MyGame" },
   dryRun: false,
 });
 ```
@@ -361,19 +362,14 @@ const ctx = createContext({
 ### 直接访问插件
 
 ```typescript
-import { ue, fs } from "boltstack/plugins";
+import { fs } from "boltstack/plugins";
 import { createContext } from "boltstack";
 
 const ctx = createContext({
-  project: {
-    name: "MyGame",
-    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
-    uproject: "C:/Projects/MyGame/MyGame.uproject",
-  },
+  project: { name: "MyGame" },
 });
 
-await ue.handlers.build({ target: "editor" }, ctx);
+await fs.handlers.copy({ src: "a.txt", dst: "b.txt" }, ctx);
 ```
 
 ### 核心内部
@@ -421,7 +417,7 @@ CLI 仍仅支持 Bun 以获得最佳性能，但库可在任何地方运行。
 ```bash
 bun install
 bun run dev          # 从源码运行
-bun test             # 运行测试（需要 bolt.local.yaml 配置本机路径）
+bun test             # 运行测试
 bun run build:types  # 重新生成 bolt.d.ts
 bun run release:dry  # 预览发布流程
 ```

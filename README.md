@@ -37,20 +37,15 @@ bolt self-update
 After installing, scaffold config in your project:
 
 ```bash
-cd /path/to/your/ue/project
+cd /path/to/your/project
 bolt init
 ```
 
-`bolt init` writes two files:
-
-1. `bolt.yaml` — the shared, committed contract (project identity, tasks, flows). No machine paths.
-2. `bolt.local.yaml` — per-machine paths (engine/project/uproject), gitignored. `bolt init` tries to auto-detect your `.uproject`.
-
-Edit the paths in `bolt.local.yaml`, then run:
+`bolt init` writes `bolt.yaml`: a `hello` task and a `demo` flow. It does not write `bolt.local.yaml`.
 
 ```bash
-bolt run daily --dry-run     # preview
-bolt run daily               # go
+bolt run demo --dry-run
+bolt run demo
 ```
 
 ## How It Works
@@ -63,11 +58,23 @@ Bolt has two building blocks:
 Everything runs through one verb, `bolt run`. Pass task names to run them in the order you type, or a single flow name to run a predefined goal. What you type is what runs — there is no hidden reordering.
 
 ```yaml
-# bolt.yaml — shared contract, committed (no machine paths)
+# bolt.yaml
+version: 1
+
 project:
   name: MyGame
-  engine: { vcs: git, branch: main }
-  project: { vcs: svn }
+
+plugins:
+  - namespace: ue
+    config:
+      engine: { path: C:/UnrealEngine, vcs: git, branch: main }
+      project: { path: C:/Projects/MyGame, vcs: svn }
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor: { kind: editor, config: development }
+  - namespace: svn
+    config:
+      use_tortoise: true
 
 tasks:
   kill: [{ uses: ue/kill }]
@@ -81,14 +88,6 @@ flows:
     description: Update, build, and launch the editor
     steps: [update, build, start]
     continue_on_fail: [start] # update/build failures abort; start may fail
-```
-
-```yaml
-# bolt.local.yaml — per-machine paths, gitignored
-engine_path: C:/UnrealEngine
-project_path: C:/Projects/MyGame
-uproject: C:/Projects/MyGame/MyGame.uproject
-use_tortoise: true
 ```
 
 Then run any combination in one command:
@@ -109,8 +108,8 @@ bolt run daily                       # run the predefined flow
 | `bolt list`               | List all tasks and flows                       |
 | `bolt inspect <names...>` | Show the resolved steps for a task or flow     |
 | `bolt info`               | Show project and VCS status                    |
-| `bolt check`              | Validate `bolt.yaml` and `bolt.local.yaml`     |
-| `bolt init`               | Scaffold `bolt.yaml` + `bolt.local.yaml`       |
+| `bolt check`              | Validate `bolt.yaml`                           |
+| `bolt init`               | Scaffold `bolt.yaml`                           |
 | `bolt config`             | Open the current `bolt.yaml` in `$EDITOR`      |
 | `bolt ai`                 | Generate `.bolt/ai-context.md` for LLM agents  |
 | `bolt version`            | Print version                                  |
@@ -120,29 +119,38 @@ bolt run daily                       # run the predefined flow
 
 ## Configuration
 
-Config is split in two: a shared `bolt.yaml` you commit, and a per-machine `bolt.local.yaml` you gitignore. Bolt merges them at load, so plugin handlers see one unified project.
+Shared config lives in `bolt.yaml` and starts with `version: 1`. `project` is a name. Unreal engine, project, and target metadata belong to the `ue` plugin. `bolt.local.yaml` is optional and may only override `vars`.
 
 ### bolt.yaml (shared, committed)
 
 ```yaml
+version: 1
+
 project:
   name: MyGame
-  engine: # repo identity only — path lives in bolt.local.yaml
-    vcs: git # git | svn
-    url: "" # optional: remote URL
-    branch: main # optional: for git repos
-  project:
-    vcs: svn # git | svn
-    url: "" # optional: remote URL
 
-targets:
-  editor:
-    kind: editor # editor | program | game | client | server
-    config: development # development | debug | debuggame | shipping | test
-  client:
-    kind: program
-    name: MyClient
-    config: shipping
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: C:/UnrealEngine # local UE root
+        vcs: git # git | svn
+        branch: main
+      project:
+        path: C:/Projects/MyGame
+        vcs: svn # git | svn
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor # editor | program | game | client | server
+          config: development # development | debug | debuggame | shipping | test
+        client:
+          kind: program
+          name: MyClient
+          config: shipping
+  - namespace: svn
+    config:
+      use_tortoise: true # optional: TortoiseSVN/Proc for SVN
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
@@ -158,16 +166,14 @@ flows:
 timeout_hours: 6 # optional: abort a run that exceeds this
 ```
 
-### bolt.local.yaml (per-machine, gitignored)
+### bolt.local.yaml (optional, gitignored)
 
 ```yaml
-engine_path: C:/UnrealEngine # local UE root
-project_path: C:/Projects/MyGame # local project working copy
-uproject: C:/Projects/MyGame/MyGame.uproject # .uproject file
-use_tortoise: true # optional: TortoiseSVN/Proc for SVN
+vars:
+  region: eu # overrides the same key in bolt.yaml
 ```
 
-Relative paths in `bolt.local.yaml` resolve against the directory containing `bolt.yaml`.
+Relative paths in plugin config resolve against the directory containing `bolt.yaml`.
 
 ### Tasks
 
@@ -346,12 +352,7 @@ await run("build", {
 
 // Create context for direct plugin calls
 const ctx = createContext({
-  project: {
-    name: "MyGame",
-    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
-    uproject: "C:/Projects/MyGame/MyGame.uproject",
-  },
+  project: { name: "MyGame" },
   dryRun: false,
 });
 ```
@@ -359,19 +360,14 @@ const ctx = createContext({
 ### Direct Plugin Access
 
 ```typescript
-import { ue, fs } from "boltstack/plugins";
+import { fs } from "boltstack/plugins";
 import { createContext } from "boltstack";
 
 const ctx = createContext({
-  project: {
-    name: "MyGame",
-    engine_repo: { path: "C:/UnrealEngine", vcs: "git" },
-    project_repo: { path: "C:/Projects/MyGame", vcs: "svn" },
-    uproject: "C:/Projects/MyGame/MyGame.uproject",
-  },
+  project: { name: "MyGame" },
 });
 
-await ue.handlers.build({ target: "editor" }, ctx);
+await fs.handlers.copy({ src: "a.txt", dst: "b.txt" }, ctx);
 ```
 
 ### Core Internals
@@ -419,7 +415,7 @@ Requires [Bun](https://bun.sh).
 ```bash
 bun install
 bun run dev          # run from source
-bun test             # run tests (requires bolt.local.yaml with local paths)
+bun test             # run tests
 bun run build:types  # regenerate bolt.d.ts
 bun run release:dry  # preview the release process
 ```
