@@ -5,8 +5,8 @@ import type { BoltPluginContext } from "../plugin";
 /**
  * Config declared for a plugin in bolt.yaml.
  *
- * Inline `cfg.plugins` wins when the entry was kept (it had a `path`).
- * Pathless entries are dropped by loadConfig, so fall back to the file.
+ * Inline `cfg.plugins` wins, including pathless builtin entries.
+ * Falls back to `configDir/bolt.yaml` only when the loaded config has no entry.
  */
 export function declaredPluginConfig(ctx: BoltPluginContext, namespace: string): unknown {
   const inline = ctx.cfg.plugins.find((entry) => entry.namespace === namespace)?.config;

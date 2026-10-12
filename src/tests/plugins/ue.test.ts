@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import uePlugin from "../../plugins/ue";
 import { loadConfig } from "../../config";
+import { run } from "../../api";
 import { testCfg, PROJECT_NAME, mockRuntime, tortoiseProcOnPath, withUeConfig } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
@@ -332,7 +333,17 @@ test("build reads pathless ue config from bolt.yaml", async () => {
     ].join("\n"),
   );
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
-  expect(cfg.plugins).toEqual([]);
+  expect(cfg.plugins).toEqual([
+    {
+      namespace: "ue",
+      config: {
+        engine: { path: path.join(dir, "engine"), vcs: "git" },
+        project: { path: path.join(dir, "project"), vcs: "svn" },
+        uproject: path.join(dir, "project", "FromFile.uproject"),
+        targets: { editor: { kind: "editor", config: "development" } },
+      },
+    },
+  ]);
   const logged: string[] = [];
   const ctx: BoltPluginContext & { logged: string[] } = {
     cfg,
@@ -361,4 +372,73 @@ test("update-project with project.vcs=git calls git pull", async () => {
   };
   await uePlugin.handlers["update_project"]({}, ctx2);
   expect(logged2.some((l) => l.includes("pull origin main"))).toBe(true);
+});
+
+function ueBuildYaml(engine: string, project: string, uproject: string): string {
+  return [
+    "version: 1",
+    "project: { name: FromFile }",
+    "tasks:",
+    "  build: [{ uses: ue/build, with: { target: editor } }]",
+    "plugins:",
+    "  - namespace: ue",
+    "    config:",
+    `      engine: { path: ${JSON.stringify(engine)}, vcs: git }`,
+    `      project: { path: ${JSON.stringify(project)}, vcs: svn }`,
+    `      uproject: ${JSON.stringify(uproject)}`,
+    "      targets:",
+    "        editor: { kind: editor, config: development }",
+  ].join("\n");
+}
+
+test("run() uses pathless ue config when configPath is outside cwd", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-run-"));
+  const other = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-cwd-"));
+  const engine = "./engine";
+  writeFileSync(
+    path.join(dir, "bolt.yaml"),
+    ueBuildYaml(engine, "./project", "./project/FromFile.uproject"),
+  );
+  writeFileSync(
+    path.join(other, "bolt.yaml"),
+    ueBuildYaml("/decoy/engine", "/decoy/project", "/decoy/project/Decoy.uproject"),
+  );
+  const logged: string[] = [];
+  await run("build", {
+    configPath: path.join(dir, "bolt.yaml"),
+    cwd: other,
+    dryRun: true,
+    runtime: mockRuntime,
+    logger: new Logger({ sink: (line) => logged.push(line) }),
+  });
+  const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
+  expect(cmd).toContain(path.join(dir, "engine").replace(/\//g, "\\"));
+  expect(cmd).not.toContain("decoy");
+});
+
+test("run() uses pathless ue config from opts.config", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-mem-"));
+  const other = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-mem-cwd-"));
+  const engine = path.join(dir, "engine");
+  writeFileSync(
+    path.join(dir, "bolt.yaml"),
+    ueBuildYaml(engine, path.join(dir, "project"), path.join(dir, "project", "FromFile.uproject")),
+  );
+  writeFileSync(
+    path.join(other, "bolt.yaml"),
+    ueBuildYaml("/decoy/engine", "/decoy/project", "/decoy/project/Decoy.uproject"),
+  );
+  const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
+  expect(cfg.plugins[0]?.path).toBeUndefined();
+  const logged: string[] = [];
+  await run("build", {
+    config: cfg,
+    cwd: other,
+    dryRun: true,
+    runtime: mockRuntime,
+    logger: new Logger({ sink: (line) => logged.push(line) }),
+  });
+  const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
+  expect(cmd).toContain(engine.replace(/\//g, "\\"));
+  expect(cmd).not.toContain("decoy");
 });

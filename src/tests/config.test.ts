@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import { loadConfig, checkConfig } from "../config";
-import { pluginMetadataErrors } from "../commands/check";
+import { loadConfig, checkConfig, pluginMetadataErrors } from "../config";
 import path from "path";
 import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -54,7 +53,29 @@ test("loads version, project name, tasks, and flows without a local file", async
   expect(cfg.version).toBe(1);
   expect(cfg.project.name).toBe("MyProject");
   expect(cfg.targets).toEqual({});
-  expect(cfg.plugins).toEqual([]);
+  expect(cfg.plugins).toEqual([
+    {
+      namespace: "ue",
+      config: {
+        engine: {
+          path: "./engine",
+          vcs: "git",
+          url: "https://github.com/EpicGames/UnrealEngine.git",
+          branch: "main",
+        },
+        project: {
+          path: "./project",
+          vcs: "svn",
+          url: "svn://svn.example.com/project/trunk",
+        },
+        uproject: "./project/MyProject.uproject",
+        targets: {
+          editor: { kind: "editor", config: "debug" },
+          client: { kind: "program", name: "MyClient", config: "shipping" },
+        },
+      },
+    },
+  ]);
   expect(cfg.tasks.update).toHaveLength(2);
   expect(cfg.flows.daily.steps).toEqual(["update", "build", "start"]);
 });
@@ -75,9 +96,13 @@ test("keeps plugin entries that have a path", async () => {
   ].join("\n");
   const dir = makeConfigDir(shared);
   const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
-  expect(cfg.plugins).toEqual([
-    { namespace: "extra", path: "./plugins/extra.ts", config: { host: "example" } },
-  ]);
+  expect(cfg.plugins.map((entry) => entry.namespace)).toEqual(["ue", "extra"]);
+  expect(cfg.plugins[1]).toEqual({
+    namespace: "extra",
+    path: "./plugins/extra.ts",
+    config: { host: "example" },
+  });
+  expect(cfg.plugins[0].path).toBeUndefined();
 });
 
 test("parses call steps", async () => {
@@ -247,4 +272,39 @@ test("plugin metadata errors on svn use_tortoise of the wrong type", () => {
     plugins: [{ namespace: "svn", config: { use_tortoise: "yes" } }],
   });
   expect(errors.some((e) => e.path.includes("use_tortoise"))).toBe(true);
+});
+
+test("checkConfig rejects malformed ue metadata", async () => {
+  const dir = makeConfigDir(
+    [
+      "version: 1",
+      "project: { name: MyProject }",
+      "plugins:",
+      "  - namespace: ue",
+      "    config:",
+      "      engine: { path: e }",
+      "      project: { path: p }",
+      "      uproject: p.uproject",
+      "      targets:",
+      "        editor: { kind: invalid_kind }",
+    ].join("\n"),
+  );
+  const result = await checkConfig(path.join(dir, "bolt.yaml"));
+  expect(result.ok).toBe(false);
+  expect(result.errors.some((e) => e.path.includes("kind"))).toBe(true);
+});
+
+test("checkConfig rejects malformed svn metadata", async () => {
+  const dir = makeConfigDir(
+    [
+      "version: 1",
+      "project: { name: MyProject }",
+      "plugins:",
+      "  - namespace: svn",
+      '    config: { use_tortoise: "yes" }',
+    ].join("\n"),
+  );
+  const result = await checkConfig(path.join(dir, "bolt.yaml"));
+  expect(result.ok).toBe(false);
+  expect(result.errors.some((e) => e.path.includes("use_tortoise"))).toBe(true);
 });

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { createRuntime, type Runtime } from "./runtime";
+import { svnMetadataErrors } from "./plugins/svn";
+import { tasksReferenceUe, ueMetadataErrors } from "./plugins/ue";
 
 /** bolt.yaml schema version. Unknown versions are rejected; there is no migrator. */
 export const CONFIG_VERSION = 1;
@@ -68,10 +70,10 @@ const PluginEntrySchema = z.object({
   config: z.record(z.unknown()).optional(),
 });
 
-/** Plugin entries returned by loadConfig. Pathless entries are config-only and are omitted. */
+/** Plugin entries returned by loadConfig. A missing path is config for a builtin. */
 export interface PluginEntry {
   namespace: string;
-  path: string;
+  path?: string;
   config?: Record<string, unknown>;
 }
 
@@ -201,20 +203,6 @@ function loadLocalConfig(localPath: string, rt: Runtime): LocalConfig {
   return result.data;
 }
 
-/**
- * Drop plugin entries that have no `path`. Those entries only carry metadata
- * for a builtin (see the ue plugin). PluginRegistry imports every `path`, and
- * this loader cannot teach it to skip them.
- *
- * ponytail: handlers re-read bolt.yaml to recover the dropped config. Upgrade
- * path is a registry that accepts config without importing a module.
- */
-function loadablePlugins(
-  entries: Array<{ namespace: string; path?: string; config?: Record<string, unknown> }>,
-): PluginEntry[] {
-  return entries.flatMap((entry) => (entry.path ? [{ ...entry, path: entry.path }] : []));
-}
-
 export async function loadConfig(filepath: string, runtime?: Runtime): Promise<BoltConfig> {
   const rt = runtime ?? createRuntime();
   const raw = readFileSync(filepath, "utf8");
@@ -237,7 +225,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     targets: {},
     tasks: shared.tasks,
     flows: shared.flows,
-    plugins: loadablePlugins(shared.plugins),
+    plugins: shared.plugins,
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
   };
@@ -246,6 +234,29 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
 export interface ConfigCheckResult {
   ok: boolean;
   errors: Array<{ path: string; message: string }>;
+}
+
+/** Plugin metadata failures. Core schema errors stay in BoltConfigSchema. */
+export function pluginMetadataErrors(parsed: unknown): Array<{ path: string; message: string }> {
+  if (!parsed || typeof parsed !== "object") return [];
+  const record = parsed as { plugins?: unknown; tasks?: unknown };
+  const errors = [...ueMetadataErrors(record.plugins), ...svnMetadataErrors(record.plugins)];
+  const hasUe = Array.isArray(record.plugins)
+    ? record.plugins.some(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          (item as { namespace?: unknown }).namespace === "ue",
+      )
+    : false;
+  if (tasksReferenceUe(record.tasks) && !hasUe) {
+    errors.push({
+      path: "plugins.ue",
+      message:
+        "ue metadata is required when a task uses a ue/ handler (plugins: namespace ue, with engine, project, uproject, targets)",
+    });
+  }
+  return errors;
 }
 
 export async function checkConfig(filepath: string, runtime?: Runtime): Promise<ConfigCheckResult> {
@@ -274,6 +285,7 @@ export async function checkConfig(filepath: string, runtime?: Runtime): Promise<
       })),
     );
   }
+  errors.push(...pluginMetadataErrors(parsed));
 
   // Optional per-machine file. Missing is fine; invalid content is an error.
   const configDir = path.dirname(path.resolve(filepath));

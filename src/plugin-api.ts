@@ -12,26 +12,14 @@ export type { SpawnResult, SpawnOptions, Runtime } from "./runtime/types";
 export type { BoltLogger } from "./plugin";
 
 // --- Narrowed public-API types ---
-// Project/RepoConfig are defined locally to avoid pulling in Zod schemas
-// from config.ts. Keep in sync with the canonical definitions there.
+// Project is defined locally to avoid pulling Zod schemas from config.ts.
+// Keep in sync with the canonical definition there.
 
 import type { Runtime } from "./runtime/types";
 import type { BoltLogger } from "./plugin";
 
-export interface RepoConfig {
-  path: string;
-  vcs: "git" | "svn";
-  url?: string;
-  branch?: string;
-}
-
 export interface Project {
   name: string;
-  engine_repo: RepoConfig;
-  project_repo: RepoConfig;
-  uproject: string;
-  use_tortoise?: boolean;
-  [key: string]: string | boolean | undefined | RepoConfig;
 }
 
 /** Subset of BoltConfig exposed to external plugin/library consumers. */

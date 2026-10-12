@@ -4,7 +4,7 @@ import type { Runtime } from "../runtime/types";
 import type { UeConfig } from "../plugins/ue";
 
 /**
- * PluginRegistry imports every plugins[].path. Point the fixture at a real
+ * Runner imports plugins[].path when it is set. Point the fixture at a real
  * module whose export namespace is not "ue", so the builtin ue plugin stays.
  */
 const registrySafePath = path.join(import.meta.dir, "../plugins/json.ts");
