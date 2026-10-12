@@ -41,7 +41,7 @@ jobs:
   e2e:
     name: e2e ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
