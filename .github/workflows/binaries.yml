@@ -1,0 +1,96 @@
+name: Binaries
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version stamped into the binaries before compile. Empty keeps src/version.ts."
+        type: string
+        required: false
+        default: ""
+
+# Build and smoke only. The caller keeps contents: write on the publish job.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      smoke: ${{ steps.smoke-matrix.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.3"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Stamp version
+        if: inputs.version != ''
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${VERSION#v}"
+          if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "refusing to stamp version: $VERSION"
+            exit 1
+          fi
+          printf '%s\n' \
+            '// Stamped by the release workflow. Not committed.' \
+            '// bolt version and bolt --version both print VERSION.' \
+            "export const VERSION = \"${VERSION}\";" \
+            > src/version.ts
+
+      - name: Build release binaries
+        run: bun run build:binaries
+
+      - name: Verify checksums
+        run: cd build && sha256sum -c SHA256SUMS
+
+      - id: smoke-matrix
+        run: |
+          include=$(bun -e 'import { RELEASE_BINARIES } from "./scripts/release-targets.ts"; process.stdout.write(JSON.stringify(RELEASE_BINARIES.map((binary) => ({ os: binary.runner, bin: binary.filename }))))')
+          echo "include=${include}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bolt-binaries
+          path: build/
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    name: smoke ${{ matrix.bin }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.build.outputs.smoke) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: bolt-binaries
+          path: build
+
+      - name: Smoke
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${VERSION#v}"
+          bash scripts/smoke-binary.sh "build/${{ matrix.bin }}" "$VERSION"

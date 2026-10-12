@@ -6,7 +6,7 @@ import { Logger } from "../logger";
 import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
-import pkg from "../../package.json";
+import { VERSION } from "../version";
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -121,7 +121,7 @@ export default defineCommand({
     const logger = new Logger({ logFile });
 
     const isFlow = names.length === 1 && !!cfg.flows[names[0]];
-    logger.info(`bolt ${pkg.version}`);
+    logger.info(`bolt ${VERSION}`);
     logger.info(`Config: ${configPath}`);
     logger.info(`${isFlow ? "Flow" : "Tasks"}: ${names.join(" ")}${dryRun ? " (dry-run)" : ""}`);
 
