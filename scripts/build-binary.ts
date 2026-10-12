@@ -94,7 +94,21 @@ function writeChecksums(files: string[]): void {
   console.log(`Wrote ${checksumPath}`);
 }
 
+function assertEmbeddedDeclaration(): void {
+  const embedded = join(ROOT, "src/plugin-types.txt");
+  const generated = join(ROOT, "bolt.d.ts");
+  if (!existsSync(embedded) || !existsSync(generated)) {
+    console.error("src/plugin-types.txt is missing. Run bun run build:types before compiling.");
+    process.exit(1);
+  }
+  if (readFileSync(embedded, "utf8") !== readFileSync(generated, "utf8")) {
+    console.error("src/plugin-types.txt does not match bolt.d.ts. Run bun run build:types.");
+    process.exit(1);
+  }
+}
+
 const args = process.argv.slice(2);
+assertEmbeddedDeclaration();
 if (args[0] === "--all") {
   const declaration = join(ROOT, "build", "bolt.d.ts");
   if (!existsSync(declaration)) {

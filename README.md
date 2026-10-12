@@ -43,7 +43,7 @@ cd /path/to/your/project
 bolt init
 ```
 
-`bolt init` writes `bolt.yaml`: a `hello` task and a `demo` flow. It does not write `bolt.local.yaml`.
+`bolt init` writes `bolt.yaml`: a `hello` task and a `demo` flow. It does not write `bolt.local.yaml`. It also writes a JSON Schema for the editor, version-matched plugin types, and a `tsconfig.json`.
 
 ```bash
 bolt run demo --dry-run
@@ -104,20 +104,21 @@ bolt run daily                       # run the predefined flow
 
 ## Commands
 
-| Command                   | Description                                    |
-| ------------------------- | ---------------------------------------------- |
-| `bolt run <names...>`     | Run tasks in the typed order, or a single flow |
-| `bolt list`               | List all tasks and flows                       |
-| `bolt inspect <names...>` | Show the resolved steps for a task or flow     |
-| `bolt info`               | Show project and VCS status                    |
-| `bolt check`              | Validate `bolt.yaml`                           |
-| `bolt init`               | Scaffold `bolt.yaml`                           |
-| `bolt config`             | Open the current `bolt.yaml` in `$EDITOR`      |
-| `bolt ai`                 | Generate `.bolt/ai-context.md` for LLM agents  |
-| `bolt version`            | Print version                                  |
-| `bolt self-update`        | Update to the latest release                   |
-| `bolt plugin list`        | List active plugins and their handlers         |
-| `bolt plugin new <name>`  | Scaffold a new plugin                          |
+| Command                   | Description                                     |
+| ------------------------- | ----------------------------------------------- |
+| `bolt run <names...>`     | Run tasks in the typed order, or a single flow  |
+| `bolt list`               | List all tasks and flows                        |
+| `bolt inspect <names...>` | Show the resolved steps for a task or flow      |
+| `bolt info`               | Show project and VCS status                     |
+| `bolt check`              | Validate `bolt.yaml`                            |
+| `bolt init`               | Scaffold `bolt.yaml`, schema, and plugin types  |
+| `bolt types`              | Write plugin types and a tsconfig for this bolt |
+| `bolt config`             | Open the current `bolt.yaml` in `$EDITOR`       |
+| `bolt ai`                 | Generate `.bolt/ai-context.md` for LLM agents   |
+| `bolt version`            | Print version                                   |
+| `bolt self-update`        | Update to the latest release                    |
+| `bolt plugin list`        | List active plugins and their handlers          |
+| `bolt plugin new <name>`  | Scaffold a new plugin                           |
 
 ## Configuration
 
@@ -279,11 +280,11 @@ bolt plugin new myplugin --user    # user-scope (~/.bolt/plugins/)
 
 ```
 cd .bolt/plugins/myplugin
-bun install    # sets up IDE type support
+bolt types
 ```
 
 ```typescript
-import type { BoltPlugin } from "bolt";
+import type { BoltPlugin } from "boltstack";
 
 const plugin: BoltPlugin = {
   namespace: "myplugin",
@@ -320,13 +321,11 @@ Higher-priority plugins override lower ones for the same namespace, so you can o
 
 ### Type definitions
 
-Plugin types are available via the `boltstack` npm package:
+`bolt types` writes `.bolt/types/boltstack.d.ts` from the bolt that is running, and a `tsconfig.json` that maps `boltstack` to that file. The types match that binary. Do not download a separate `bolt.d.ts`.
 
+```bash
+bolt types
 ```
-bun add -d boltstack
-```
-
-`import type { BoltPlugin, BoltPluginContext } from "bolt"` resolves correctly after install. The scaffold sets this up automatically.
 
 ## Library Usage
 

@@ -10,6 +10,7 @@ import pluginCmd from "./commands/plugin";
 import configCmd from "./commands/config";
 import inspectCmd from "./commands/inspect";
 import initCmd from "./commands/init";
+import typesCmd from "./commands/types";
 import aiCmd from "./commands/ai";
 import { VERSION } from "./version";
 
@@ -28,6 +29,7 @@ const main = defineCommand({
     check: checkCmd,
     config: configCmd,
     init: initCmd,
+    types: typesCmd,
     plugin: pluginCmd,
     inspect: inspectCmd,
     "self-update": updateCmd,
