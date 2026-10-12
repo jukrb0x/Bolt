@@ -16,6 +16,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          # The expected version is the latest public tag with the leading v removed.
           $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest"
           $tag = [string]$release.tag_name
           Write-Host "Release URL: $($release.html_url)"
