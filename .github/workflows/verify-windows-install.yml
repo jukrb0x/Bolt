@@ -1,0 +1,36 @@
+name: Verify Windows release install
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: windows-latest install from GitHub Release
+    runs-on: windows-latest
+    steps:
+      - name: Install from the public release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest"
+          # install.ps1 runs in this scope and assigns $Expected, so keep the tag in the environment.
+          $env:BOLT_RELEASE_TAG = [string]$release.tag_name
+          Write-Host "Release URL: $($release.html_url)"
+          if (-not $env:BOLT_RELEASE_TAG.StartsWith("v") -or $env:BOLT_RELEASE_TAG.Length -lt 2) {
+            throw "latest release tag '$($env:BOLT_RELEASE_TAG)' has no version after v"
+          }
+          irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
+          # install.ps1 updates the user Path and says to open a new terminal.
+          $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+          Write-Host "bolt: $((Get-Command bolt).Source)"
+          $got = (bolt --version | Out-String).Trim()
+          $want = $env:BOLT_RELEASE_TAG.Substring(1)
+          Write-Host "bolt --version: $got"
+          if ($got -cne $want) {
+            throw "bolt --version '$got' did not match '$want' from tag $($env:BOLT_RELEASE_TAG)"
+          }
+          Write-Host "bolt --version matched tag $($env:BOLT_RELEASE_TAG)"
