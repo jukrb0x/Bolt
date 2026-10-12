@@ -9,4 +9,5 @@ ubt="$here/../../Binaries/DotNET/UnrealBuildTool.sh"
 if [ -x "$ubt" ]; then
   exec "$ubt" "$@"
 fi
-exit 0
+echo "UnrealBuildTool.sh is not executable: $ubt" >&2
+exit 1

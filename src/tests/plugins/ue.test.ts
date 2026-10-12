@@ -106,7 +106,8 @@ test("ue/build alias client resolves to MyClient and Shipping", async () => {
   try {
     await uePlugin.handlers["build"]({ target: "client" }, ctx);
     const argv = shellArgv(captured[0] ?? "");
-    expect(argv[0]).toBe(`${engine.replace(/\//g, "\\")}/Engine/Build/BatchFiles/Build.bat`);
+    const root = /^[A-Za-z]:[\\/]/.test(engine) ? engine.replace(/\//g, "\\") : engine;
+    expect(argv[0]).toBe(`${root}/Engine/Build/BatchFiles/Build.bat`);
     expect(argv[1]).toBe("MyClient");
     expect(argv[2]).toBe("Win64");
     expect(argv[3]).toBe("Shipping");
@@ -402,7 +403,7 @@ test("build reads pathless ue config from bolt.yaml", async () => {
   await uePlugin.handlers["build"]({ target: "editor" }, ctx);
   const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
   expect(cmd).toContain("FromFileEditor");
-  expect(cmd).toContain(path.join(dir, "engine").replace(/\//g, "\\"));
+  expect(cmd.replace(/\\/g, "/")).toContain(path.join(dir, "engine").replace(/\\/g, "/"));
 });
 
 test("update-project with project.vcs=git calls git pull", async () => {
@@ -458,7 +459,7 @@ test("run() uses pathless ue config when configPath is outside cwd", async () =>
     logger: new Logger({ sink: (line) => logged.push(line) }),
   });
   const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
-  expect(cmd).toContain(path.join(dir, "engine").replace(/\//g, "\\"));
+  expect(cmd.replace(/\\/g, "/")).toContain(path.join(dir, "engine").replace(/\\/g, "/"));
   expect(cmd).not.toContain("decoy");
 });
 
@@ -485,7 +486,7 @@ test("run() uses pathless ue config from opts.config", async () => {
     logger: new Logger({ sink: (line) => logged.push(line) }),
   });
   const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
-  expect(cmd).toContain(engine.replace(/\//g, "\\"));
+  expect(cmd.replace(/\\/g, "/")).toContain(engine.replace(/\\/g, "/"));
   expect(cmd).not.toContain("decoy");
 });
 
@@ -510,11 +511,95 @@ test("run({ config }) resolves ./engine against the bolt.yaml directory", async 
     logger: new Logger({ sink: (line) => logged.push(line) }),
   });
   const cmd = logged.find((line) => line.includes("Build.bat")) ?? "";
-  const engine = path.resolve(dir, "engine").replace(/\//g, "\\");
+  const engine = path.resolve(dir, "engine");
   const uproject = path.resolve(dir, "Game.uproject");
-  const otherEngine = path.resolve(other, "engine").replace(/\//g, "\\");
-  expect(cmd).toContain(engine);
-  expect(cmd).toContain(uproject);
-  expect(cmd).not.toContain(otherEngine);
+  const otherEngine = path.resolve(other, "engine");
+  const flat = cmd.replace(/\\/g, "/");
+  expect(flat).toContain(engine.replace(/\\/g, "/"));
+  expect(flat).toContain(uproject.replace(/\\/g, "/"));
+  expect(flat).not.toContain(otherEngine.replace(/\\/g, "/"));
   expect(cmd).not.toContain("Decoy.uproject");
+});
+
+test("BOLT_E2E_BIN does not change which engine file is executed", async () => {
+  const prev = process.env.BOLT_E2E_BIN;
+  const root = mkdtempSync(path.join(os.tmpdir(), "bolt-e2e-bin-"));
+  const bin = path.join(root, "bin");
+  const engine = path.join(root, "engine");
+  mkdirSync(path.join(engine, "Engine", "Binaries", "Win64"), { recursive: true });
+  writeFileSync(path.join(engine, "Engine", "Binaries", "Win64", "UE4Editor.exe"), "");
+  const spawned: string[][] = [];
+  const shelled: string[] = [];
+  const runtime = {
+    ...mockRuntime,
+    spawn: async (cmd: string[]) => {
+      spawned.push(cmd);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+    spawnSync: (cmd: string[]) => {
+      spawned.push(cmd);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+    shell: async (command: string) => {
+      shelled.push(command);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+  const ctx = {
+    cfg: withUeConfig({ engine: { path: "D:/UE" } }),
+    configDir: root,
+    dryRun: false,
+    logger: new Logger({ sink: () => {} }),
+    runtime,
+  };
+  try {
+    process.env.BOLT_E2E_BIN = bin;
+    await uePlugin.handlers["build"]({ target: "editor" }, ctx);
+    const buildWithBin = shelled.at(-1) ?? "";
+    delete process.env.BOLT_E2E_BIN;
+    await uePlugin.handlers["build"]({ target: "editor" }, ctx);
+    expect(shelled.at(-1)).toBe(buildWithBin);
+    expect(buildWithBin).toContain("Engine/Build/BatchFiles/Build.bat");
+    expect(buildWithBin).not.toContain("Build.sh");
+    if (process.platform === "win32") {
+      expect(buildWithBin).toContain("D:\\UE/Engine/Build/BatchFiles/Build.bat");
+    }
+
+    process.env.BOLT_E2E_BIN = bin;
+    await uePlugin.handlers["fillddc"]({}, ctx);
+    const fillWithBin = shelled.at(-1) ?? "";
+    delete process.env.BOLT_E2E_BIN;
+    await uePlugin.handlers["fillddc"]({}, ctx);
+    expect(shelled.at(-1)).toBe(fillWithBin);
+    expect(fillWithBin).toContain("UE4Editor-Cmd.exe");
+    expect(fillWithBin).not.toContain("UE4Editor-Cmd.sh");
+    expect(fillWithBin).not.toContain("UE4Editor-Cmd.cmd");
+    process.env.BOLT_E2E_BIN = bin;
+
+    await uePlugin.handlers["start"](
+      {},
+      { ...ctx, cfg: withUeConfig({ engine: { path: engine } }) },
+    );
+    const shim = process.platform === "win32" ? "cmd.cmd" : "cmd";
+    expect(spawned.at(-1)?.[0]).toBe(path.join(bin, shim));
+    expect(spawned.at(-1)?.slice(1, 3)).toEqual(["/c", "start"]);
+    expect(spawned.at(-1)?.some((arg) => arg.endsWith("UE4Editor.exe"))).toBe(true);
+
+    await uePlugin.handlers["kill"]({}, ctx);
+    const killer = process.platform === "win32" ? "taskkill.cmd" : "taskkill";
+    expect(spawned.at(-1)?.[0]).toBe(path.join(bin, killer));
+
+    delete process.env.BOLT_E2E_BIN;
+    await uePlugin.handlers["start"](
+      {},
+      { ...ctx, cfg: withUeConfig({ engine: { path: engine } }) },
+    );
+    expect(spawned.at(-1)?.[0]).toBe("cmd");
+    await uePlugin.handlers["kill"]({}, ctx);
+    expect(spawned.at(-1)?.[0]).toBe("taskkill");
+  } finally {
+    if (prev === undefined) delete process.env.BOLT_E2E_BIN;
+    else process.env.BOLT_E2E_BIN = prev;
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -13,10 +13,10 @@ import os from "os";
 import path from "path";
 
 export const repoRoot = path.resolve(import.meta.dir, "..");
-export const ueShell = process.platform === "win32" ? "cmd" : "posix";
 
 const entry = path.join(repoRoot, "src/main.ts");
 const record = path.join(repoRoot, "e2e/fakes/record.ts");
+const recordExe = path.join(repoRoot, "e2e/fakes/win/record.exe");
 const engineTemplate = path.join(repoRoot, "e2e/fakes/engine");
 const fakeBin = path.join(
   repoRoot,
@@ -80,10 +80,6 @@ export function callsMatching(log: string, fragment: string): FakeCall[] {
   return readCalls(log).filter((call) => slash(call.tool).includes(fragment));
 }
 
-export function joined(call: FakeCall): string {
-  return [slash(call.tool), ...call.argv].join(" ");
-}
-
 function chmodTree(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -92,9 +88,45 @@ function chmodTree(dir: string): void {
   }
 }
 
+/** Shell bodies installed under the filename the handler already executes. */
+const POSIX_AS_WINDOWS: Array<[string, string]> = [
+  ["Setup.sh", "Setup.bat"],
+  ["GenerateProjectFiles.sh", "GenerateProjectFiles.bat"],
+  ["Engine/Build/BatchFiles/Build.sh", "Engine/Build/BatchFiles/Build.bat"],
+  [
+    "Engine/Build/BatchFiles/GenerateProjectFiles.sh",
+    "Engine/Build/BatchFiles/GenerateProjectFiles.bat",
+  ],
+  ["Engine/Build/BatchFiles/RunUAT.sh", "Engine/Build/BatchFiles/RunUAT.bat"],
+  ["Engine/Binaries/Win64/UE4Editor.sh", "Engine/Binaries/Win64/UE4Editor.exe"],
+  ["Engine/Binaries/Win64/UE4Editor-Cmd.sh", "Engine/Binaries/Win64/UE4Editor-Cmd.exe"],
+  ["Engine/Binaries/Win64/UnrealEditor.sh", "Engine/Binaries/Win64/UnrealEditor.exe"],
+  ["Engine/Binaries/Win64/UnrealEditor-Cmd.sh", "Engine/Binaries/Win64/UnrealEditor-Cmd.exe"],
+];
+
+const WINDOWS_EXES = [
+  "Engine/Binaries/Win64/UE4Editor.exe",
+  "Engine/Binaries/Win64/UE4Editor-Cmd.exe",
+  "Engine/Binaries/Win64/UnrealEditor.exe",
+  "Engine/Binaries/Win64/UnrealEditor-Cmd.exe",
+];
+
 export function installEngine(dest: string): void {
   mkdirSync(dest, { recursive: true });
   cpSync(engineTemplate, dest, { recursive: true });
+  if (process.platform === "win32") {
+    for (const rel of WINDOWS_EXES) {
+      const file = path.join(dest, rel);
+      mkdirSync(path.dirname(file), { recursive: true });
+      cpSync(recordExe, file);
+    }
+    return;
+  }
+  for (const [srcRel, destRel] of POSIX_AS_WINDOWS) {
+    const file = path.join(dest, destRel);
+    mkdirSync(path.dirname(file), { recursive: true });
+    cpSync(path.join(engineTemplate, srcRel), file);
+  }
   chmodTree(dest);
 }
 
@@ -273,11 +305,14 @@ export function makeProject(opts?: {
 }
 
 export function placeTargetBinary(project: Project, name: string): string {
-  const ext = ueShell === "posix" ? ".sh" : ".cmd";
-  const file = path.join(project.dir, "Binaries", "Win64", `${name}${ext}`);
+  const file = path.join(project.dir, "Binaries", "Win64", `${name}.exe`);
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, ueShell === "posix" ? "#!/bin/sh\nexit 0\n" : "@echo off\r\n");
-  if (ueShell === "posix") chmodSync(file, 0o755);
+  if (process.platform === "win32") {
+    cpSync(recordExe, file);
+  } else {
+    writeFileSync(file, '#!/bin/sh\nexec bun "$BOLT_FAKE_RECORD" "$0" "$@"\n');
+    chmodSync(file, 0o755);
+  }
   return file;
 }
 
@@ -293,7 +328,7 @@ function childEnv(log: string, extra: Record<string, string>): Record<string, st
     ...gitEnv,
     PATH: next,
     Path: next,
-    BOLT_E2E_UE_SHELL: ueShell,
+    BOLT_E2E_BIN: fakeBin,
     BOLT_FAKE_RECORD: record,
     BOLT_FAKE_LOG: log,
     ...extra,
@@ -325,5 +360,18 @@ export async function bolt(
 }
 
 export function dispose(dir: string): void {
-  rmSync(dir, { recursive: true, force: true });
+  // A child can still have the temp directory as its cwd (Windows EBUSY).
+  // Retry, then return. The lock must not fail the test file from `finally`.
+  const attempts = process.platform === "win32" ? 8 : 2;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw err;
+      if (i === attempts - 1) return;
+      Bun.sleepSync(40 * (i + 1));
+    }
+  }
 }

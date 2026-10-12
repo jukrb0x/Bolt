@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import os from "os";
 import path from "path";
 import {
   bolt,
@@ -8,7 +9,6 @@ import {
   findCall,
   git,
   installEngine,
-  joined,
   makeProject,
   placeTargetBinary,
   readCalls,
@@ -16,10 +16,9 @@ import {
   writeBolt,
 } from "./harness";
 
-function tool(log: string, fragment: string) {
+function tool(log: string, fragment: string, cwd: string) {
   const call = findCall(log, fragment);
-  expect(slash(call.cwd)).toBe(slash(readCalls(log)[0]?.cwd ?? call.cwd));
-  expect(call.env.BOLT_E2E_UE_SHELL === "posix" || call.env.BOLT_E2E_UE_SHELL === "cmd").toBe(true);
+  expect(slash(call.cwd)).toBe(slash(cwd));
   return call;
 }
 
@@ -28,29 +27,30 @@ test("ue/build editor and client pass target, config, and project to Build and U
   try {
     const editor = await bolt(project.dir, ["run", "build-editor", "--config=debug"]);
     expect(editor.exitCode).toBe(0);
-    const build = tool(editor.log, "Engine/Build/BatchFiles/Build.");
-    const text = joined(build);
-    expect(text).toContain("SampleEditor");
-    expect(text).toContain("Win64 Debug");
-    expect(text).toContain("ShaderCompileWorker Win64 Development");
-    expect(text).toContain("Sample.uproject");
-    expect(text).toContain("-WaitMutex");
-    expect(slash(build.cwd)).toBe(slash(project.dir));
+    const build = tool(editor.log, "Engine/Build/BatchFiles/Build.", project.dir);
+    expect(build.argv).toContain("-Target=SampleEditor Win64 Debug");
+    expect(build.argv).toContain("-Target=ShaderCompileWorker Win64 Development -Quiet");
+    expect(build.argv.some((arg) => arg.includes("Sample.uproject"))).toBe(true);
+    expect(build.argv).toContain("-WaitMutex");
     expect(slash(build.tool)).toContain(
-      slash(path.join(project.engine, "Engine/Build/BatchFiles")),
+      slash(path.join(project.engine, "Engine/Build/BatchFiles/Build.bat")),
     );
-    const ubt = findCall(editor.log, "UnrealBuildTool");
-    expect(joined(ubt)).toContain("SampleEditor");
+    const ubt = tool(editor.log, "UnrealBuildTool", project.dir);
+    expect(ubt.argv).toContain("-Target=SampleEditor Win64 Debug");
     expect(ubt.exit).toBe(0);
     expect(editor.output).toContain("Result: Succeeded");
 
     const client = await bolt(project.dir, ["run", "build-client"]);
     expect(client.exitCode).toBe(0);
-    const clientText = joined(findCall(client.log, "Engine/Build/BatchFiles/Build."));
-    expect(clientText).toContain("SampleClient");
-    expect(clientText).toContain("Shipping");
-    expect(clientText).toContain("Sample.uproject");
-    expect(clientText).not.toContain("ShaderCompileWorker");
+    const clientBuild = tool(client.log, "Engine/Build/BatchFiles/Build.", project.dir);
+    expect(clientBuild.argv).toContain("SampleClient");
+    expect(clientBuild.argv).toContain("Win64");
+    expect(clientBuild.argv).toContain("Shipping");
+    expect(
+      clientBuild.argv.some((arg) => arg.includes("SampleClient") && arg.includes("Win64")),
+    ).toBe(false);
+    expect(clientBuild.argv.some((arg) => arg.includes("Sample.uproject"))).toBe(true);
+    expect(clientBuild.argv).not.toContain("-Target=ShaderCompileWorker Win64 Development -Quiet");
   } finally {
     dispose(project.dir);
   }
@@ -61,12 +61,16 @@ test("ue/build_program and a failing Build.bat exit", async () => {
   try {
     const program = await bolt(project.dir, ["run", "build-program"]);
     expect(program.exitCode).toBe(0);
-    const text = joined(findCall(program.log, "Engine/Build/BatchFiles/Build."));
-    expect(text).toContain("CustomProgram");
-    expect(text).toContain("Win64");
-    expect(text).toContain("Development");
-    expect(text).toContain("-project=");
-    expect(text).toContain("-FromMsBuild");
+    const programBuild = tool(program.log, "Engine/Build/BatchFiles/Build.", project.dir);
+    expect(programBuild.argv).toContain("CustomProgram");
+    expect(programBuild.argv).toContain("Win64");
+    expect(programBuild.argv).toContain("Development");
+    expect(
+      programBuild.argv.some(
+        (arg) => arg.startsWith("-project=") && arg.includes("Sample.uproject"),
+      ),
+    ).toBe(true);
+    expect(programBuild.argv).toContain("-FromMsBuild");
 
     const failed = await bolt(project.dir, ["run", "build-editor"], { BOLT_FAKE_FAIL: "Build" });
     expect(failed.exitCode).not.toBe(0);
@@ -83,19 +87,17 @@ test("engine build runs Setup, GenerateProjectFiles, and Build", async () => {
   try {
     const result = await bolt(project.dir, ["run", "build-engine"]);
     expect(result.exitCode).toBe(0);
-    const setup = findCall(result.log, "/Setup.");
-    expect(joined(setup)).toContain("--force");
-    expect(slash(setup.tool)).toContain(slash(project.engine));
+    const setup = tool(result.log, "/Setup.", project.dir);
+    expect(setup.argv).toContain("--force");
+    expect(slash(setup.tool)).toContain(slash(path.join(project.engine, "Setup.bat")));
     const generated = callsMatching(result.log, "GenerateProjectFiles").filter(
       (call) => !slash(call.tool).includes("BatchFiles"),
     );
     expect(generated).toHaveLength(1);
-    const build = joined(findCall(result.log, "Engine/Build/BatchFiles/Build."));
-    expect(build).toContain("UE4Editor");
-    expect(build).toContain("Win64");
-    expect(build).toContain("Development");
-    expect(build).toContain("ShaderCompileWorker");
-    expect(findCall(result.log, "UnrealBuildTool").exit).toBe(0);
+    const build = tool(result.log, "Engine/Build/BatchFiles/Build.", project.dir);
+    expect(build.argv).toContain("-Target=UE4Editor Win64 Development");
+    expect(build.argv).toContain("-Target=ShaderCompileWorker Win64 Development -Quiet");
+    expect(tool(result.log, "UnrealBuildTool", project.dir).exit).toBe(0);
   } finally {
     dispose(project.dir);
   }
@@ -106,38 +108,48 @@ test("generate_project, fillddc, start, and kill hit the fake tools", async () =
   try {
     const generated = await bolt(project.dir, ["run", "gen"]);
     expect(generated.exitCode).toBe(0);
-    const gen = findCall(generated.log, "BatchFiles/GenerateProjectFiles.");
-    expect(joined(gen)).toContain("Sample.uproject");
-    expect(joined(gen)).toContain("-Game");
+    const gen = tool(generated.log, "BatchFiles/GenerateProjectFiles.", project.dir);
+    expect(gen.argv.some((arg) => arg.includes("Sample.uproject"))).toBe(true);
+    expect(gen.argv).toContain("-Game");
 
     const filled = await bolt(project.dir, ["run", "fill"]);
     expect(filled.exitCode).toBe(0);
-    const editor = findCall(filled.log, "UE4Editor-Cmd.");
-    const editorText = joined(editor);
-    expect(editorText).toContain("Sample.uproject");
-    expect(editorText).toContain("FillDDCForPIETest");
-    expect(editorText).toContain("-unattended");
-    expect(editorText).toContain("-nullrhi");
+    const editor = tool(filled.log, "UE4Editor-Cmd.exe", project.dir);
+    expect(editor.argv.some((arg) => arg.includes("Sample.uproject"))).toBe(true);
+    expect(editor.argv.some((arg) => arg.includes("FillDDCForPIETest"))).toBe(true);
+    expect(editor.argv).toContain("-unattended");
+    expect(editor.argv).toContain("-nullrhi");
+    expect(editor.exit).toBe(0);
     expect(filled.output).toContain("Automation Test Queue Empty");
     expect(callsMatching(filled.log, "UnrealEditor-Cmd.")).toHaveLength(0);
 
     const started = await bolt(project.dir, ["run", "start"]);
     expect(started.exitCode).toBe(0);
-    const cmd = findCall(started.log, "/cmd");
-    expect(joined(cmd)).toContain("start");
-    expect(joined(cmd)).toContain("Sample.uproject");
-    expect(slash(joined(cmd))).toContain("UE4Editor.");
+    const cmd = tool(started.log, "/cmd", project.dir);
+    expect(cmd.exit).toBe(0);
+    expect(cmd.argv[0]).toBe("/c");
+    expect(cmd.argv[1]).toBe("start");
+    expect(cmd.argv.some((arg) => slash(arg).endsWith("UE4Editor.exe"))).toBe(true);
+    expect(cmd.argv.some((arg) => arg.includes("Sample.uproject"))).toBe(true);
 
     const binary = placeTargetBinary(project, "SampleEditor");
     const named = await bolt(project.dir, ["run", "start-named"]);
     expect(named.exitCode).toBe(0);
-    expect(slash(joined(findCall(named.log, "/cmd")))).toContain(slash(binary));
+    const namedCmd = tool(named.log, "/cmd", project.dir);
+    expect(namedCmd.exit).toBe(0);
+    expect(namedCmd.argv.some((arg) => slash(arg) === slash(binary))).toBe(true);
 
     const killed = await bolt(project.dir, ["run", "kill"]);
     expect(killed.exitCode).toBe(0);
     const kills = callsMatching(killed.log, "taskkill");
-    expect(kills.length).toBe(6);
-    expect(kills.map((call) => call.argv.join(" ")).join("\n")).toContain("UnrealEditor-Cmd.exe");
+    expect(kills).toHaveLength(6);
+    for (const call of kills) {
+      expect(slash(call.cwd)).toBe(slash(project.dir));
+      expect(call.exit).toBe(0);
+      expect(call.argv[0]).toBe("/f");
+      expect(call.argv[1]).toBe("/im");
+    }
+    expect(kills.some((call) => call.argv[2] === "UnrealEditor-Cmd.exe")).toBe(true);
   } finally {
     dispose(project.dir);
   }
@@ -218,8 +230,9 @@ test("svn shims and TortoiseProc record the handler arguments", async () => {
     expect(updated.exitCode).toBe(0);
     const update = callsMatching(updated.log, "/svn").find((call) => call.argv[0] === "update");
     expect(update).toBeDefined();
+    expect(slash(update?.cwd ?? "")).toBe(slash(project.dir));
     expect(update?.argv).toContain("--non-interactive");
-    expect(slash(update?.argv.join(" ") ?? "")).toContain(slash(project.dir));
+    expect(update?.argv.some((arg) => slash(arg) === slash(project.dir))).toBe(true);
     expect(updated.output).toContain("URL: file:///bolt-e2e/svn");
     expect(updated.output).toContain("Revision: 1");
     const commit = callsMatching(updated.log, "/svn").find((call) => call.argv[0] === "commit");
@@ -240,11 +253,12 @@ test("svn shims and TortoiseProc record the handler arguments", async () => {
   try {
     const result = await bolt(tortoise.dir, ["run", "ue-cleanup"]);
     expect(result.exitCode).toBe(0);
-    const proc = findCall(result.log, "TortoiseProc");
-    expect(joined(proc)).toContain("/command:cleanup");
-    expect(joined(proc)).toContain("/noui");
-    expect(slash(joined(proc))).toContain(slash(tortoise.dir));
-    expect(findCall(result.log, "where").argv.join(" ")).toContain("TortoiseProc.exe");
+    const proc = tool(result.log, "TortoiseProc", tortoise.dir);
+    expect(proc.argv).toContain("/command:cleanup");
+    expect(proc.argv).toContain("/noui");
+    expect(proc.argv.some((arg) => slash(arg).includes(slash(tortoise.dir)))).toBe(true);
+    const where = tool(result.log, "where", tortoise.dir);
+    expect(where.argv).toContain("TortoiseProc.exe");
   } finally {
     dispose(tortoise.dir);
   }
@@ -291,24 +305,47 @@ test("fs, json, path guard, ue-ini, and fix_dll", async () => {
     dispose(project.dir);
   }
 
-  const escape = makeProject({
-    tasks: `tasks:
+  const outside = mkdtempSync(path.join(os.tmpdir(), "bolt-e2e-outside-"));
+  const sentinel = path.join(outside, "sentinel.txt");
+  const outsideJson = path.join(outside, "data.json");
+  writeFileSync(sentinel, "sentinel\n");
+  writeFileSync(outsideJson, "{}\n");
+  const escape = makeProject();
+  const rel = (target: string) => JSON.stringify(slash(path.relative(escape.dir, target)));
+  writeBolt(
+    escape.dir,
+    `tasks:
   escape:
     - uses: fs/copy
-      with: { src: ../outside.txt, dst: out/x.txt }
+      with: { src: ${rel(sentinel)}, dst: out/x.txt }
   bad-json:
     - uses: json/set
-      with: { file: ../data.json, key: a, value: "1" }
+      with: { file: ${rel(outsideJson)}, key: a, value: "1" }
+  proto:
+    - uses: json/set
+      with: { file: data.json, key: __proto__, value: "1" }
 `,
-  });
+  );
   try {
+    const before = readFileSync(sentinel, "utf8");
     const copied = await bolt(escape.dir, ["run", "escape"]);
     expect(copied.exitCode).not.toBe(0);
     expect(copied.output).toContain("escapes project root");
+    expect(readFileSync(sentinel, "utf8")).toBe(before);
+    expect(existsSync(path.join(escape.dir, "out/x.txt"))).toBe(false);
+
+    const jsonBefore = readFileSync(outsideJson, "utf8");
     const patched = await bolt(escape.dir, ["run", "bad-json"]);
     expect(patched.exitCode).not.toBe(0);
     expect(patched.output).toContain("escapes project root");
+    expect(readFileSync(outsideJson, "utf8")).toBe(jsonBefore);
+
+    const dataBefore = readFileSync(path.join(escape.dir, "data.json"), "utf8");
+    const proto = await bolt(escape.dir, ["run", "proto"]);
+    expect(proto.exitCode).not.toBe(0);
+    expect(readFileSync(path.join(escape.dir, "data.json"), "utf8")).toBe(dataBefore);
   } finally {
+    rmSync(outside, { recursive: true, force: true });
     dispose(escape.dir);
   }
 });
