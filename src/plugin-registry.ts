@@ -1,14 +1,41 @@
+import { createHash } from "crypto";
+import { spawnSync } from "child_process";
 import {
-  PluginBase,
+  PLUGIN_API_VERSION,
+  PLUGIN_BRAND,
+  assertPluginApiVersion,
   hasManifestGetter,
+  isBrandedPlugin,
   isDefinedPlugin,
   markDefinedPlugin,
   reflectObjectManifest,
   type BoltPlugin,
 } from "./plugin";
 import path from "path";
-import { existsSync, readdirSync, statSync, readFileSync, mkdirSync } from "fs";
+import {
+  existsSync,
+  readdirSync,
+  statSync,
+  readFileSync,
+  mkdirSync,
+  writeFileSync,
+  realpathSync,
+} from "fs";
 import os from "os";
+import { pathToFileURL } from "url";
+
+/** Legacy decorator emit. Compiled binaries do not read a project tsconfig. */
+const DECORATOR_TSCONFIG = JSON.stringify({
+  compilerOptions: {
+    experimentalDecorators: true,
+    useDefineForClassFields: false,
+    target: "ESNext",
+    module: "ESNext",
+    moduleResolution: "bundler",
+  },
+});
+
+const HOST_EXTERNALS = ["boltstack", "zod"];
 
 /** Get the max mtime of all .ts files in a directory (non-recursive). */
 function maxSourceMtime(dir: string): number {
@@ -64,17 +91,104 @@ function pluginLoadError(name: string, dir: string, error: unknown): Error {
   return new Error(`Failed to load plugin "${name}" from ${dir}:\n${errorText(error)}`);
 }
 
+function isTypeScript(file: string): boolean {
+  return file.endsWith(".ts") || file.endsWith(".tsx");
+}
+
+/** Stable path so two spellings of one file share a cache and two files do not. */
+export function canonicalPluginEntry(entryTs: string): string {
+  const abs = path.resolve(entryTs);
+  try {
+    return realpathSync(abs);
+  } catch {
+    return abs;
+  }
+}
+
+/** Cache file for one source. The namespace alone is not unique. */
+export function pluginCacheFile(cacheRoot: string, pluginName: string, entryTs: string): string {
+  const id = createHash("sha256").update(canonicalPluginEntry(entryTs)).digest("hex").slice(0, 16);
+  return path.join(cacheRoot, ".bolt", ".cache", "plugins", pluginName, id, "index.js");
+}
+
+/**
+ * Bun.build leaves import.meta.* pointing at the emitted file.
+ * Rewrite those reads to the plugin source so adjacent assets still resolve.
+ */
+function rewritePluginLocation(source: string, entryTs: string): string {
+  const abs = canonicalPluginEntry(entryTs);
+  const values: Record<string, string> = {
+    url: pathToFileURL(abs).href,
+    dir: path.dirname(abs),
+    path: abs,
+    file: path.basename(abs),
+  };
+  let out = source;
+  for (const [prop, value] of Object.entries(values)) {
+    out = out.replace(new RegExp(`import\\.meta\\.${prop}\\b`, "g"), JSON.stringify(value));
+  }
+  return out;
+}
+
+/** Copy the brand and the export's own apiVersion. Never substitute the host version. */
+function retainPluginBrand(plugin: object, apiVersion: unknown): void {
+  Object.defineProperty(plugin, PLUGIN_BRAND, { value: true });
+  if (apiVersion !== undefined) {
+    Object.defineProperty(plugin, "apiVersion", {
+      value: apiVersion,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
+/**
+ * Install plugin dependencies with this process, not a `bun` binary on PATH.
+ * Compiled bolt accepts bun's CLI when BUN_BE_BUN=1.
+ */
+export function pluginInstallInvocation(env: NodeJS.ProcessEnv = process.env): {
+  command: string;
+  args: string[];
+  env: NodeJS.ProcessEnv;
+} {
+  return {
+    command: process.execPath,
+    args: ["install"],
+    env: { ...env, BUN_BE_BUN: "1" },
+  };
+}
+
+function installPluginDependencies(pluginName: string, sourceDir: string): void {
+  const invocation = pluginInstallInvocation();
+  const result = spawnSync(invocation.command, invocation.args, {
+    cwd: sourceDir,
+    stdio: "inherit",
+    env: invocation.env,
+  });
+  if (result.status !== 0) {
+    const detail = result.error ? `\n${result.error.message}` : "";
+    throw new Error(`Failed to install dependencies for plugin "${pluginName}"${detail}`);
+  }
+}
+
 export class PluginRegistry {
   private plugins = new Map<string, BoltPlugin>();
 
   /**
-   * Class plugins and definePlugin() already carry a manifest.
+   * Branded plugins keep the manifest their copy already built.
    * Plain handler maps are reflected here (ai: false, no params).
    */
   private normalize(plugin: BoltPlugin): BoltPlugin {
-    if (isDefinedPlugin(plugin)) return plugin;
-    // Another bundled copy of PluginBase fails instanceof, but its manifest is still a getter.
-    if (plugin instanceof PluginBase || hasManifestGetter(plugin)) return plugin;
+    if (isBrandedPlugin(plugin) || isDefinedPlugin(plugin)) {
+      assertPluginApiVersion(plugin);
+      return plugin;
+    }
+    if (hasManifestGetter(plugin)) {
+      throw new Error(
+        `Plugin "${plugin.namespace}" is missing Symbol.for("boltstack.plugin") and apiVersion ${PLUGIN_API_VERSION}.`,
+      );
+    }
     plugin.manifest = reflectObjectManifest(plugin);
     return plugin;
   }
@@ -93,44 +207,39 @@ export class PluginRegistry {
   }
 
   /**
-   * Compile a plugin's TypeScript source to a cached JS file using Bun.build().
-   * Returns the path to the cached JS file.
+   * Compile a plugin entry to cached JS. boltstack and zod stay external so the
+   * virtual module can supply the host instances. Decorators are always legacy.
    */
-  private async jitCompile(
+  private async compilePlugin(
     pluginName: string,
-    sourceDir: string,
-    projectRoot: string,
+    entryTs: string,
+    cacheRoot: string,
   ): Promise<string> {
-    const cacheDir = path.join(projectRoot, ".bolt", ".cache", "plugins", pluginName);
-    const cachedJs = path.join(cacheDir, "index.js");
-    const entryTs = path.join(sourceDir, "index.ts");
+    const sourceDir = path.dirname(entryTs);
+    const cachedJs = pluginCacheFile(cacheRoot, pluginName, entryTs);
+    const cacheDir = path.dirname(cachedJs);
 
-    // Check if cache is fresh
     if (existsSync(cachedJs)) {
       const cacheMtime = statSync(cachedJs).mtimeMs;
-      const sourceMtime = maxSourceMtime(sourceDir);
-      if (cacheMtime >= sourceMtime) {
-        return cachedJs; // Cache is fresh
-      }
+      const sourceMtime = Math.max(maxSourceMtime(sourceDir), statSync(entryTs).mtimeMs);
+      if (cacheMtime >= sourceMtime) return cachedJs;
     }
 
-    // Auto-install runtime deps if needed
     if (hasRuntimeDeps(sourceDir) && !hasNodeModules(sourceDir)) {
-      const { spawnSync } = await import("child_process");
-      const result = spawnSync("bun", ["install"], { cwd: sourceDir, stdio: "inherit" });
-      if (result.status !== 0) {
-        throw new Error(`Failed to install dependencies for plugin "${pluginName}"`);
-      }
+      installPluginDependencies(pluginName, sourceDir);
     }
 
-    // Compile with Bun.build()
     mkdirSync(cacheDir, { recursive: true });
+    const tsconfigPath = path.join(cacheRoot, ".bolt", ".cache", "decorator-tsconfig.json");
+    mkdirSync(path.dirname(tsconfigPath), { recursive: true });
+    writeFileSync(tsconfigPath, DECORATOR_TSCONFIG);
     const buildResult = await Bun.build({
       entrypoints: [entryTs],
       outdir: cacheDir,
       target: "bun",
-      external: ["boltstack"],
+      external: HOST_EXTERNALS,
       naming: "index.js",
+      tsconfig: tsconfigPath,
     });
 
     if (!buildResult.success) {
@@ -138,6 +247,7 @@ export class PluginRegistry {
       throw new Error(`Failed to compile plugin "${pluginName}":\n${errors}`);
     }
 
+    writeFileSync(cachedJs, rewritePluginLocation(readFileSync(cachedJs, "utf8"), entryTs));
     return cachedJs;
   }
 
@@ -145,8 +255,11 @@ export class PluginRegistry {
    * Load a plugin from a path. Handles both pre-compiled JS and raw TS.
    * For class exports, instantiates with no config.
    */
-  async loadFromPath(namespace: string, pluginPath: string): Promise<void> {
-    const mod = await import(pluginPath);
+  async loadFromPath(namespace: string, pluginPath: string, cacheRoot?: string): Promise<void> {
+    const file = isTypeScript(pluginPath)
+      ? await this.compilePlugin(namespace, pluginPath, cacheRoot ?? path.dirname(pluginPath))
+      : pluginPath;
+    const mod = await import(file);
     const exported = mod.default ?? mod;
 
     const plugin = this.resolvePluginExport(exported, namespace);
@@ -189,8 +302,11 @@ export class PluginRegistry {
       );
     }
     const defined = isDefinedPlugin(exported);
+    const branded = isBrandedPlugin(exported);
+    const apiVersion = (exported as { apiVersion?: unknown }).apiVersion;
     const plugin: BoltPlugin = { ...exported, namespace: exported.namespace || namespace };
     if (defined) markDefinedPlugin(plugin);
+    if (branded) retainPluginBrand(plugin, apiVersion);
     return plugin;
   }
 
@@ -213,14 +329,14 @@ export class PluginRegistry {
 
       if (existsSync(tsFile) && projectRoot) {
         try {
-          candidate = await this.jitCompile(entry, entryPath, projectRoot);
+          candidate = await this.compilePlugin(entry, tsFile, projectRoot);
         } catch (e: unknown) {
           throw pluginLoadError(entry, entryPath, e);
         }
       } else if (existsSync(jsFile)) {
         candidate = jsFile;
       } else if (existsSync(tsFile)) {
-        // No projectRoot for caching — try direct import (Bun handles .ts)
+        // loadFromPath compiles this, with the plugin directory as the cache root.
         candidate = tsFile;
       }
 
@@ -243,8 +359,12 @@ export class PluginRegistry {
     pluginPath: string,
     config?: unknown,
     deps?: Record<string, BoltPlugin>,
+    cacheRoot?: string,
   ): Promise<void> {
-    const mod = await import(pluginPath);
+    const file = isTypeScript(pluginPath)
+      ? await this.compilePlugin(namespace, pluginPath, cacheRoot ?? path.dirname(pluginPath))
+      : pluginPath;
+    const mod = await import(file);
     const exported = mod.default ?? mod;
     const plugin = this.resolvePluginExport(exported, namespace, config, deps);
     this.register(plugin);
@@ -277,9 +397,9 @@ export async function buildRegistry(
     const dir = pluginDirectory(resolved);
     try {
       if (entry.config) {
-        await reg.loadAndInstantiate(entry.namespace, resolved, entry.config);
+        await reg.loadAndInstantiate(entry.namespace, resolved, entry.config, undefined, configDir);
       } else {
-        await reg.loadFromPath(entry.namespace, resolved);
+        await reg.loadFromPath(entry.namespace, resolved, configDir);
       }
     } catch (e: unknown) {
       throw pluginLoadError(entry.namespace, dir, e);

@@ -21,4 +21,4 @@ export type {
 } from "./plugin";
 
 // Plugin API. definePlugin returns a plugin object; class plugins use withDescriptor.
-export { PluginBase, defineHandler, definePlugin, handler } from "./plugin";
+export { PLUGIN_API_VERSION, PluginBase, defineHandler, definePlugin, handler } from "./plugin";
