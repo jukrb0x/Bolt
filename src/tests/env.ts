@@ -80,7 +80,6 @@ export const testCfg: BoltConfig = {
   project: {
     name: PROJECT_NAME,
   },
-  targets: {},
   vars: {},
   tasks: {
     kill: [{ uses: "ue/kill" }],
