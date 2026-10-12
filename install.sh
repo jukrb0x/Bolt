@@ -1,77 +1,127 @@
-#!/usr/bin/env bash
-# Bolt installer for macOS (Apple Silicon)
-# Usage: curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
-# Or: ./install.sh
-
-set -euo pipefail
+#!/bin/sh
+# Install bolt for macOS or Linux.
+#   curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
+# Intel macOS installs bolt-mac-x64. Apple Silicon installs bolt-mac-arm64.
+set -eu
 
 REPO="jukrb0x/Bolt"
-BIN_DIR="$HOME/.bolt/bin"
-BOLT_HOME="$HOME/.bolt"
+BASE="https://github.com/${REPO}/releases/latest/download"
 
-echo "Installing bolt..."
-
-# Fetch latest release JSON
-RELEASE=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest")
-
-# Parse release JSON — prefer jq when available, fall back to grep/sed
-if command -v jq &>/dev/null; then
-    VERSION=$(echo "$RELEASE" | jq -r '.tag_name')
-    BINARY_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "bolt-mac-arm64") | .browser_download_url')
-else
-    VERSION=$(echo "$RELEASE" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-    BINARY_URL=$(echo "$RELEASE" | grep '"browser_download_url"' | grep 'bolt-mac-arm64"' | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/' | head -1)
-fi
-
-if [ -z "$VERSION" ] || [ -z "$BINARY_URL" ]; then
-    echo "Error: bolt-mac-arm64 not found in latest release. Is this macOS Apple Silicon?" >&2
-    exit 1
-fi
-
-# Create dirs
-mkdir -p "$BIN_DIR"
-
-# Download binary — rename to 'bolt' (no platform suffix in PATH)
-echo "Downloading bolt $VERSION..."
-curl -fsSL "$BINARY_URL" -o "$BIN_DIR/bolt"
-chmod +x "$BIN_DIR/bolt"
-
-
-# Add ~/.bolt/bin to PATH in shell rc
-# Prefer the rc file matching the running shell, fall back to file existence
-SHELL_RC=""
-case "${SHELL:-}" in
-    */zsh)  SHELL_RC="$HOME/.zshrc" ;;
-    */bash) SHELL_RC="$HOME/.bashrc" ;;
+# Print the release asset for an OS and machine, or return 1.
+resolve_asset() {
+  case "$1" in
+    Darwin)
+      case "$2" in
+        x86_64) printf '%s\n' "bolt-mac-x64" ;;
+        arm64 | aarch64) printf '%s\n' "bolt-mac-arm64" ;;
+        *)
+          echo "Unsupported macOS architecture: $2" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    Linux)
+      case "$2" in
+        x86_64) printf '%s\n' "bolt-linux-x64" ;;
+        *)
+          echo "Unsupported Linux architecture: $2" >&2
+          return 1
+          ;;
+      esac
+      ;;
     *)
-        if [ -f "$HOME/.zshrc" ]; then
-            SHELL_RC="$HOME/.zshrc"
-        elif [ -f "$HOME/.bashrc" ]; then
-            SHELL_RC="$HOME/.bashrc"
-        fi
-        ;;
+      echo "On Windows, install with: irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Tests set BOLT_INSTALL_PRINT_ASSET=1. A normal install always uses uname.
+if [ "${BOLT_INSTALL_PRINT_ASSET:-}" = "1" ]; then
+  resolve_asset "${BOLT_INSTALL_OS:-$(uname -s)}" "${BOLT_INSTALL_ARCH:-$(uname -m)}"
+  exit 0
+fi
+
+ASSET=$(resolve_asset "$(uname -s)" "$(uname -m)")
+DEST="${HOME}/.bolt/bin"
+RECEIPT="${HOME}/.bolt/install.json"
+
+mkdir -p "$DEST" "${HOME}/.bolt"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+curl -fsSL "${BASE}/SHA256SUMS" -o "${TMP}/SHA256SUMS"
+curl -fsSL "${BASE}/${ASSET}" -o "${TMP}/${ASSET}"
+
+expected=$(awk -v asset="$ASSET" '$2 == asset { print $1; exit }' "${TMP}/SHA256SUMS" | tr 'ABCDEF' 'abcdef')
+if [ -z "$expected" ]; then
+  echo "SHA256SUMS has no entry for ${ASSET}" >&2
+  exit 1
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  actual=$(sha256sum "${TMP}/${ASSET}" | awk '{ print $1 }')
+else
+  actual=$(shasum -a 256 "${TMP}/${ASSET}" | awk '{ print $1 }')
+fi
+actual=$(printf '%s' "$actual" | tr 'ABCDEF' 'abcdef')
+if [ "$expected" != "$actual" ]; then
+  echo "Checksum mismatch for ${ASSET}" >&2
+  exit 1
+fi
+
+# Run the download before replacing a working bolt. A bad version leaves the old file in place.
+cp "${TMP}/${ASSET}" "${DEST}/bolt.new"
+chmod 755 "${DEST}/bolt.new"
+if ! version=$("${DEST}/bolt.new" version); then
+  rm -f "${DEST}/bolt.new"
+  echo "Downloaded bolt failed to run. The existing bolt was not replaced." >&2
+  exit 1
+fi
+version=$(printf '%s' "$version" | tr -d '[:space:]')
+case "$version" in
+  "" | *[!0-9A-Za-z.+-]*)
+    rm -f "${DEST}/bolt.new"
+    echo "Downloaded bolt printed an unexpected version. The existing bolt was not replaced." >&2
+    exit 1
+    ;;
 esac
+mv -f "${DEST}/bolt.new" "${DEST}/bolt"
+
+installed_path="${DEST}/bolt"
+escaped_path=$(printf '%s' "$installed_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+cat >"$RECEIPT" <<EOF
+{
+  "channel": "github",
+  "asset": "${ASSET}",
+  "version": "${version}",
+  "path": "${escaped_path}"
+}
+EOF
 
 PATH_LINE='export PATH="$HOME/.bolt/bin:$PATH"'
-if [ -n "$SHELL_RC" ]; then
-    if ! grep -q '.bolt/bin' "$SHELL_RC" 2>/dev/null; then
-        echo "" >> "$SHELL_RC"
-        echo "# bolt" >> "$SHELL_RC"
-        echo "$PATH_LINE" >> "$SHELL_RC"
-        echo "Added ~/.bolt/bin to PATH in $SHELL_RC"
+SHELL_RC=""
+case "${SHELL:-}" in
+  */zsh) SHELL_RC="$HOME/.zshrc" ;;
+  */bash) SHELL_RC="$HOME/.bashrc" ;;
+  *)
+    if [ -f "$HOME/.zshrc" ]; then
+      SHELL_RC="$HOME/.zshrc"
+    elif [ -f "$HOME/.bashrc" ]; then
+      SHELL_RC="$HOME/.bashrc"
+    elif [ -f "$HOME/.profile" ]; then
+      SHELL_RC="$HOME/.profile"
     fi
+    ;;
+esac
+if [ -n "$SHELL_RC" ]; then
+  if ! grep -F '.bolt/bin' "$SHELL_RC" >/dev/null 2>&1; then
+    printf '\n%s\n' "$PATH_LINE" >>"$SHELL_RC"
+    echo "Added ~/.bolt/bin to PATH in $SHELL_RC"
+  fi
 else
-    echo ""
-    echo "Warning: Could not detect shell rc file."
-    echo "Add the following line to your shell profile manually:"
-    echo "  $PATH_LINE"
+  echo "Add this to your shell profile:"
+  echo "  $PATH_LINE"
 fi
 
-echo ""
-echo "bolt $VERSION installed to $BIN_DIR/bolt"
-echo ""
-if [ -n "$SHELL_RC" ]; then
-    echo "Run: source $SHELL_RC && bolt version"
-else
-    echo "Open a new terminal and run: bolt version"
-fi
+echo "Installed ${ASSET} to ${DEST}/bolt (${version})"
+echo "Open a new shell, then run: bolt version"

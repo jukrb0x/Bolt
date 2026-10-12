@@ -10,13 +10,15 @@ Install Bolt to get started with Unreal Engine workflow automation.
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
-Installs `bolt` to `~/.bolt/bin/` and adds it to your PATH.
+Installs `bolt.exe` to `%LOCALAPPDATA%\bolt\bin` and adds that directory to your user Path.
 
-## macOS (Apple Silicon)
+## macOS and Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
+
+Intel macOS installs `bolt-mac-x64`. Apple Silicon installs `bolt-mac-arm64`. Linux x64 installs `bolt-linux-x64`. The binary is `~/.bolt/bin/bolt`.
 
 ## Update
 
@@ -57,8 +59,8 @@ To remove Bolt from your system, delete the install directory and remove it from
 **Windows**
 
 ```powershell
-Remove-Item -Recurse -Force "$env:USERPROFILE\.bolt\bin"
-# Then remove "%USERPROFILE%\.bolt\bin" from your PATH via System Settings
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\bolt\bin"
+# Then remove "%LOCALAPPDATA%\bolt\bin" from your user Path via System Settings
 ```
 
 **macOS/Linux**
@@ -75,18 +77,21 @@ If you prefer manual installation, download the latest release from [GitHub Rele
 **Windows**
 
 ```powershell
-$installPath = "$env:USERPROFILE\.bolt\bin"
+$installPath = "$env:LOCALAPPDATA\bolt\bin"
 New-Item -ItemType Directory -Force -Path $installPath | Out-Null
 Move-Item .\bolt-win-x64.exe "$installPath\bolt.exe"
-# Add $installPath to your PATH, then verify:
+# Add $installPath to your user Path, then verify:
 bolt --version
 ```
 
 **macOS**
 
+Intel uses `bolt-mac-x64`. Apple Silicon uses `bolt-mac-arm64`.
+
 ```bash
 mkdir -p ~/.bolt/bin
-mv ./bolt-mac-arm64 ~/.bolt/bin/bolt
+mv ./bolt-mac-x64 ~/.bolt/bin/bolt    # Intel
+# mv ./bolt-mac-arm64 ~/.bolt/bin/bolt  # Apple Silicon
 chmod +x ~/.bolt/bin/bolt
 echo 'export PATH="$HOME/.bolt/bin:$PATH"' >> ~/.zshrc
 bolt --version
