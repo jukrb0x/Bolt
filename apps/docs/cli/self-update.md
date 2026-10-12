@@ -2,53 +2,68 @@
 title: "bolt self-update"
 ---
 
-Update Bolt to the latest release.
+Replace a script-installed `bolt` with a GitHub release.
 
 ## Usage
 
 ```bash
-bolt self-update [--force]
+bolt self-update [--force] [--version <version>]
 ```
 
 ## Description
 
-Downloads and replaces the Bolt binary with the latest GitHub release. Only works in the compiled binary (not `bun run src/main.ts`).
+`bolt self-update` talks to the GitHub release channel for [jukrb0x/Bolt](https://github.com/jukrb0x/Bolt/releases). It downloads the asset named in `~/.bolt/install.json` (on Windows, `%USERPROFILE%\.bolt\install.json`), checks `SHA256SUMS`, runs the new file's `version` command, and only then replaces the binary.
 
-The binary is replaced in-place via atomic rename. The temp file is written to the same directory as the binary to avoid cross-device rename errors.
+The receipt must say `"channel": "github"`, and its `path` must be the executable you are running. `install.ps1` and `install.sh` write that file. A binary you copied onto PATH yourself does not have it, and self-update refuses to replace it.
+
+The recorded asset is kept. An Intel macOS install stays on `bolt-mac-x64`; it is not replaced with `bolt-mac-arm64`.
+
+This command runs in the compiled binary. A dev process whose executable name starts with `bun` exits with an error.
+
+### Checksum
+
+The release must contain both the platform asset and `SHA256SUMS`. The downloaded bytes are hashed before the installed file is touched. A missing line or a mismatch leaves the installed `bolt` in place.
+
+### Windows
+
+Windows cannot overwrite the running exe. Self-update renames it to `bolt.exe.old` in the same directory, then moves the new file to `bolt.exe`. A later launch of that `bolt.exe` deletes `bolt.exe.old`. If the old file is still locked, the next launch tries again.
+
+### Other install locations
+
+When the executable path is under `node_modules`, WinGet, Scoop, or Homebrew, self-update does not overwrite it. It names that manager and exits. An npm path is told to run `npm install -g boltstack@latest`. WinGet, Scoop, and Homebrew have no published package id yet, so the hint says to upgrade the package that installed this `bolt`. A receipt whose `channel` is not `github` is handled the same way.
 
 ## Options
 
-| Flag      | Description                            |
-| --------- | -------------------------------------- |
-| `--force` | Re-download even if already up to date |
+| Flag        | Description                                                              |
+| ----------- | ------------------------------------------------------------------------ |
+| `--force`   | Download and replace even when the current version is already the latest |
+| `--version` | Install this version instead of the latest, for example `2.1.0`          |
+
+Without `--force` or `--version`, a current version that is not older than the latest release prints `Already up to date (v2.1.1)` (the `v` plus the running version) and does not download.
 
 ## Examples
 
 ```bash
-# Update to latest version
 bolt self-update
-
-# Force re-download
 bolt self-update --force
+bolt self-update --version 2.1.1
 ```
 
-## Installation Methods
-
-If you installed via the install scripts:
+## Install scripts
 
 ::: code-group
 ```powershell [Windows]
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
-```bash [macOS]
-curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
+```bash [macOS and Linux]
+curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
 :::
 
-A Windows script install lives at `%LOCALAPPDATA%\bolt\bin\bolt.exe`. macOS and Linux script installs live at `~/.bolt/bin/bolt`. `bolt self-update` replaces only that recorded file. Intel macOS stays on `bolt-mac-x64`.
+Windows installs `%LOCALAPPDATA%\bolt\bin\bolt.exe`. macOS and Linux install `~/.bolt/bin/bolt`. Both write the receipt under `~/.bolt/install.json`. Open a new terminal after the first install so `PATH` includes the binary.
 
 ## See Also
 
-- [bolt version](./version.md) - Print current version
-- [Installation](/guides/installation.md) - Install Bolt
+- [Installation](/guides/installation) - Install scripts, assets, and checksums
+- [bolt version](./version.md) - Print the current version

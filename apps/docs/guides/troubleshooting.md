@@ -16,11 +16,10 @@ Common issues and solutions for Bolt.
 
 1. `cd` into your project root (or any subdirectory of it)
 2. Bolt walks _up_ from the current directory looking for `bolt.yaml`
-3. If the project isn't set up yet, run `bolt init`
+3. If the project has no config yet, create `bolt.yaml` with `version: 1`
 
 ```bash
 cd /path/to/project
-bolt init
 ```
 
 ### bolt.local.yaml invalid

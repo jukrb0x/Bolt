@@ -12,7 +12,6 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 | [`bolt list`](./list.md)               | List all tasks and flows                     |
 | [`bolt info`](./info.md)               | Show project and VCS configuration           |
 | [`bolt check`](./check.md)             | Validate bolt.yaml                           |
-| [`bolt init`](./init.md)               | Scaffold bolt.yaml                           |
 | [`bolt config`](./config.md)           | Manage configuration                         |
 | [`bolt plugin`](./plugin.md)           | Manage plugins                               |
 | [`bolt inspect`](./inspect.md)         | Preview resolved steps for a task or flow    |

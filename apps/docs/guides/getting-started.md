@@ -25,16 +25,8 @@ Bolt has two building blocks and one verb:
 
 ## Quick Start
 
-1. Install Bolt (see [Installation](./installation.md))
-2. Initialize your project:
-
-```bash
-cd /path/to/your/ue/project
-bolt init
-```
-
-`bolt init` scaffolds `bolt.yaml` (`version: 1`, a project name, and a sample task). Commit it. `bolt.local.yaml` is optional and only overrides `vars`.
-
+1. Install Bolt (see [Installation](./installation.md)). Open a new terminal, then run `bolt version`.
+2. Add `bolt.yaml` in the project and commit it. It starts with `version: 1`. `project` is a name. Unreal metadata, including `targets`, goes under the `ue` plugin. There is no root `targets` key. `bolt.local.yaml` is optional and only overrides `vars`.
 3. Preview, then run your workflow:
 
 ```bash
@@ -99,5 +91,5 @@ Stop running `Build.bat` by hand. Stop context-switching between TortoiseSVN, th
 ## Next Steps
 
 - [Installation](./installation.md) - Install Bolt on various platforms
-- [First Project](./first-project.md) - Walk through `bolt init` and your first flow
+- [First Project](./first-project.md) - Write `bolt.yaml` and run a flow
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Complete configuration schema
