@@ -80,9 +80,14 @@ export interface PluginManifest {
   handlers: Record<string, HandlerManifest>;
 }
 
+/** Plugin protocol version stamped on definePlugin() objects and PluginBase instances. */
+export declare const PLUGIN_API_VERSION: 1;
+
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
+  /** Present on plugins created by this bolt. Plain handler maps omit it. */
+  apiVersion?: number;
   manifest?: PluginManifest;
   describe?: DescribeFunction;
 }
@@ -138,6 +143,7 @@ export declare abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
   version: string;
   description: string;
+  apiVersion: number;
   metadata?: import("zod").ZodTypeAny;
   config?: unknown;
   deps?: Record<string, BoltPlugin>;
@@ -194,6 +200,8 @@ export declare function definePlugin<TMeta = unknown>(def: {
   namespace: string;
   version: string;
   description: string;
+  /** Must be PLUGIN_API_VERSION when set. Omitted means the host version. */
+  apiVersion?: number;
   metadata?: import("zod").ZodType<TMeta>;
   handlers: Record<string, HandlerDef<any>>;
 }): BoltPlugin & { manifest: PluginManifest };

@@ -100,6 +100,12 @@ const HANDLER_DEF = Symbol.for("bolt:handler-def");
 const DEFINED_PLUGIN = Symbol.for("bolt:defined-plugin");
 const MANIFEST_CACHE = Symbol.for("bolt:manifest-cache");
 
+/** Cross-realm brand. `instanceof PluginBase` is false for another bundled copy. */
+export const PLUGIN_BRAND = Symbol.for("boltstack.plugin");
+
+/** Plugin protocol version. Independent of the CLI semver. */
+export const PLUGIN_API_VERSION = 1;
+
 interface StoredHandler {
   alias: string;
   description?: string;
@@ -348,12 +354,36 @@ export function markDefinedPlugin(plugin: object): void {
   Object.defineProperty(plugin, DEFINED_PLUGIN, { value: true });
 }
 
-/**
- * Object plugins (git, svn, fs, json) have no authoring metadata.
- * Reflect their handler names into a manifest with ai:false and no params.
- * A hand-written manifest property is ignored.
- */
-/** True when `manifest` is a getter, including a PluginBase from another module copy. */
+export function isBrandedPlugin(value: object): boolean {
+  return (value as { [PLUGIN_BRAND]?: boolean })[PLUGIN_BRAND] === true;
+}
+
+/** Stamp the cross-copy brand and the protocol version the registry checks. */
+export function brandPlugin(plugin: object, apiVersion: number = PLUGIN_API_VERSION): void {
+  Object.defineProperty(plugin, PLUGIN_BRAND, { value: true });
+  Object.defineProperty(plugin, "apiVersion", {
+    value: apiVersion,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
+export function assertPluginApiVersion(plugin: { namespace?: string; apiVersion?: unknown }): void {
+  if (plugin.apiVersion === PLUGIN_API_VERSION) return;
+  const version = plugin.apiVersion;
+  const found =
+    version === undefined
+      ? "none"
+      : typeof version === "number"
+        ? `v${version}`
+        : JSON.stringify(version);
+  throw new Error(
+    `Plugin "${plugin.namespace ?? "(unknown)"}" requires plugin API ${found}, but this bolt supports plugin API v${PLUGIN_API_VERSION}.`,
+  );
+}
+
+/** True when `manifest` is a getter. Without the brand this is not a plugin. */
 export function hasManifestGetter(plugin: object): boolean {
   let current: object | null = plugin;
   while (current && current !== Object.prototype) {
@@ -364,6 +394,11 @@ export function hasManifestGetter(plugin: object): boolean {
   return false;
 }
 
+/**
+ * Object plugins (git, svn, fs, json) have no authoring metadata.
+ * Reflect their handler names into a manifest with ai:false and no params.
+ * A hand-written manifest property is ignored.
+ */
 export function reflectObjectManifest(plugin: BoltPlugin): PluginManifest {
   const handlers: PluginManifest["handlers"] = {};
   for (const name of Object.keys(plugin.handlers ?? {})) {
@@ -479,6 +514,8 @@ export interface DefinePluginOptions<TMeta = unknown> {
   namespace: string;
   version: string;
   description: string;
+  /** Must be {@link PLUGIN_API_VERSION} when set. Omitted means the host version. */
+  apiVersion?: number;
   metadata?: ZodType<TMeta>;
   handlers: Record<string, HandlerDef<any>>;
 }
@@ -496,6 +533,11 @@ export function definePlugin<TMeta = unknown>(
   if (!opts.namespace) throw new Error("definePlugin: namespace is required");
   if (!opts.version) throw new Error("definePlugin: version is required");
   if (!opts.description) throw new Error("definePlugin: description is required");
+  if (opts.apiVersion !== undefined && opts.apiVersion !== PLUGIN_API_VERSION) {
+    throw new Error(
+      `definePlugin: apiVersion ${opts.apiVersion} is not supported. This bolt implements plugin API v${PLUGIN_API_VERSION}.`,
+    );
+  }
   if (!opts.handlers || typeof opts.handlers !== "object" || Array.isArray(opts.handlers)) {
     throw new Error("definePlugin: handlers is required");
   }
@@ -534,6 +576,7 @@ export function definePlugin<TMeta = unknown>(
     },
   };
   markDefinedPlugin(plugin);
+  brandPlugin(plugin, PLUGIN_API_VERSION);
   return plugin;
 }
 
@@ -559,6 +602,8 @@ export interface PluginLifecycleHooks {
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
+  /** Stamped by definePlugin() and PluginBase. Plain handler maps omit it. */
+  apiVersion?: number;
   /** Present once the plugin is defined (class or definePlugin) or registered (object). */
   manifest?: PluginManifest;
   /** Return a human-readable description for a handler call, or undefined if none. */
@@ -592,6 +637,7 @@ export abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
   version = "";
   description = "";
+  apiVersion = PLUGIN_API_VERSION;
   /** Zod schema this plugin owns. Not checked by the runner. */
   metadata?: ZodTypeAny;
   config?: unknown;
@@ -599,6 +645,10 @@ export abstract class PluginBase implements BoltPlugin {
   deps?: Record<string, BoltPlugin>;
 
   private _handlers?: Record<string, BoltPluginHandler>;
+
+  constructor() {
+    Object.defineProperty(this, PLUGIN_BRAND, { value: true });
+  }
 
   get handlers(): Record<string, BoltPluginHandler> {
     if (this._handlers) return this._handlers;
