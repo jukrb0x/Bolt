@@ -210,7 +210,7 @@ No params.
 
 ## fs/ — File System
 
-`fs/` handlers are simple file operations. They do not check `ctx.dryRun` — suppress via `continue-on-error` or op-level dry-run logic.
+`fs/` handlers are simple file operations. When `ctx.dryRun` is set they log the planned action and do not create, copy, move, or delete anything.
 
 ### fs/copy
 
