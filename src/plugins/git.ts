@@ -15,7 +15,16 @@ const plugin: BoltPlugin = {
       const branch = params.branch ?? (ctx.cfg.project as any).git_branch ?? "main";
       ctx.logger.cmd(`git -C "${p}" pull origin ${branch} --autostash --no-edit`);
       if (!ctx.dryRun) {
-        const result = await ctx.runtime.spawn(["git", "-C", p, "pull", "origin", branch, "--autostash", "--no-edit"]);
+        const result = await ctx.runtime.spawn([
+          "git",
+          "-C",
+          p,
+          "pull",
+          "origin",
+          branch,
+          "--autostash",
+          "--no-edit",
+        ]);
         if (result.exitCode !== 0) throw new Error(`git pull failed (exit ${result.exitCode})`);
       }
     },
@@ -32,17 +41,28 @@ const plugin: BoltPlugin = {
     info: async (params, ctx) => {
       const p = resolvePath(params, ctx);
       // Read-only query — intentionally runs in dry-run mode
-      const logResult = ctx.runtime.spawnSync(
-        ["git", "-C", p, "log", "-1", "--pretty=format:%h %s", "--no-walk"],
-      );
+      const logResult = ctx.runtime.spawnSync([
+        "git",
+        "-C",
+        p,
+        "log",
+        "-1",
+        "--pretty=format:%h %s",
+        "--no-walk",
+      ]);
       if (logResult.exitCode === 0) {
         ctx.logger.info(`Git: ${logResult.stdout.trim()}`);
       } else {
         ctx.logger.warn("Git info unavailable");
       }
-      const branchResult = ctx.runtime.spawnSync(
-        ["git", "-C", p, "rev-parse", "--abbrev-ref", "HEAD"],
-      );
+      const branchResult = ctx.runtime.spawnSync([
+        "git",
+        "-C",
+        p,
+        "rev-parse",
+        "--abbrev-ref",
+        "HEAD",
+      ]);
       if (branchResult.exitCode === 0) {
         ctx.logger.info(`Git branch: ${branchResult.stdout.trim()}`);
       }

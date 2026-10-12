@@ -6,7 +6,13 @@ import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
 
 const tmp = "/tmp/bolt-fs-plugin-test";
-const ctx: BoltPluginContext = { cfg: testCfg, configDir: tmp, dryRun: false, logger: new Logger(), runtime: mockRuntime };
+const ctx: BoltPluginContext = {
+  cfg: testCfg,
+  configDir: tmp,
+  dryRun: false,
+  logger: new Logger(),
+  runtime: mockRuntime,
+};
 
 beforeEach(() => mkdirSync(tmp, { recursive: true }));
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
@@ -29,9 +35,9 @@ test("mkdir creates directory", async () => {
 });
 
 test("delete rejects path escaping project root", async () => {
-  await expect(
-    fsPlugin.handlers["delete"]({ path: "../../etc/passwd" }, ctx),
-  ).rejects.toThrow("escapes project root");
+  await expect(fsPlugin.handlers["delete"]({ path: "../../etc/passwd" }, ctx)).rejects.toThrow(
+    "escapes project root",
+  );
 });
 
 test("copy rejects src escaping project root", async () => {

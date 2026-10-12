@@ -39,7 +39,7 @@ Holds project identity, targets, tasks, and flows. It must **not** contain machi
 # bolt.yaml — commit this
 project:
   name: MyGame
-  engine:                    # repo identity only — no path here
+  engine: # repo identity only — no path here
     vcs: git
     branch: main
     # url: https://github.com/company/UnrealEngine.git
@@ -57,11 +57,11 @@ targets:
     config: shipping
 
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
   genproj: [{ uses: ue/generate_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
-  start:   [{ uses: ue/start }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
@@ -92,9 +92,9 @@ Holds only the paths that differ between machines. Relative paths resolve agains
 
 ```yaml
 # bolt.local.yaml — gitignored, one per machine
-engine_path:  D:/UE
+engine_path: D:/UE
 project_path: D:/Games/MyGame
-uproject:     D:/Games/MyGame/MyGame.uproject
+uproject: D:/Games/MyGame/MyGame.uproject
 use_tortoise: true
 
 # Optional per-machine variable overrides (shallow-merged over bolt.yaml vars)
@@ -106,34 +106,38 @@ Commit `bolt.local.example.yaml` (a template) so teammates know what to fill in.
 
 ### `.bolt/` — generated and local
 
-| Path | Purpose |
-|------|---------|
+| Path                  | Purpose                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
 | `.bolt/ai-context.md` | Generated command reference (via `bolt ai`), with a `bolt.yaml` hash for staleness |
-| `.bolt/plugins/<ns>/` | Project-scope plugins, auto-discovered by namespace |
-| `.bolt/logs/` | Per-run execution logs |
+| `.bolt/plugins/<ns>/` | Project-scope plugins, auto-discovered by namespace                                |
+| `.bolt/logs/`         | Per-run execution logs                                                             |
 
 ## Side-by-Side Summary
 
-| Concern | `bolt.yaml` | `bolt.local.yaml` | `.bolt/` |
-|---------|-------------|-------------------|----------|
-| Committed | Yes | No (gitignored) | `ai-context.md` + `plugins/` optional; `logs/` no |
-| Project identity | Yes (`project`, `vcs`, `url`) | No | No |
-| Machine paths | No | Yes (`engine_path`, etc.) | No |
-| Tasks / flows / targets | Yes | No | Rendered into `ai-context.md` |
-| Plugins | Explicit paths (`plugins:`) | No | Auto-discovered under `plugins/` |
+| Concern                 | `bolt.yaml`                   | `bolt.local.yaml`         | `.bolt/`                                          |
+| ----------------------- | ----------------------------- | ------------------------- | ------------------------------------------------- |
+| Committed               | Yes                           | No (gitignored)           | `ai-context.md` + `plugins/` optional; `logs/` no |
+| Project identity        | Yes (`project`, `vcs`, `url`) | No                        | No                                                |
+| Machine paths           | No                            | Yes (`engine_path`, etc.) | No                                                |
+| Tasks / flows / targets | Yes                           | No                        | Rendered into `ai-context.md`                     |
+| Plugins                 | Explicit paths (`plugins:`)   | No                        | Auto-discovered under `plugins/`                  |
 
 ## Team Collaboration Tips
 
 ### 1. Keep paths out of `bolt.yaml`
+
 Machine paths belong in `bolt.local.yaml`. This keeps the committed contract portable across every teammate's machine.
 
 ### 2. Commit an example local config
+
 Ship `bolt.local.example.yaml` so new teammates can copy it to `bolt.local.yaml` and fill in their paths (or just run `bolt init`).
 
 ### 3. Compose tasks instead of duplicating
+
 Use `call: <name>` to build larger tasks from smaller ones, and define goals as flows. `uses` is reserved for plugin/local actions; `run` is reserved for shell commands.
 
 ### 4. Use environment variables for secrets
+
 Reference secrets via interpolation instead of hardcoding them.
 
 ```yaml
@@ -151,5 +155,6 @@ bolt run daily
 ```
 
 ## See Also
+
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Complete configuration schema
 - [Error Handling](./error-handling.md) - Fail-fast and the missing-local-config error

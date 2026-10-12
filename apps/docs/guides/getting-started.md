@@ -9,6 +9,7 @@ Welcome to Bolt! This guide will help you understand what Bolt is, get up and ru
 Bolt is a build and workflow automation tool for Unreal Engine projects. It provides a unified CLI for common development tasks like version control, building, cooking, and launching.
 
 **Key features:**
+
 - **Declarative configuration** - Define your workflow in `bolt.yaml`
 - **Tasks and flows** - Compose reusable tasks and run them as ordered flows
 - **Plugin system** - Extend with custom handlers
@@ -49,7 +50,7 @@ bolt run daily              # run the flow for real
 ```yaml
 project:
   name: MyGame
-  engine:                    # repo identity only — path lives in bolt.local.yaml
+  engine: # repo identity only — path lives in bolt.local.yaml
     vcs: git
     branch: main
   project:
@@ -65,24 +66,24 @@ targets:
     config: shipping
 
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
-  start:   [{ uses: ue/start }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     description: Update, build, and launch the editor
     steps: [update, build, start]
-    continue_on_fail: [start]   # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
 ```
 
 Machine-specific paths live in `bolt.local.yaml` (gitignored):
 
 ```yaml
-engine_path:  D:/UE
+engine_path: D:/UE
 project_path: D:/Games/MyGame
-uproject:     D:/Games/MyGame/MyGame.uproject
+uproject: D:/Games/MyGame/MyGame.uproject
 use_tortoise: true
 ```
 

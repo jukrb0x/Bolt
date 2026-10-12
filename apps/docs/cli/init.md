@@ -29,9 +29,9 @@ automatically; otherwise the path is left as a `CHANGE_ME` placeholder for you t
 
 ## Options
 
-| Flag | Alias | Default | Description |
-|------|-------|---------|-------------|
-| `--force` | `-f` | `false` | Overwrite `bolt.yaml` / `bolt.local.yaml` if they already exist |
+| Flag      | Alias | Default | Description                                                     |
+| --------- | ----- | ------- | --------------------------------------------------------------- |
+| `--force` | `-f`  | `false` | Overwrite `bolt.yaml` / `bolt.local.yaml` if they already exist |
 
 ## Examples
 

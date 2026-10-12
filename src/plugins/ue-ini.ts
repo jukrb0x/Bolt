@@ -48,7 +48,10 @@ function parseKeyName(rawKey: string): { prefix: string | null; key: string } {
 /**
  * Coerce a string value to the specified type
  */
-function coerceValue(value: string, type: "string" | "number" | "boolean"): string | number | boolean {
+function coerceValue(
+  value: string,
+  type: "string" | "number" | "boolean",
+): string | number | boolean {
   if (type === "number") {
     const num = Number(value);
     return isNaN(num) ? value : num;
@@ -216,7 +219,10 @@ function serializeLines(lines: ParsedLine[]): string {
 /**
  * Find line indices for a section
  */
-function findSectionRange(lines: ParsedLine[], sectionName: string): { start: number; end: number } {
+function findSectionRange(
+  lines: ParsedLine[],
+  sectionName: string,
+): { start: number; end: number } {
   let start = -1;
   let end = lines.length;
 

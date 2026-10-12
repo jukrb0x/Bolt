@@ -18,7 +18,11 @@ const wrapped = `/**
  */
 
 declare module "boltstack" {
-${stripped.split("\n").map(l => l ? "  " + l : "").join("\n").trimEnd()}
+${stripped
+  .split("\n")
+  .map((l) => (l ? "  " + l : ""))
+  .join("\n")
+  .trimEnd()}
 }
 `;
 

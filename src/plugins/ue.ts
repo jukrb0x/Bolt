@@ -11,6 +11,13 @@ import { normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
 /** Normalise any path to Windows backslashes so cmd.exe handles it correctly. */
 const w = (p: string) => p.replace(/\//g, "\\");
 
+/** Omit an unset branch so git/pull keeps its default (`git_branch`, else `main`). */
+function gitPullArgs(repo: { path: string; branch?: string }): Record<string, string> {
+  const args: Record<string, string> = { path: repo.path };
+  if (repo.branch !== undefined) args.branch = repo.branch;
+  return args;
+}
+
 function requireUnrealBuildConfig(input: string): string {
   const result = normalizeBuildConfig(input);
   if (!result.ok) throw new Error(result.message);
@@ -102,7 +109,7 @@ class UEPlugin extends PluginBase {
     const repo = ctx.cfg.project.engine_repo;
     const vcs = repo.vcs ?? "git";
     if (vcs === "git") {
-      await gitPlugin.handlers["pull"]({ path: repo.path, branch: repo.branch }, ctx);
+      await gitPlugin.handlers["pull"](gitPullArgs(repo), ctx);
     } else {
       await svnPlugin.handlers["update"]({ path: repo.path }, ctx);
     }
@@ -113,7 +120,7 @@ class UEPlugin extends PluginBase {
     const repo = ctx.cfg.project.project_repo;
     const vcs = repo.vcs ?? "svn";
     if (vcs === "git") {
-      await gitPlugin.handlers["pull"]({ path: repo.path, branch: repo.branch }, ctx);
+      await gitPlugin.handlers["pull"](gitPullArgs(repo), ctx);
     } else {
       await svnPlugin.handlers["update"]({ path: repo.path }, ctx);
     }
@@ -198,11 +205,8 @@ class UEPlugin extends PluginBase {
 
     ctx.logger.cmd(`start "" "${exePath}" "${projFile}"`);
     if (!ctx.dryRun) {
-      ctx.runtime.spawnSync(["cmd", "/c", "start", "", exePath, projFile], {
-        stdout: "ignore",
-        stderr: "ignore",
-        stdin: "ignore",
-      });
+      // SpawnOptions has no stdio mode. Both runtimes pipe, and this result is unused.
+      ctx.runtime.spawnSync(["cmd", "/c", "start", "", exePath, projFile]);
     }
   }
 

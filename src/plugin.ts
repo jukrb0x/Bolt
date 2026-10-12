@@ -61,7 +61,10 @@ export function param(name: string, description: string) {
 /**
  * Retrieve the param metadata map for a specific method on a plugin instance.
  */
-export function getParamMap(plugin: { constructor: any }, methodName: string): ParamMap | undefined {
+export function getParamMap(
+  plugin: { constructor: any },
+  methodName: string,
+): ParamMap | undefined {
   const ctor = plugin.constructor;
   const classMap = ctor?.[PARAMS] as ClassParamMap | undefined;
   return classMap?.get(methodName);
@@ -140,8 +143,16 @@ export function resolveDescription(
 /** Optional lifecycle hooks that class-based plugins can implement. */
 export interface PluginLifecycleHooks {
   onInit?(ctx: BoltPluginContext): Promise<void>;
-  onBeforeStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
-  onAfterStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  onBeforeStep?(
+    handlerName: string,
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ): Promise<void>;
+  onAfterStep?(
+    handlerName: string,
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ): Promise<void>;
 }
 
 export interface BoltPlugin {
@@ -184,7 +195,10 @@ export abstract class PluginBase implements BoltPlugin {
   static withDescriptor<TConfig = unknown>(
     desc: PluginDescriptor<TConfig>,
   ): {
-    new (config?: TConfig, deps?: Record<string, BoltPlugin>): PluginBase & {
+    new (
+      config?: TConfig,
+      deps?: Record<string, BoltPlugin>,
+    ): PluginBase & {
       config: TConfig | undefined;
       deps: Record<string, BoltPlugin> | undefined;
       descriptor: PluginDescriptor<TConfig>;

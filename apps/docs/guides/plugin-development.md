@@ -5,6 +5,7 @@ title: "Plugin Development"
 Build a custom Bolt plugin from scratch.
 
 ## Prerequisites
+
 - Bolt installed (`bolt plugin new` command available)
 - Basic TypeScript knowledge
 - Understanding of Bolt's plugin system
@@ -18,6 +19,7 @@ bolt plugin new myplugin
 ```
 
 This creates a directory at `.bolt/plugins/myplugin/` with:
+
 - `index.ts` - Plugin entry point
 - `package.json` - Dependencies
 - `tsconfig.json` - TypeScript configuration
@@ -32,6 +34,7 @@ bun install
 This installs the `boltstack` package, which provides TypeScript definitions for the plugin API.
 
 ## Step 3: Implement Plugin
+
 Edit `index.ts`:
 
 ```typescript
@@ -84,6 +87,7 @@ export default plugin;
 ```
 
 ## Step 4: Use in bolt.yaml
+
 Add a task that uses your handlers and reuses the built-in `build` task with `call`:
 
 ```yaml
@@ -101,11 +105,13 @@ tasks:
 ```
 
 ## Step 5: Test the Plugin
+
 ```bash
 bolt run ci --dry-run
 ```
 
 Expected output:
+
 ```
 [dry-run] ue/build target=editor
 [dry-run] myplugin/run command=npm test
@@ -119,6 +125,7 @@ bolt run ci
 ```
 
 ## Complete Plugin Example
+
 Here's a more comprehensive example with error handling:
 
 ```typescript
@@ -184,6 +191,7 @@ export default plugin;
 ```
 
 ## Testing the Plugin
+
 ```bash
 # Install dependencies
 cd .bolt/plugins/deploy
@@ -203,5 +211,6 @@ bolt run ship --bucket=my-bucket --region=us-east-1 --dry-run
 ```
 
 ## See Also
+
 - [Plugin API](/api/plugin-api.md) - API reference
 - [Plugin System](/guides/plugin-system.md) - How plugins work

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import uePlugin from "../../plugins/ue";
-import { testCfg, PROJECT_NAME, mockRuntime } from "../env";
+import { testCfg, PROJECT_NAME, mockRuntime, tortoiseProcOnPath } from "../env";
 import type { BoltPluginContext } from "../../plugin";
 import { Logger } from "../../logger";
 import { mkdirSync, writeFileSync, existsSync, rmSync } from "fs";
@@ -82,7 +82,7 @@ test("build with target=engine runs setup and engine build", async () => {
 test("update-engine produces git pull command (default vcs=git)", async () => {
   const ctx = makeCtx();
   await uePlugin.handlers["update_engine"]({}, ctx);
-  expect(ctx.logged.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
+  expect(ctx.logged.some((l) => l.includes("pull origin main"))).toBe(true);
 });
 
 test("update-project produces svn update command (default vcs=svn)", async () => {
@@ -244,8 +244,7 @@ test("svn-revert with use_tortoise=false uses plain svn", async () => {
 });
 
 test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async () => {
-  const tp = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
-  if (tp.exitCode === 0) return; // TortoiseProc present — skip this test
+  if (tortoiseProcOnPath()) return; // TortoiseProc present — skip this test
   const fakeCfg = { ...testCfg, project: { ...testCfg.project, use_tortoise: true } };
   const ctx2 = {
     cfg: fakeCfg,
@@ -261,8 +260,7 @@ test("svn-cleanup with use_tortoise=true throws when TortoiseProc absent", async
 });
 
 test("svn-cleanup without use_tortoise uses svn when TortoiseProc absent", async () => {
-  const tp = Bun.spawnSync(["where", "TortoiseProc.exe"], { stdout: "pipe", stderr: "pipe" });
-  if (tp.exitCode === 0) return; // TortoiseProc present — auto-detect would use it, skip
+  if (tortoiseProcOnPath()) return; // TortoiseProc present — auto-detect would use it, skip
   const logged2: string[] = [];
   const ctx2 = {
     cfg: testCfg,
@@ -336,5 +334,5 @@ test("update-project with project_repo.vcs=git calls git pull", async () => {
     runtime: mockRuntime,
   };
   await uePlugin.handlers["update_project"]({}, ctx2);
-  expect(logged2.some((l) => l.includes("git") && l.includes("pull"))).toBe(true);
+  expect(logged2.some((l) => l.includes("pull origin main"))).toBe(true);
 });

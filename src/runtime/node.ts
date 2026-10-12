@@ -17,8 +17,18 @@ export function createNodeRuntime(): Runtime {
         let stdout = "";
         let stderr = "";
 
-        proc.stdout?.on("data", (data) => { const t = data.toString(); process.stdout.write(data); stdout += t; opts?.onOutput?.(t); });
-        proc.stderr?.on("data", (data) => { const t = data.toString(); process.stderr.write(data); stderr += t; opts?.onOutput?.(t); });
+        proc.stdout?.on("data", (data) => {
+          const t = data.toString();
+          process.stdout.write(data);
+          stdout += t;
+          opts?.onOutput?.(t);
+        });
+        proc.stderr?.on("data", (data) => {
+          const t = data.toString();
+          process.stderr.write(data);
+          stderr += t;
+          opts?.onOutput?.(t);
+        });
 
         proc.on("close", (exitCode) => {
           resolve({ exitCode: exitCode ?? 1, stdout, stderr });
@@ -65,8 +75,18 @@ export function createNodeRuntime(): Runtime {
         let stdout = "";
         let stderr = "";
 
-        proc.stdout?.on("data", (data) => { const t = data.toString(); process.stdout.write(data); stdout += t; opts?.onOutput?.(t); });
-        proc.stderr?.on("data", (data) => { const t = data.toString(); process.stderr.write(data); stderr += t; opts?.onOutput?.(t); });
+        proc.stdout?.on("data", (data) => {
+          const t = data.toString();
+          process.stdout.write(data);
+          stdout += t;
+          opts?.onOutput?.(t);
+        });
+        proc.stderr?.on("data", (data) => {
+          const t = data.toString();
+          process.stderr.write(data);
+          stderr += t;
+          opts?.onOutput?.(t);
+        });
 
         proc.on("close", (exitCode) => {
           resolve({ exitCode: exitCode ?? 1, stdout, stderr });

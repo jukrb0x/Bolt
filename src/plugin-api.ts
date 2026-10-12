@@ -84,11 +84,10 @@ export interface RunOptions {
  * @param description  Optional description template for `bolt ai`.
  * @param alias        Optional handler name override (defaults to method name).
  */
-export declare function handler(description?: string, alias?: string): (
-  target: any,
-  propertyKey: string,
-  descriptor: PropertyDescriptor,
-) => void;
+export declare function handler(
+  description?: string,
+  alias?: string,
+): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
 
 /**
  * Base class for class-based plugins.
@@ -104,13 +103,24 @@ export declare abstract class PluginBase implements BoltPlugin {
 
   // Lifecycle hooks (optional — override in subclass)
   onInit?(ctx: BoltPluginContext): Promise<void>;
-  onBeforeStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
-  onAfterStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  onBeforeStep?(
+    handlerName: string,
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ): Promise<void>;
+  onAfterStep?(
+    handlerName: string,
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ): Promise<void>;
 
   static withDescriptor<TConfig = unknown>(
     desc: PluginDescriptor<TConfig>,
   ): {
-    new (config?: TConfig, deps?: Record<string, BoltPlugin>): PluginBase & {
+    new (
+      config?: TConfig,
+      deps?: Record<string, BoltPlugin>,
+    ): PluginBase & {
       config: TConfig | undefined;
       deps: Record<string, BoltPlugin> | undefined;
       descriptor: PluginDescriptor<TConfig>;
@@ -146,6 +156,14 @@ export declare function param(
 /** Optional lifecycle hooks for class-based plugins. */
 export interface PluginLifecycleHooks {
   onInit?(ctx: BoltPluginContext): Promise<void>;
-  onBeforeStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
-  onAfterStep?(handlerName: string, params: Record<string, string>, ctx: BoltPluginContext): Promise<void>;
+  onBeforeStep?(
+    handlerName: string,
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ): Promise<void>;
+  onAfterStep?(
+    handlerName: string,
+    params: Record<string, string>,
+    ctx: BoltPluginContext,
+  ): Promise<void>;
 }

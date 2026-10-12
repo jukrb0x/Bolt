@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-> *本文由 AI 翻译，可能存在不准确之处，将在后续版本中人工校正。*
+> _本文由 AI 翻译，可能存在不准确之处，将在后续版本中人工校正。_
 
 自动化你的虚幻引擎日常工作流程。
 
@@ -17,11 +17,13 @@ bolt run update build start
 ## 安装
 
 **Windows**
+
 ```powershell
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
 **macOS (Apple Silicon)**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
 ```
@@ -70,24 +72,24 @@ project:
   project: { vcs: svn }
 
 tasks:
-  kill:    [{ uses: ue/kill }]
-  update:  [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:   [{ uses: ue/build, with: { target: editor } }]
+  kill: [{ uses: ue/kill }]
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build }]
-  start:   [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     description: 更新、构建并启动编辑器
     steps: [update, build, start]
-    continue_on_fail: [start]    # update/build 失败则中止；start 允许失败
+    continue_on_fail: [start] # update/build 失败则中止；start 允许失败
 ```
 
 ```yaml
 # bolt.local.yaml——本机路径，已 gitignore
-engine_path:  C:/UnrealEngine
+engine_path: C:/UnrealEngine
 project_path: C:/Projects/MyGame
-uproject:     C:/Projects/MyGame/MyGame.uproject
+uproject: C:/Projects/MyGame/MyGame.uproject
 use_tortoise: true
 ```
 
@@ -103,20 +105,20 @@ bolt run daily                       # 运行预定义 flow
 
 ## 命令
 
-| 命令 | 描述 |
-|---------|-------------|
-| `bolt run <names...>` | 按输入顺序运行任务，或运行单个 flow |
-| `bolt list` | 列出所有 task 和 flow |
-| `bolt inspect <names...>` | 显示某个 task 或 flow 解析后的步骤 |
-| `bolt info` | 显示项目和 VCS 状态 |
-| `bolt check` | 校验 `bolt.yaml` 和 `bolt.local.yaml` |
-| `bolt init` | 生成 `bolt.yaml` + `bolt.local.yaml` |
-| `bolt config` | 在 `$EDITOR` 中打开当前 `bolt.yaml` |
-| `bolt ai` | 为 LLM agent 生成 `.bolt/ai-context.md` |
-| `bolt version` | 打印版本 |
-| `bolt self-update` | 更新到最新版本 |
-| `bolt plugin list` | 列出活动插件及其处理器 |
-| `bolt plugin new <name>` | 创建新插件脚手架 |
+| 命令                      | 描述                                    |
+| ------------------------- | --------------------------------------- |
+| `bolt run <names...>`     | 按输入顺序运行任务，或运行单个 flow     |
+| `bolt list`               | 列出所有 task 和 flow                   |
+| `bolt inspect <names...>` | 显示某个 task 或 flow 解析后的步骤      |
+| `bolt info`               | 显示项目和 VCS 状态                     |
+| `bolt check`              | 校验 `bolt.yaml` 和 `bolt.local.yaml`   |
+| `bolt init`               | 生成 `bolt.yaml` + `bolt.local.yaml`    |
+| `bolt config`             | 在 `$EDITOR` 中打开当前 `bolt.yaml`     |
+| `bolt ai`                 | 为 LLM agent 生成 `.bolt/ai-context.md` |
+| `bolt version`            | 打印版本                                |
+| `bolt self-update`        | 更新到最新版本                          |
+| `bolt plugin list`        | 列出活动插件及其处理器                  |
+| `bolt plugin new <name>`  | 创建新插件脚手架                        |
 
 ## 配置
 
@@ -127,18 +129,18 @@ bolt run daily                       # 运行预定义 flow
 ```yaml
 project:
   name: MyGame
-  engine:                    # 仅仓库标识——路径在 bolt.local.yaml 中
-    vcs: git                 # git | svn
-    url: ""                  # 可选：远程 URL
-    branch: main             # 可选：用于 git 仓库
+  engine: # 仅仓库标识——路径在 bolt.local.yaml 中
+    vcs: git # git | svn
+    url: "" # 可选：远程 URL
+    branch: main # 可选：用于 git 仓库
   project:
-    vcs: svn                 # git | svn
-    url: ""                  # 可选：远程 URL
+    vcs: svn # git | svn
+    url: "" # 可选：远程 URL
 
 targets:
   editor:
-    kind: editor             # editor | program | game | client | server
-    config: development      # development | debug | debuggame | shipping | test
+    kind: editor # editor | program | game | client | server
+    config: development # development | debug | debuggame | shipping | test
   client:
     kind: program
     name: MyClient
@@ -146,25 +148,25 @@ targets:
 
 tasks:
   update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
-  build:  [{ uses: ue/build, with: { target: editor } }]
+  build: [{ uses: ue/build, with: { target: editor } }]
   build_editor: [{ call: build }]
-  start:  [{ uses: ue/start }]
+  start: [{ uses: ue/start }]
 
 flows:
   daily:
     steps: [update, build, start]
     continue_on_fail: [start]
 
-timeout_hours: 6             # 可选：运行超过该时长则中止
+timeout_hours: 6 # 可选：运行超过该时长则中止
 ```
 
 ### bolt.local.yaml（本机，gitignore）
 
 ```yaml
-engine_path:  C:/UnrealEngine                       # 本机 UE 根目录
-project_path: C:/Projects/MyGame                    # 本机项目工作副本
-uproject:     C:/Projects/MyGame/MyGame.uproject    # .uproject 文件
-use_tortoise: true                                  # 可选：SVN 操作使用 TortoiseSVN/Proc
+engine_path: C:/UnrealEngine # 本机 UE 根目录
+project_path: C:/Projects/MyGame # 本机项目工作副本
+uproject: C:/Projects/MyGame/MyGame.uproject # .uproject 文件
+use_tortoise: true # 可选：SVN 操作使用 TortoiseSVN/Proc
 ```
 
 `bolt.local.yaml` 中的相对路径以 `bolt.yaml` 所在目录为基准解析。
@@ -181,8 +183,8 @@ tasks:
         target: editor
   reset:
     - uses: ue/kill
-      continue-on-error: true    # 步骤级：出错不中止整个运行
-    - call: update               # 内联复用另一个 task
+      continue-on-error: true # 步骤级：出错不中止整个运行
+    - call: update # 内联复用另一个 task
     - call: build
   notify:
     - run: echo "done at ${{ env.TIME }}"
@@ -208,10 +210,10 @@ flows:
   daily:
     description: 更新、构建并启动编辑器
     steps: [update, build, start]
-    continue_on_fail: [start]    # update/build 中止；start 允许失败
+    continue_on_fail: [start] # update/build 中止；start 允许失败
   reset:
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]     # kill 允许失败（没有进程在运行）而不中止
+    continue_on_fail: [kill] # kill 允许失败（没有进程在运行）而不中止
 ```
 
 ```
@@ -240,23 +242,23 @@ notifications:
 
 ## 内置处理器
 
-| 处理器 | 描述 |
-|---------|-------------|
-| `ue/build` | 构建编辑器、程序或游戏目标 |
-| `ue/build_engine` | 构建 UE 引擎本身 |
-| `ue/build_program` | 构建独立程序目标 |
-| `ue/start` | 启动 UE 编辑器或已构建的二进制文件 |
-| `ue/kill` | 终止所有运行中的 UE 进程 |
-| `ue/update_engine` | 更新引擎仓库（git/svn） |
-| `ue/update_project` | 更新项目仓库（git/svn） |
-| `ue/setup` | 运行引擎 `Setup.bat` |
-| `ue/svn_cleanup` | 运行 SVN cleanup（支持 TortoiseSVN） |
-| `ue/svn_revert` | 还原 SVN 更改 |
-| `ue/generate_project` | 重新生成项目文件 |
-| `ue/fillddc` | 填充 Derived Data Cache |
-| `ue/fix_dll` | 删除导致链接器错误的零字节 DLL |
-| `ue/info` | 打印项目和 VCS 信息 |
-| `ue/ini_set`、`ue/ini_get`、`ue/ini_remove`、`ue/ini_override`、`ue/ini_read_all` | 编辑 UE `.ini` 配置 |
+| 处理器                                                                            | 描述                                 |
+| --------------------------------------------------------------------------------- | ------------------------------------ |
+| `ue/build`                                                                        | 构建编辑器、程序或游戏目标           |
+| `ue/build_engine`                                                                 | 构建 UE 引擎本身                     |
+| `ue/build_program`                                                                | 构建独立程序目标                     |
+| `ue/start`                                                                        | 启动 UE 编辑器或已构建的二进制文件   |
+| `ue/kill`                                                                         | 终止所有运行中的 UE 进程             |
+| `ue/update_engine`                                                                | 更新引擎仓库（git/svn）              |
+| `ue/update_project`                                                               | 更新项目仓库（git/svn）              |
+| `ue/setup`                                                                        | 运行引擎 `Setup.bat`                 |
+| `ue/svn_cleanup`                                                                  | 运行 SVN cleanup（支持 TortoiseSVN） |
+| `ue/svn_revert`                                                                   | 还原 SVN 更改                        |
+| `ue/generate_project`                                                             | 重新生成项目文件                     |
+| `ue/fillddc`                                                                      | 填充 Derived Data Cache              |
+| `ue/fix_dll`                                                                      | 删除导致链接器错误的零字节 DLL       |
+| `ue/info`                                                                         | 打印项目和 VCS 信息                  |
+| `ue/ini_set`、`ue/ini_get`、`ue/ini_remove`、`ue/ini_override`、`ue/ini_read_all` | 编辑 UE `.ini` 配置                  |
 
 ## 插件
 
@@ -301,12 +303,12 @@ tasks:
 
 ### 插件范围
 
-| 范围 | 位置 | 优先级 |
-|-------|----------|----------|
-| 内置 | 编译到 bolt 中 | 最低 |
-| 用户 | `~/.bolt/plugins/<name>/` | ↑ |
-| 项目自动 | `.bolt/plugins/<name>/` | ↑ |
-| 项目显式 | 在 `bolt.yaml` 的 `plugins:` 中声明 | 最高 |
+| 范围     | 位置                                | 优先级 |
+| -------- | ----------------------------------- | ------ |
+| 内置     | 编译到 bolt 中                      | 最低   |
+| 用户     | `~/.bolt/plugins/<name>/`           | ↑      |
+| 项目自动 | `.bolt/plugins/<name>/`             | ↑      |
+| 项目显式 | 在 `bolt.yaml` 的 `plugins:` 中声明 | 最高   |
 
 高优先级插件会覆盖同一命名空间的低优先级插件，因此你可以覆盖任何内置行为。
 
@@ -383,8 +385,8 @@ import { loadConfig } from "boltstack";
 const config = await loadConfig("./bolt.yaml", createRuntime());
 const runner = new Runner(config, { logger: new Logger() });
 
-await runner.runTask("build", {});   // 运行 task
-await runner.runFlow("daily");        // 运行 flow
+await runner.runTask("build", {}); // 运行 task
+await runner.runFlow("daily"); // 运行 flow
 ```
 
 ### 子路径导出
@@ -396,6 +398,7 @@ await runner.runFlow("daily");        // 运行 flow
 ### 运行时兼容性
 
 库使用运行时抽象层：
+
 - **Bun**: 使用原生 API（Bun.spawn、Bun.YAML）
 - **Node.js**: 使用 child_process 和 yaml 包
 

@@ -52,7 +52,11 @@ export class PluginRegistry {
    * Compile a plugin's TypeScript source to a cached JS file using Bun.build().
    * Returns the path to the cached JS file.
    */
-  private async jitCompile(pluginName: string, sourceDir: string, projectRoot: string): Promise<string> {
+  private async jitCompile(
+    pluginName: string,
+    sourceDir: string,
+    projectRoot: string,
+  ): Promise<string> {
     const cacheDir = path.join(projectRoot, ".bolt", ".cache", "plugins", pluginName);
     const cachedJs = path.join(cacheDir, "index.js");
     const entryTs = path.join(sourceDir, "index.ts");
@@ -123,7 +127,7 @@ export class PluginRegistry {
       if (!_h || Object.keys(_h).length === 0) {
         throw new Error(
           `Class plugin "${namespace}" has no handlers. ` +
-          `Ensure methods are decorated with @handler().`
+            `Ensure methods are decorated with @handler().`,
         );
       }
       // Return the instance directly — it implements BoltPlugin and keeps
@@ -136,7 +140,7 @@ export class PluginRegistry {
     if (!exported || !exported.handlers) {
       throw new Error(
         `Plugin "${namespace}" has no default export with handlers.\n` +
-        `For class-based plugins, ensure you export a class extending PluginBase.`
+          `For class-based plugins, ensure you export a class extending PluginBase.`,
       );
     }
     return { ...exported, namespace: exported.namespace || namespace };
@@ -206,7 +210,9 @@ export class PluginRegistry {
       if (temp.descriptor?.configSchema && config !== undefined) {
         const result = temp.descriptor.configSchema.safeParse(config);
         if (!result.success) {
-          const issues = result.error.issues.map((i: any) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+          const issues = result.error.issues
+            .map((i: any) => `  ${i.path.join(".")}: ${i.message}`)
+            .join("\n");
           throw new Error(`Invalid config for plugin "${namespace}":\n${issues}`);
         }
         validatedConfig = result.data; // Use parsed (with defaults applied)

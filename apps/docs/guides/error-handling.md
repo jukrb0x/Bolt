@@ -4,10 +4,10 @@ title: "Error Handling"
 
 Bolt has two independent failure controls. Keep them straight:
 
-| Control | Scope | Key | Where |
-|---------|-------|-----|-------|
-| `continue-on-error` | A single **step** inside a task | hyphen | task step |
-| `continue_on_fail` | A **task** inside a flow | underscore | flow definition |
+| Control             | Scope                           | Key        | Where           |
+| ------------------- | ------------------------------- | ---------- | --------------- |
+| `continue-on-error` | A single **step** inside a task | hyphen     | task step       |
+| `continue_on_fail`  | A **task** inside a flow        | underscore | flow definition |
 
 Flows are otherwise **fail-fast**.
 
@@ -19,12 +19,13 @@ Flows are otherwise **fail-fast**.
 tasks:
   clean:
     - run: "rm -rf ./Saved"
-      continue-on-error: true      # keep going even if this fails
+      continue-on-error: true # keep going even if this fails
     - run: "rm -rf ./Intermediate"
       continue-on-error: true
 ```
 
 Use it for:
+
 - Cleaning directories that might not exist
 - Non-critical cleanup steps
 - Optional operations
@@ -39,17 +40,18 @@ A flow runs its tasks in listed order and is **fail-fast**: the first failing ta
 flows:
   daily:
     steps: [update, build, start]
-    continue_on_fail: [start]    # update/build failures abort; start may fail
+    continue_on_fail: [start] # update/build failures abort; start may fail
   reset:
     steps: [kill, update, genproj, build]
-    continue_on_fail: [kill]     # kill may fail (nothing running) without aborting
+    continue_on_fail: [kill] # kill may fail (nothing running) without aborting
 ```
 
 Behavior (`runFlow`):
+
 - If a task fails and is **not** in `continue_on_fail`, the flow stops immediately and Bolt exits with an error code.
 - If a task fails and **is** in `continue_on_fail`, Bolt logs a warning (`"<task>" failed but is in continue_on_fail — continuing`) and moves on to the next task.
 
-> `continue-on-error` (per-step) and `continue_on_fail` (per-flow) are unrelated. A step swallowed by `continue-on-error` never fails its task in the first place; `continue_on_fail` decides what happens when a whole *task* fails inside a *flow*.
+> `continue-on-error` (per-step) and `continue_on_fail` (per-flow) are unrelated. A step swallowed by `continue-on-error` never fails its task in the first place; `continue_on_fail` decides what happens when a whole _task_ fails inside a _flow_.
 
 ## Missing bolt.local.yaml
 
@@ -74,21 +76,23 @@ This is intentional — Bolt does not silently fall back to defaults for machine
 Set a global timeout to prevent runaway runs. Checked between tasks in a flow:
 
 ```yaml
-timeout_hours: 6  # abort the run once it exceeds 6 hours
+timeout_hours: 6 # abort the run once it exceeds 6 hours
 ```
 
 ## Best Practices
 
 ### 1. Critical vs Non-Critical
+
 Categorize tasks by importance.
 
-| Type | Behavior | Example |
-|------|----------|---------|
-| Critical | Abort the flow on failure | `update`, `build` |
-| Non-critical | Add to `continue_on_fail` | `start`, `kill` |
+| Type          | Behavior                        | Example              |
+| ------------- | ------------------------------- | -------------------- |
+| Critical      | Abort the flow on failure       | `update`, `build`    |
+| Non-critical  | Add to `continue_on_fail`       | `start`, `kill`      |
 | Optional step | `continue-on-error` on the step | cleanup `run:` steps |
 
 ### 2. Preview with --dry-run
+
 Always test with `--dry-run` before running for real.
 
 ```bash
@@ -96,6 +100,7 @@ bolt run daily --dry-run
 ```
 
 ### 3. Check Exit Codes
+
 Bolt exits non-zero when a run fails. Check it in scripts.
 
 ```bash
@@ -107,6 +112,7 @@ fi
 ```
 
 ### 4. Use Notifications
+
 Configure notifications for important workflows.
 
 ```yaml
@@ -120,18 +126,20 @@ notifications:
 ```
 
 ## Error Messages
+
 Bolt provides clear error messages with context.
 
-| Error | Cause | Solution |
-|-------|------|----------|
-| `bolt.yaml not found` | No config file in directory tree | Run `bolt init` or navigate to project root |
-| `bolt.local.yaml missing or invalid` | Per-machine config absent | Copy `bolt.local.example.yaml` or run `bolt init`, then set paths |
-| `Unknown task: foo` | Task name not defined | Run `bolt list` to see available tasks/flows |
-| `Unknown flow: foo` | Flow name not defined | Run `bolt list` to see available flows |
-| `Command failed (exit N)` | Shell command returned non-zero | Check output; fix, or add `continue-on-error` |
-| `Build timed out after Nh` | Run exceeded `timeout_hours` | Increase `timeout_hours` or optimize |
+| Error                                | Cause                            | Solution                                                          |
+| ------------------------------------ | -------------------------------- | ----------------------------------------------------------------- |
+| `bolt.yaml not found`                | No config file in directory tree | Run `bolt init` or navigate to project root                       |
+| `bolt.local.yaml missing or invalid` | Per-machine config absent        | Copy `bolt.local.example.yaml` or run `bolt init`, then set paths |
+| `Unknown task: foo`                  | Task name not defined            | Run `bolt list` to see available tasks/flows                      |
+| `Unknown flow: foo`                  | Flow name not defined            | Run `bolt list` to see available flows                            |
+| `Command failed (exit N)`            | Shell command returned non-zero  | Check output; fix, or add `continue-on-error`                     |
+| `Build timed out after Nh`           | Run exceeded `timeout_hours`     | Increase `timeout_hours` or optimize                              |
 
 ## See Also
+
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
 - [Daily Workflow](/guides/daily-workflow.md) - Tasks, flows, and params
 - [Troubleshooting](/guides/troubleshooting.md) - Common issues and solutions

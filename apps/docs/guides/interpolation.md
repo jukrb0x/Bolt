@@ -27,24 +27,24 @@ Values are resolved just before the step executes. An expression that can't be r
 
 Four namespaces are available in every step:
 
-| Namespace | Resolves to | Source |
-|-----------|-------------|--------|
-| `${{ project.* }}` | The merged runtime `project` | `bolt.yaml` identity + `bolt.local.yaml` paths |
-| `${{ vars.* }}` | Shared vars (local overrides applied) | `bolt.yaml` `vars` + `bolt.local.yaml` `vars` |
-| `${{ env.* }}` | Environment variables | `process.env` |
-| `${{ params.* }}` | Run parameters | `--key=value` on `bolt run` |
+| Namespace          | Resolves to                           | Source                                         |
+| ------------------ | ------------------------------------- | ---------------------------------------------- |
+| `${{ project.* }}` | The merged runtime `project`          | `bolt.yaml` identity + `bolt.local.yaml` paths |
+| `${{ vars.* }}`    | Shared vars (local overrides applied) | `bolt.yaml` `vars` + `bolt.local.yaml` `vars`  |
+| `${{ env.* }}`     | Environment variables                 | `process.env`                                  |
+| `${{ params.* }}`  | Run parameters                        | `--key=value` on `bolt run`                    |
 
 ### project
 
 `project` is the **merged** runtime shape (see [merged runtime shape](/api/config-schema.md#merged-runtime-shape)), so machine paths authored in `bolt.local.yaml` are available here:
 
-| Expression | Resolves to |
-|------------|-------------|
-| `${{ project.name }}` | Project name |
-| `${{ project.engine_repo.path }}` | Local engine path (from `engine_path`) |
-| `${{ project.engine_repo.branch }}` | Engine branch |
-| `${{ project.project_repo.path }}` | Local project path (from `project_path`) |
-| `${{ project.uproject }}` | Absolute `.uproject` path |
+| Expression                          | Resolves to                              |
+| ----------------------------------- | ---------------------------------------- |
+| `${{ project.name }}`               | Project name                             |
+| `${{ project.engine_repo.path }}`   | Local engine path (from `engine_path`)   |
+| `${{ project.engine_repo.branch }}` | Engine branch                            |
+| `${{ project.project_repo.path }}`  | Local project path (from `project_path`) |
+| `${{ project.uproject }}`           | Absolute `.uproject` path                |
 
 Extra scalar fields on the `bolt.yaml` `project` block also pass through as `${{ project.<key> }}`.
 
@@ -86,7 +86,7 @@ tasks:
   build:
     - uses: ue/build
       with:
-        target: editor          # default; overridden if --target is passed
+        target: editor # default; overridden if --target is passed
         config: ${{ params.config }}
 ```
 
