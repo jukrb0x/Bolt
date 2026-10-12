@@ -48,6 +48,11 @@ try {
     throw "Checksum mismatch for $Asset. bolt was not installed."
   }
 
+  $Version = (& $DownloadPath version | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0 -or $Version -notmatch '^[0-9A-Za-z.+-]+$') {
+    throw "Downloaded bolt printed an unexpected version (exit $LASTEXITCODE). The existing bolt was not replaced."
+  }
+
   $Dest = Join-Path $DestDir 'bolt.exe'
   $Old = "$Dest.old"
   $RenamedAside = $false
@@ -67,10 +72,6 @@ try {
     throw
   }
 
-  $Version = (& $Dest version | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0 -or $Version -notmatch '^[0-9A-Za-z.+-]+$') {
-    throw "Installed bolt printed an unexpected version (exit $LASTEXITCODE)"
-  }
   $Json = (@{
       channel = 'github'
       asset   = $Asset

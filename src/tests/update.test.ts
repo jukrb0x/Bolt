@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import path from "path";
 import {
   cleanupStaleBinary,
+  acceptedBinaryVersion,
   isNewer,
   packageManagerForPath,
   parseInstallReceipt,
@@ -87,6 +88,15 @@ test("sha256Hex matches a known digest", () => {
   );
 });
 
+test("acceptedBinaryVersion rejects a binary that does not print a version", () => {
+  expect(acceptedBinaryVersion(0, "2.1.0\n")).toBe("2.1.0");
+  expect(acceptedBinaryVersion(0, "2.0.0-dev")).toBe("2.0.0-dev");
+  expect(acceptedBinaryVersion(1, "2.1.0")).toBeNull();
+  expect(acceptedBinaryVersion(0, '2.1.0"; rm')).toBeNull();
+  expect(acceptedBinaryVersion(0, "")).toBeNull();
+  expect(acceptedBinaryVersion(null, "")).toBeNull();
+});
+
 test("parseInstallReceipt accepts a github receipt and strips a BOM", () => {
   expect(parseInstallReceipt('\uFEFF{"channel":"github","asset":"bolt-mac-x64"}')).toEqual({
     channel: "github",
@@ -138,7 +148,11 @@ test("planSelfUpdate lets a package-manager path win over a github receipt", () 
       arch: "x64",
       receipt: { channel: "github", asset: "bolt-linux-x64" },
     }),
-  ).toEqual({ kind: "delegate", manager: "npm", command: "npm install -g boltstack@latest" });
+  ).toEqual({
+    kind: "delegate",
+    manager: "npm",
+    command: "Upgrade it with: npm install -g boltstack@latest",
+  });
   expect(
     planSelfUpdate({
       execPath: "C:/Users/me/scoop/shims/bolt.exe",
@@ -146,7 +160,11 @@ test("planSelfUpdate lets a package-manager path win over a github receipt", () 
       arch: "x64",
       receipt: { channel: "github", asset: "bolt-win-x64.exe" },
     }),
-  ).toEqual({ kind: "delegate", manager: "scoop", command: "scoop update" });
+  ).toEqual({
+    kind: "delegate",
+    manager: "scoop",
+    command: "No Scoop app name is published yet. Upgrade the app that installed this bolt.",
+  });
 });
 
 test("planSelfUpdate delegates a non-github receipt", () => {
@@ -157,7 +175,11 @@ test("planSelfUpdate delegates a non-github receipt", () => {
       arch: "arm64",
       receipt: { channel: "winget" },
     }),
-  ).toEqual({ kind: "delegate", manager: "winget", command: "winget upgrade" });
+  ).toEqual({
+    kind: "delegate",
+    manager: "winget",
+    command: "No winget package id is published yet. Upgrade the package that installed this bolt.",
+  });
 });
 
 test("replaceInstalledBinary on win32 renames the running exe aside", () => {
@@ -210,6 +232,14 @@ function installAsset(
   };
 }
 
+test("install.sh runs the download before it replaces bolt", () => {
+  const text = readFileSync("install.sh", "utf8");
+  const probe = text.indexOf('"${DEST}/bolt.new" version');
+  const move = text.indexOf('mv -f "${DEST}/bolt.new" "${DEST}/bolt"');
+  expect(probe).toBeGreaterThan(-1);
+  expect(move).toBeGreaterThan(probe);
+});
+
 test("install.sh selects bolt-mac-x64 for Intel macOS", () => {
   const intel = installAsset("Darwin", "x86_64");
   expect(intel.status).toBe(0);
@@ -228,5 +258,10 @@ test("install.ps1 targets the windows x64 asset and renames a running exe", () =
   expect(text).toContain("Get-FileHash");
   expect(text).toContain("Rename-Item");
   expect(text).toContain("LOCALAPPDATA");
-  expect(text.indexOf("Get-FileHash")).toBeLessThan(text.indexOf("Rename-Item"));
+  const hash = text.indexOf("Get-FileHash");
+  const probe = text.indexOf("& $DownloadPath version");
+  const rename = text.indexOf("Rename-Item");
+  expect(hash).toBeGreaterThan(-1);
+  expect(probe).toBeGreaterThan(hash);
+  expect(rename).toBeGreaterThan(probe);
 });
