@@ -158,6 +158,11 @@ export interface BoltConfig {
   tasks: TasksMap;
   flows: Record<string, Flow>;
   plugins: PluginEntry[];
+  /**
+   * Directory containing the bolt.yaml this config was loaded from.
+   * Set by loadConfig. Not a bolt.yaml field. Relative plugin paths resolve against it.
+   */
+  configDir?: string;
   timeout_hours?: number;
   notifications?: NotificationsConfig;
 }
@@ -226,6 +231,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     tasks: shared.tasks,
     flows: shared.flows,
     plugins: shared.plugins,
+    configDir,
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
   };

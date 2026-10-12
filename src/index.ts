@@ -4,7 +4,7 @@ export { run, createContext, type RunOptions, type CreateContextOptions } from "
 
 // Config
 export { loadConfig, checkConfig } from "./config";
-export type { BoltConfig, Project, Flow, Step } from "./config";
+export type { BoltConfig, PluginEntry, Project, Flow, Step } from "./config";
 
 // Types
 export type {

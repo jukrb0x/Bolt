@@ -2,7 +2,7 @@
 title: "bolt check"
 ---
 
-Validate `bolt.yaml` and (if present) `bolt.local.yaml`.
+Validate `bolt.yaml`. When `bolt.local.yaml` is present, validate that too.
 
 ## Usage
 
@@ -12,17 +12,15 @@ bolt check
 
 ## Description
 
-Validates your configuration against Bolt's schema. It checks **both** files:
+Validates your configuration against Bolt's schema:
 
-- **`bolt.yaml`** — file existence, YAML syntax, and full schema validation
-  (project identity, targets, tasks, flows).
-- **`bolt.local.yaml`** — if present, its YAML syntax and schema
-  (`engine_path`, `project_path`, `uproject`). If it is **missing**, that is
-  surfaced as an error with an actionable hint.
+- **`bolt.yaml`** — file existence, YAML syntax, `version: 1`, and the core schema
+  (project name, tasks, flows, plugins). `ue` and `svn` plugin metadata is checked
+  when those entries are present.
+- **`bolt.local.yaml`** — only if the file exists. It may contain `vars` only.
+  A missing file is not an error.
 
-Every problem is reported as a `path → message` row. A missing or invalid
-`bolt.local.yaml` does not stop the check — it is collected alongside any
-`bolt.yaml` errors so you see everything at once.
+Every problem is reported as a `path → message` row.
 
 ## Options
 
@@ -32,7 +30,7 @@ None.
 
 | Code | Description                                             |
 | ---- | ------------------------------------------------------- |
-| 0    | Both files are valid                                    |
+| 0    | The config is valid                                     |
 | 1    | `bolt.yaml` not found, or one or more validation errors |
 
 ## Examples
@@ -52,16 +50,7 @@ bolt.yaml: /path/to/bolt.yaml
 ✓ bolt.yaml is valid
 ```
 
-Output when the per-machine file is missing:
-
-```
-bolt.yaml: /path/to/bolt.yaml
-✗ bolt.yaml has 1 error(s):
-
-  bolt.local.yaml                     missing — copy bolt.local.example.yaml or run bolt init
-```
-
-Legacy task composition is intentionally rejected in v2. Replace `uses: task/name` with `call: name`; `uses` is reserved for plugin/local actions.
+Legacy task composition is intentionally rejected. Replace `uses: task/name` with `call: name`; `uses` is reserved for plugin/local actions.
 
 Output on a schema error:
 
@@ -69,12 +58,12 @@ Output on a schema error:
 bolt.yaml: /path/to/bolt.yaml
 ✗ bolt.yaml has 2 error(s):
 
+  version                             config version is required (expected 1)
   project.name                        Required
-  targets.editor.kind                 Invalid enum value
 ```
 
 ## See Also
 
 - [bolt info](./info.md) - Show project configuration
-- [bolt init](./init.md) - Scaffold bolt.yaml and bolt.local.yaml
+- [bolt init](./init.md) - Scaffold bolt.yaml
 - [bolt.yaml Reference](/guides/bolt-yaml.md) - Configuration schema
