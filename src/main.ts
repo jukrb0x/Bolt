@@ -5,7 +5,7 @@ import listCmd from "./commands/list";
 import infoCmd from "./commands/info";
 import checkCmd from "./commands/check";
 import versionCmd from "./commands/version";
-import updateCmd, { cleanupStaleBinary } from "./commands/update";
+import updateCmd, { cleanupInstalledBolt } from "./commands/update";
 import pluginCmd from "./commands/plugin";
 import configCmd from "./commands/config";
 import inspectCmd from "./commands/inspect";
@@ -13,7 +13,7 @@ import initCmd from "./commands/init";
 import aiCmd from "./commands/ai";
 import { VERSION } from "./version";
 
-if (process.platform === "win32") cleanupStaleBinary(process.execPath);
+if (process.platform === "win32") cleanupInstalledBolt(process.execPath);
 
 const main = defineCommand({
   meta: {

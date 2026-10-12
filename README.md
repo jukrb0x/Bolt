@@ -20,13 +20,15 @@ Stop running Build.bat by hand. Stop context-switching between TortoiseSVN, the 
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
-**macOS (Apple Silicon)**
+Installs `bolt.exe` to `%LOCALAPPDATA%\bolt\bin` and adds that directory to your user Path.
+
+**macOS and Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
 
-Installs `bolt` to `~/.bolt/bin/` and adds it to your PATH. To update:
+Intel macOS installs `bolt-mac-x64`. Apple Silicon installs `bolt-mac-arm64`. Linux x64 installs `bolt-linux-x64`. The binary is `~/.bolt/bin/bolt`. To update a script install:
 
 ```
 bolt self-update
