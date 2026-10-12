@@ -1,6 +1,6 @@
 import type { BoltConfig } from "./config";
 import type { Runtime } from "./runtime/types";
-import type { ZodType } from "zod";
+import type { ZodType, ZodTypeAny } from "zod";
 
 /** Subset of Logger exposed to plugin handlers. */
 export interface BoltLogger {
@@ -24,14 +24,55 @@ export type BoltPluginHandler = (
   ctx: BoltPluginContext,
 ) => Promise<void>;
 
+export type AiMode = false | true | "confirm";
+
+/** Plugin-level fields for class plugins. Not a manifest, and not a plugin object. */
+export interface PluginMeta<TMeta = unknown> {
+  namespace: string;
+  version: string;
+  description: string;
+  metadata?: ZodType<TMeta>;
+}
+
+export interface HandlerManifest {
+  description?: string;
+  ai: AiMode;
+  params?: ZodTypeAny;
+  /** Draft-07 JSON Schema emitted from the flat zod subset. */
+  paramsSchema?: Record<string, unknown>;
+}
+
+/**
+ * Normalized plugin metadata. Built when the plugin is defined or loaded.
+ * There is no manifest file.
+ */
+export interface PluginManifest {
+  namespace: string;
+  version: string;
+  description: string;
+  metadata?: ZodTypeAny;
+  handlers: Record<string, HandlerManifest>;
+}
+
+export interface HandlerDef<T = Record<string, unknown>> {
+  description?: string;
+  ai: AiMode;
+  params?: ZodType<T>;
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void>;
+}
+
+export interface HandlerOptions {
+  description?: string;
+  ai?: AiMode;
+  params?: ZodTypeAny;
+  alias?: string;
+}
+
 // ---------------------------------------------------------------------------
-// @handler decorator — marks a method as a plugin handler
+// Legacy @param storage — reader kept so ai-context can still call getParamMap.
+// New params are zod schemas on the handler, not this map.
 // ---------------------------------------------------------------------------
 
-/** Symbol key for storing handler metadata on the class. */
-const HANDLERS = Symbol.for("bolt:handlers");
-
-/** Symbol key for storing parameter metadata on the class. */
 export const PARAMS = Symbol.for("bolt:params");
 
 interface ParamMeta {
@@ -41,26 +82,6 @@ interface ParamMeta {
 type ParamMap = Map<string, ParamMeta>;
 type ClassParamMap = Map<string, ParamMap>;
 
-/**
- * Parameter decorator — attach metadata to a handler parameter.
- * Stores a `Map<methodName, Map<paramName, { description }>>` on the class constructor.
- *
- * @param name         Logical parameter name (key in the `with:` block).
- * @param description  Human-readable description for `bolt ai`.
- */
-export function param(name: string, description: string) {
-  return function (_target: any, propertyKey: string, _parameterIndex: number) {
-    const ctor = _target.constructor;
-    if (!ctor[PARAMS]) ctor[PARAMS] = new Map<string, ParamMap>();
-    const classMap = ctor[PARAMS] as ClassParamMap;
-    if (!classMap.has(propertyKey)) classMap.set(propertyKey, new Map());
-    classMap.get(propertyKey)!.set(name, { description });
-  };
-}
-
-/**
- * Retrieve the param metadata map for a specific method on a plugin instance.
- */
 export function getParamMap(
   plugin: { constructor: any },
   methodName: string,
@@ -70,49 +91,341 @@ export function getParamMap(
   return classMap?.get(methodName);
 }
 
-interface HandlerMeta {
-  /** The public handler name (defaults to method name). */
+// ---------------------------------------------------------------------------
+// Handler metadata shared by @handler and defineHandler
+// ---------------------------------------------------------------------------
+
+const HANDLERS = Symbol.for("bolt:handlers");
+const HANDLER_DEF = Symbol.for("bolt:handler-def");
+const DEFINED_PLUGIN = Symbol.for("bolt:defined-plugin");
+const MANIFEST_CACHE = Symbol.for("bolt:manifest-cache");
+
+interface StoredHandler {
   alias: string;
-  /** Description template for `bolt ai`. Use ${paramName} for interpolation. */
   description?: string;
+  ai: AiMode;
+  params?: ZodTypeAny;
 }
 
-type HandlerMap = Map<string, HandlerMeta>;
+type HandlerMap = Map<string, StoredHandler>;
+
+interface ZodLike {
+  description?: string;
+  safeParse?: (data: unknown) => {
+    success: boolean;
+    data?: unknown;
+    error?: { issues: { path: PropertyKey[]; message: string }[] };
+  };
+  _def: {
+    typeName?: string;
+    checks?: unknown[];
+    coerce?: boolean;
+    values?: readonly string[];
+    innerType?: ZodLike;
+    defaultValue?: () => unknown;
+    shape?: (() => Record<string, ZodLike>) | Record<string, ZodLike>;
+    unknownKeys?: string;
+    catchall?: ZodLike;
+  };
+}
+
+const PARAMS_SCHEMA_HELP =
+  "Use a flat z.object of z.string(), z.enum(), z.coerce.number(), or z.coerce.boolean(), with optional(), default(), and describe() only.";
+
+function assertAi(ai: unknown, label: string): asserts ai is AiMode {
+  if (ai !== false && ai !== true && ai !== "confirm") {
+    throw new Error(`${label}: ai must be false, true, or "confirm"`);
+  }
+}
+
+function asZod(schema: ZodTypeAny): ZodLike {
+  return schema as unknown as ZodLike;
+}
+
+function unsupportedParams(field: string, kind: string): never {
+  const where = field ? ` at "${field}"` : "";
+  throw new Error(`Unsupported params schema${where} (${kind}). ${PARAMS_SCHEMA_HELP}`);
+}
+
+function unwrapField(
+  schema: ZodLike,
+  field: string,
+): {
+  schema: ZodLike;
+  optional: boolean;
+  hasDefault: boolean;
+  defaultValue?: unknown;
+  description?: string;
+} {
+  let optional = false;
+  let hasDefault = false;
+  let defaultValue: unknown;
+  let description: string | undefined;
+  let current = schema;
+  const seen = new Set<ZodLike>();
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (description === undefined && typeof current.description === "string") {
+      description = current.description;
+    }
+    const typeName = current._def?.typeName;
+    if (typeName === "ZodOptional") {
+      optional = true;
+      current = current._def.innerType!;
+      continue;
+    }
+    if (typeName === "ZodDefault") {
+      if (!hasDefault) {
+        hasDefault = true;
+        defaultValue = current._def.defaultValue?.();
+      }
+      current = current._def.innerType!;
+      continue;
+    }
+    if (
+      typeName === "ZodEffects" ||
+      typeName === "ZodNullable" ||
+      typeName === "ZodCatch" ||
+      typeName === "ZodPipeline" ||
+      typeName === "ZodBranded" ||
+      typeName === "ZodLazy" ||
+      typeName === "ZodPromise" ||
+      typeName === "ZodArray" ||
+      typeName === "ZodUnion" ||
+      typeName === "ZodDiscriminatedUnion" ||
+      typeName === "ZodTuple" ||
+      typeName === "ZodRecord" ||
+      typeName === "ZodIntersection" ||
+      typeName === "ZodObject"
+    ) {
+      unsupportedParams(field, typeName);
+    }
+    break;
+  }
+
+  return { schema: current, optional, hasDefault, defaultValue, description };
+}
+
+function fieldToJson(
+  schema: ZodLike,
+  field: string,
+): {
+  json: Record<string, unknown>;
+  optional: boolean;
+  hasDefault: boolean;
+} {
+  const unwrapped = unwrapField(schema, field);
+  const typeName = unwrapped.schema._def?.typeName;
+  const json: Record<string, unknown> = {};
+
+  if (typeName === "ZodString") {
+    if (unwrapped.schema._def.coerce) unsupportedParams(field, "ZodString coerce");
+    if (unwrapped.schema._def.checks?.length) unsupportedParams(field, "ZodString check");
+    json.type = "string";
+  } else if (typeName === "ZodEnum") {
+    json.type = "string";
+    json.enum = [...(unwrapped.schema._def.values ?? [])];
+  } else if (typeName === "ZodNumber") {
+    if (!unwrapped.schema._def.coerce) unsupportedParams(field, "ZodNumber");
+    if (unwrapped.schema._def.checks?.length) unsupportedParams(field, "ZodNumber check");
+    json.type = "number";
+  } else if (typeName === "ZodBoolean") {
+    if (!unwrapped.schema._def.coerce) unsupportedParams(field, "ZodBoolean");
+    if (unwrapped.schema._def.checks?.length) unsupportedParams(field, "ZodBoolean check");
+    json.type = "boolean";
+  } else {
+    unsupportedParams(field, typeName ?? "unknown");
+  }
+
+  if (unwrapped.description !== undefined) json.description = unwrapped.description;
+  if (unwrapped.hasDefault) json.default = unwrapped.defaultValue;
+  return { json, optional: unwrapped.optional, hasDefault: unwrapped.hasDefault };
+}
+
+function objectShape(schema: ZodLike): Record<string, ZodLike> {
+  if (schema._def?.typeName !== "ZodObject") return {};
+  const shape = schema._def.shape;
+  return typeof shape === "function" ? shape() : (shape ?? {});
+}
 
 /**
- * Method decorator — mark a method as a plugin handler.
- * Only decorated methods are exposed as handlers by PluginBase.
- *
- * @param description  Optional description template for `bolt ai`.
- *                     Use `${paramName}` for interpolation with step's `with:` params.
- * @param alias        Optional handler name override (defaults to method name).
- *
- * @example
- *   @handler("Build ${target} (${config})")
- *   async build(params, ctx) { ... }
- *
- *   @handler("Override INI ${file}", "ini-override")
- *   async iniOverride(params, ctx) { ... }
- *
- *   @handler()  // no description, method name as handler name
- *   async kill(params, ctx) { ... }
+ * Step params arrive as strings. Zod's boolean coerce uses JS Boolean(), so
+ * the string "false" would become true. Map the two textual booleans first.
  */
-export function handler(description?: string, alias?: string) {
-  return function (_target: any, propertyKey: string, _descriptor: PropertyDescriptor) {
-    const ctor = _target.constructor;
-    if (!ctor[HANDLERS]) ctor[HANDLERS] = new Map<string, HandlerMeta>();
-    (ctor[HANDLERS] as HandlerMap).set(propertyKey, {
-      alias: alias ?? propertyKey,
-      description,
-    });
+export function normalizeTextualBooleans(
+  schema: ZodTypeAny,
+  raw: Record<string, string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw };
+  for (const [key, field] of Object.entries(objectShape(asZod(schema)))) {
+    if (unwrapField(field, key).schema._def?.typeName !== "ZodBoolean") continue;
+    if (raw[key] === "true") out[key] = true;
+    else if (raw[key] === "false") out[key] = false;
+  }
+  return out;
+}
+
+/** Emit draft-07 JSON Schema for the allowed flat zod subset. Throws on anything else. */
+export function zodParamsToJsonSchema(schema: ZodTypeAny): Record<string, unknown> {
+  const root = asZod(schema);
+  if (root._def?.typeName !== "ZodObject") {
+    throw new Error(`params must be a flat z.object(...). ${PARAMS_SCHEMA_HELP}`);
+  }
+  if (root._def.unknownKeys !== "strip") {
+    unsupportedParams("", `ZodObject ${root._def.unknownKeys ?? "unknownKeys"}`);
+  }
+  if (root._def.catchall && root._def.catchall._def?.typeName !== "ZodNever") {
+    unsupportedParams("", "ZodObject catchall");
+  }
+
+  const shape = objectShape(root);
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+  for (const [key, field] of Object.entries(shape)) {
+    const converted = fieldToJson(field, key);
+    properties[key] = converted.json;
+    if (!converted.optional && !converted.hasDefault) required.push(key);
+  }
+
+  const out: Record<string, unknown> = {
+    $schema: "http://json-schema.org/draft-07/schema#",
+    type: "object",
+    properties,
+  };
+  if (required.length > 0) out.required = required;
+  return out;
+}
+
+function toManifestHandler(stored: {
+  description?: string;
+  ai: AiMode;
+  params?: ZodTypeAny;
+}): HandlerManifest {
+  const entry: HandlerManifest = { ai: stored.ai };
+  if (stored.description !== undefined) entry.description = stored.description;
+  if (stored.params) {
+    entry.params = stored.params;
+    entry.paramsSchema = zodParamsToJsonSchema(stored.params);
+  }
+  return entry;
+}
+
+function assertZodSchema(value: unknown, label: string): ZodTypeAny {
+  const schema = value as ZodLike;
+  if (
+    !schema ||
+    typeof schema !== "object" ||
+    typeof schema.safeParse !== "function" ||
+    typeof schema._def?.typeName !== "string"
+  ) {
+    throw new Error(`${label} must be a zod schema`);
+  }
+  return value as ZodTypeAny;
+}
+
+function rejectRetiredFields(opts: object, label: string): void {
+  if ("deps" in opts || "configSchema" in opts) {
+    throw new Error(
+      `${label}: deps and configSchema are not supported. deps is not implemented and must not appear on the manifest. Use metadata for the schema this plugin owns.`,
+    );
+  }
+}
+
+export function isHandlerDef(value: unknown): value is HandlerDef<any> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { [HANDLER_DEF]?: boolean })[HANDLER_DEF] === true
+  );
+}
+
+export function isDefinedPlugin(value: object): boolean {
+  return (value as { [DEFINED_PLUGIN]?: boolean })[DEFINED_PLUGIN] === true;
+}
+
+export function markDefinedPlugin(plugin: object): void {
+  Object.defineProperty(plugin, DEFINED_PLUGIN, { value: true });
+}
+
+/**
+ * Object plugins (git, svn, fs, json) have no authoring metadata.
+ * Reflect their handler names into a manifest with ai:false and no params.
+ * A hand-written manifest property is ignored.
+ */
+/** True when `manifest` is a getter, including a PluginBase from another module copy. */
+export function hasManifestGetter(plugin: object): boolean {
+  let current: object | null = plugin;
+  while (current && current !== Object.prototype) {
+    const desc = Object.getOwnPropertyDescriptor(current, "manifest");
+    if (desc?.get) return true;
+    current = Object.getPrototypeOf(current);
+  }
+  return false;
+}
+
+export function reflectObjectManifest(plugin: BoltPlugin): PluginManifest {
+  const handlers: PluginManifest["handlers"] = {};
+  for (const name of Object.keys(plugin.handlers ?? {})) {
+    handlers[name] = { ai: false };
+  }
+  const record = plugin as BoltPlugin & { version?: unknown; description?: unknown };
+  return {
+    namespace: plugin.namespace,
+    version: typeof record.version === "string" ? record.version : "",
+    description: typeof record.description === "string" ? record.description : "",
+    handlers,
+  };
+}
+
+function storeHandler(ctor: any, propertyKey: string, stored: StoredHandler): void {
+  if (!ctor[HANDLERS]) ctor[HANDLERS] = new Map<string, StoredHandler>();
+  (ctor[HANDLERS] as HandlerMap).set(propertyKey, stored);
+}
+
+function toStored(
+  methodName: string,
+  descriptionOrOptions?: string | HandlerOptions,
+  alias?: string,
+): StoredHandler {
+  if (descriptionOrOptions && typeof descriptionOrOptions === "object") {
+    const ai = descriptionOrOptions.ai ?? false;
+    assertAi(ai, `@handler ${methodName}`);
+    if (descriptionOrOptions.params) zodParamsToJsonSchema(descriptionOrOptions.params);
+    return {
+      alias: descriptionOrOptions.alias ?? methodName,
+      description: descriptionOrOptions.description,
+      ai,
+      params: descriptionOrOptions.params,
+    };
+  }
+  return {
+    alias: alias ?? methodName,
+    description: descriptionOrOptions,
+    ai: false,
   };
 }
 
 /**
- * Get handler metadata for all decorated methods on a plugin class.
+ * Method decorator — mark a method as a plugin handler.
+ * String form stays compatible with existing `@handler("...")` plugins.
+ * Object form fills the same handler metadata as `defineHandler`.
  */
-function getHandlerMap(plugin: BoltPlugin): HandlerMap | undefined {
-  const ctor = (plugin as any).constructor;
+export function handler(description?: string, alias?: string): MethodDecorator;
+export function handler(options: HandlerOptions): MethodDecorator;
+export function handler(descriptionOrOptions?: string | HandlerOptions, alias?: string) {
+  return function (_target: object, propertyKey: string | symbol, _descriptor: PropertyDescriptor) {
+    const methodName = String(propertyKey);
+    storeHandler(
+      (_target as { constructor: any }).constructor,
+      methodName,
+      toStored(methodName, descriptionOrOptions, alias),
+    );
+  };
+}
+
+function getHandlerMap(plugin: object): HandlerMap | undefined {
+  const ctor = (plugin as { constructor?: any }).constructor;
   return ctor?.[HANDLERS] as HandlerMap | undefined;
 }
 
@@ -127,13 +440,101 @@ export function resolveDescription(
 ): string | undefined {
   const map = getHandlerMap(plugin);
   if (!map) return undefined;
-  // Find by alias match (handlerName is the public name)
   for (const [, meta] of map) {
     if (meta.alias === handlerName && meta.description) {
       return meta.description.replace(/\$\{([\w-]+)\}/g, (_, key) => params[key] ?? key);
     }
   }
   return undefined;
+}
+
+function fillDescription(
+  description: string | undefined,
+  params: Record<string, string>,
+): string | undefined {
+  if (!description) return undefined;
+  return description.replace(/\$\{([\w-]+)\}/g, (_, key) => params[key] ?? key);
+}
+
+export function defineHandler<T = Record<string, string>>(
+  meta: { description?: string; ai?: AiMode; params?: ZodType<T> },
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void>,
+): HandlerDef<T> {
+  if (!meta || typeof meta !== "object") throw new Error("defineHandler: meta object is required");
+  if (typeof fn !== "function") throw new Error("defineHandler: fn must be a function");
+  const ai = meta.ai ?? false;
+  assertAi(ai, "defineHandler");
+  if (meta.params) zodParamsToJsonSchema(meta.params as ZodTypeAny);
+  const def: HandlerDef<T> = {
+    description: meta.description,
+    ai,
+    params: meta.params,
+    fn,
+  };
+  Object.defineProperty(def, HANDLER_DEF, { value: true });
+  return def;
+}
+
+export interface DefinePluginOptions<TMeta = unknown> {
+  namespace: string;
+  version: string;
+  description: string;
+  metadata?: ZodType<TMeta>;
+  handlers: Record<string, HandlerDef<any>>;
+}
+
+/**
+ * Define a plugin object. This used to return a descriptor for `withDescriptor`;
+ * it now returns the plugin itself (public API break).
+ */
+export function definePlugin<TMeta = unknown>(
+  opts: DefinePluginOptions<TMeta>,
+): BoltPlugin & { manifest: PluginManifest } {
+  if (!opts || typeof opts !== "object")
+    throw new Error("definePlugin: options object is required");
+  rejectRetiredFields(opts, "definePlugin");
+  if (!opts.namespace) throw new Error("definePlugin: namespace is required");
+  if (!opts.version) throw new Error("definePlugin: version is required");
+  if (!opts.description) throw new Error("definePlugin: description is required");
+  if (!opts.handlers || typeof opts.handlers !== "object" || Array.isArray(opts.handlers)) {
+    throw new Error("definePlugin: handlers is required");
+  }
+  const names = Object.keys(opts.handlers);
+  if (names.length === 0) throw new Error("definePlugin: at least one handler is required");
+
+  const handlers: Record<string, BoltPluginHandler> = {};
+  const manifestHandlers: PluginManifest["handlers"] = {};
+  for (const name of names) {
+    const def = opts.handlers[name];
+    if (!isHandlerDef(def)) {
+      throw new Error(`definePlugin: handlers.${name} must be created with defineHandler()`);
+    }
+    handlers[name] = def.fn as BoltPluginHandler;
+    manifestHandlers[name] = toManifestHandler({
+      description: def.description,
+      ai: def.ai,
+      params: def.params as ZodTypeAny | undefined,
+    });
+  }
+
+  const manifest: PluginManifest = {
+    namespace: opts.namespace,
+    version: opts.version,
+    description: opts.description,
+    handlers: manifestHandlers,
+  };
+  if (opts.metadata) manifest.metadata = assertZodSchema(opts.metadata, "definePlugin metadata");
+
+  const plugin: BoltPlugin & { manifest: PluginManifest } = {
+    namespace: opts.namespace,
+    handlers,
+    manifest,
+    describe(handlerName, params) {
+      return fillDescription(manifest.handlers[handlerName]?.description, params);
+    },
+  };
+  markDefinedPlugin(plugin);
+  return plugin;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,8 +559,28 @@ export interface PluginLifecycleHooks {
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
+  /** Present once the plugin is defined (class or definePlugin) or registered (object). */
+  manifest?: PluginManifest;
   /** Return a human-readable description for a handler call, or undefined if none. */
   describe?: (handler: string, params: Record<string, string>) => string | undefined;
+}
+
+function buildClassManifest(plugin: PluginBase): PluginManifest {
+  const map = getHandlerMap(plugin);
+  const handlers: PluginManifest["handlers"] = {};
+  if (map) {
+    for (const [, stored] of map) {
+      handlers[stored.alias] = toManifestHandler(stored);
+    }
+  }
+  const manifest: PluginManifest = {
+    namespace: plugin.namespace,
+    version: plugin.version ?? "",
+    description: plugin.description ?? "",
+    handlers,
+  };
+  if (plugin.metadata) manifest.metadata = plugin.metadata;
+  return manifest;
 }
 
 /**
@@ -169,8 +590,12 @@ export interface BoltPlugin {
  */
 export abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
-  descriptor?: PluginDescriptor<any>;
+  version = "";
+  description = "";
+  /** Zod schema this plugin owns. Not checked by the runner. */
+  metadata?: ZodTypeAny;
   config?: unknown;
+  /** Accepted by withDescriptor's constructor. The registry does not inject deps. */
   deps?: Record<string, BoltPlugin>;
 
   private _handlers?: Record<string, BoltPluginHandler>;
@@ -188,29 +613,46 @@ export abstract class PluginBase implements BoltPlugin {
     return result;
   }
 
+  get manifest(): PluginManifest {
+    const cached = (this as { [MANIFEST_CACHE]?: PluginManifest })[MANIFEST_CACHE];
+    if (cached) return cached;
+    const built = buildClassManifest(this);
+    (this as { [MANIFEST_CACHE]?: PluginManifest })[MANIFEST_CACHE] = built;
+    return built;
+  }
+
   describe(handlerName: string, params: Record<string, string>): string | undefined {
     return resolveDescription(this, handlerName, params);
   }
 
-  static withDescriptor<TConfig = unknown>(
-    desc: PluginDescriptor<TConfig>,
+  static withDescriptor<TMeta = unknown>(
+    meta: PluginMeta<TMeta>,
   ): {
     new (
-      config?: TConfig,
+      config?: unknown,
       deps?: Record<string, BoltPlugin>,
     ): PluginBase & {
-      config: TConfig | undefined;
+      config: unknown;
       deps: Record<string, BoltPlugin> | undefined;
-      descriptor: PluginDescriptor<TConfig>;
+      metadata?: ZodType<TMeta>;
+      manifest: PluginManifest;
     };
   } {
+    if (!meta?.namespace || !meta.version || !meta.description) {
+      throw new Error("withDescriptor: namespace, version, and description are required");
+    }
+    rejectRetiredFields(meta, "withDescriptor");
+    if (meta.metadata) assertZodSchema(meta.metadata, "withDescriptor metadata");
+
     abstract class BoundPlugin extends PluginBase {
-      namespace = desc.namespace;
-      override descriptor = desc as PluginDescriptor<any>;
-      override config: TConfig | undefined;
+      namespace = meta.namespace;
+      override version = meta.version;
+      override description = meta.description;
+      override metadata = meta.metadata as ZodTypeAny | undefined;
+      override config: unknown;
       override deps: Record<string, BoltPlugin> | undefined;
 
-      constructor(config?: TConfig, deps?: Record<string, BoltPlugin>) {
+      constructor(config?: unknown, deps?: Record<string, BoltPlugin>) {
         super();
         this.config = config;
         this.deps = deps;
@@ -218,37 +660,4 @@ export abstract class PluginBase implements BoltPlugin {
     }
     return BoundPlugin as any;
   }
-}
-
-// ---------------------------------------------------------------------------
-// definePlugin() — typed plugin descriptor
-// ---------------------------------------------------------------------------
-
-export interface PluginDescriptor<TConfig = unknown> {
-  namespace: string;
-  version: string;
-  description: string;
-  configSchema?: ZodType<TConfig>;
-  deps?: string[];
-}
-
-/**
- * Define a plugin descriptor. Pass the result to `PluginBase.withDescriptor()`.
- *
- * @example
- *   const descriptor = definePlugin({
- *     namespace: "deploy",
- *     version: "1.0.0",
- *     description: "Deployment automation",
- *     configSchema: z.object({ host: z.string() }),
- *     deps: ["git"],
- *   });
- */
-export function definePlugin<TConfig = unknown>(
-  opts: PluginDescriptor<TConfig>,
-): PluginDescriptor<TConfig> {
-  if (!opts.namespace) throw new Error("definePlugin: namespace is required");
-  if (!opts.version) throw new Error("definePlugin: version is required");
-  if (!opts.description) throw new Error("definePlugin: description is required");
-  return { ...opts };
 }
