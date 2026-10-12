@@ -5,9 +5,8 @@
  * one x64 runtime, with AVX chosen when the process starts. A second file would
  * be the same CPU binary, so this list has no baseline asset.
  *
- * These filenames are the release assets. Install scripts are a later change.
- * `bolt self-update` picks one of these names from the running executable, or
- * from platform and architecture when that executable was renamed.
+ * Install scripts record the downloaded asset in ~/.bolt/install.json.
+ * self-update uses that recorded asset, so an Intel macOS install stays on bolt-mac-x64.
  */
 export const RELEASE_BINARIES = [
   { target: "bun-windows-x64", filename: "bolt-win-x64.exe", runner: "windows-latest" },
