@@ -37,7 +37,7 @@
           },
           {
             "group": "Plugin Development",
-            "pages": ["guides/plugin-development"]
+            "pages": ["guides/plugin-development", "guides/e2e"]
           },
           {
             "group": "Configuration",
