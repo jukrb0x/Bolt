@@ -22,8 +22,10 @@ jobs:
             throw "latest release is $($release.tag_name), expected v2.1.0"
           }
           irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
-          $env:Path = "$env:USERPROFILE\.bolt\bin;" + $env:Path
-          $version = (bolt --version).Trim()
+          # install.ps1 updates the user Path and says to open a new terminal.
+          $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+          Write-Host "bolt: $((Get-Command bolt).Source)"
+          $version = (bolt --version | Out-String).Trim()
           Write-Host "bolt --version: $version"
           if ($version -ne "2.1.0") {
             throw "bolt --version '$version' did not match tag v2.1.0"
