@@ -417,7 +417,8 @@ bun install
 bun run dev          # run from source
 bun test             # run tests
 bun run build:types  # regenerate bolt.d.ts
-bun run release:dry  # preview the release process
+# Release by tagging a commit on main: git tag vX.Y.Z && git push origin vX.Y.Z
+# See docs/ops/release.md. This does not publish to npm.
 ```
 
 ## License

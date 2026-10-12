@@ -14,7 +14,13 @@ fi
 chmod +x "$bin" 2>/dev/null || true
 
 version=$("$bin" version | tr -d '\r\n')
+flag=$("$bin" --version | tr -d '\r\n')
 echo "version: $version"
+echo "--version: $flag"
+if [ "$version" != "$flag" ]; then
+  echo "bolt version ($version) and bolt --version ($flag) disagree" >&2
+  exit 1
+fi
 if [ -n "$expected" ]; then
   if [ "$version" != "$expected" ]; then
     echo "expected version $expected, got $version" >&2

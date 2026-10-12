@@ -4,68 +4,43 @@ title: "Release Process"
 
 ## Prerequisites
 
-- `gh` CLI installed and authenticated (`gh auth login`)
-- `npm` logged in (`npm login`) for `boltstack` type package
-- Clean `main` branch with no uncommitted changes
+- The commit is already on `origin/main`.
+- You can push a tag to `jukrb0x/Bolt`.
 
-## Bump the version
+GitHub Actions uses `GITHUB_TOKEN`. This pipeline does not publish the `boltstack` package and does not need an npm token.
 
-Edit `package.json`:
+## Cut a release
 
-```json
-{ "version": "0.2.0" }
+`package.json` `version` is repository metadata. The binaries embed `src/version.ts`, which the workflow stamps from the tag. `bolt version` and `bolt --version` both print that stamped value.
+
+From `main`:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-Commit and push. That's the only file to change.
+A tag that contains a hyphen, such as `vX.Y.Z-rc.1`, is marked as a GitHub pre-release. `bun run release` and `--pre-release` do not publish.
 
-## Run the release script
+The workflow refuses the release when the tagged commit is not an ancestor of `origin/main`.
 
-```
-bun run release           # full release
-bun run release:pre       # pre-release (tagged "next" on npm, marked pre-release on GitHub)
-bun run release:dry       # dry-run — shows every step without executing
-```
+## What CI uploads
 
-### What the script does
+`.github/workflows/release.yml` builds on Ubuntu with Bun 1.4.3, smoke-tests every binary, then creates the GitHub Release. The asset list lives in `scripts/release-targets.ts`:
 
-1. Verify git working tree is clean
-2. Verify current branch is `main`
-3. Check `gh` CLI is available
-4. Write `src/version.ts` with the release version (before compile)
-5. Generate `bolt.d.ts` via `bun run build:types`
-6. Build the native binary (`bolt-win-x64.exe` on Windows, `bolt-mac-arm64` on macOS)
-7. Copy `bolt.d.ts` to `build/`
-8. Open `$EDITOR` for a custom release notes preamble (prepended before auto-generated git log)
-9. Tag `v<version>` and push to origin
-10. Create GitHub release with native binary + `bolt.d.ts` attached
-11. Publish `boltstack` to npm (`--tag next` for pre-releases)
-12. Restore `src/version.ts` to `<version>-dev` and push
+- `bolt-win-x64.exe`
+- `bolt-linux-x64`
+- `bolt-mac-arm64`
+- `bolt-mac-x64`
+- `bolt.d.ts`
+- `SHA256SUMS`
 
-After the tag is pushed, the CI workflow (`.github/workflows/release.yml`) automatically builds the other platform's binary and uploads it to the same GitHub release.
+There is no `bolt-win-x64-baseline.exe`. In Bun 1.4.3, `bun-windows-x64-baseline` is an alias of `bun-windows-x64`, not a separate older-CPU build.
 
-## CI Workflow
+Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. Build and smoke use `contents: read`. Only the publish job has `contents: write`.
 
-Triggers on `v*` tag push. Two parallel jobs:
-
-- **build-windows** (windows-latest): stamps version, builds `bolt-win-x64.exe`, uploads to the release via `gh release upload --clobber`
-- **build-macos** (macos-latest): stamps version, builds `bolt-mac-arm64`, uploads to the release
-
-Both jobs upload directly to the release created by the local script. No separate release job.
+`bun run release:dry` prints these steps and does not tag or upload.
 
 ## bolt.d.ts
 
-`bolt.d.ts` is generated from `src/plugin-api.ts` via `bun run build:types`:
-
-```
-bunx dts-bundle-generator --no-banner --project tsconfig.json -o bolt.d.ts src/plugin-api.ts
-bun run scripts/wrap-dts.ts bolt.d.ts    # wraps into a declare module block
-```
-
-The output is a single flat file — no imports, no runtime code. Published to npm as the `boltstack` package.
-
-## Environment Variables
-
-| Variable              | Description                                                                 |
-| --------------------- | --------------------------------------------------------------------------- |
-| `BOLT_INTERNAL_SHARE` | If set, copies build artifacts to this path after release                   |
-| `EDITOR` / `VISUAL`   | Editor for release notes (defaults to `notepad` on Windows, `vi` elsewhere) |
+CI generates it from `src/plugin-api.ts` with `bun run build:types` and attaches it to the GitHub Release. It is not published to npm.

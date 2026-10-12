@@ -5,17 +5,71 @@ on:
     tags:
       - "v*"
 
-# Tag push builds every release binary, smoke-tests it, and publishes a
-# GitHub Release with SHA256SUMS. GITHUB_TOKEN is enough; no extra secret.
+# Build and smoke are called with contents: read. Only publish can write.
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  binaries:
     uses: ./.github/workflows/binaries.yml
     with:
       version: ${{ github.ref_name }}
-      publish: true
+    permissions:
+      contents: read
+
+  publish:
+    needs: binaries
+    runs-on: ubuntu-latest
     permissions:
       contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: bolt-binaries
+          path: build
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd build && sha256sum -c SHA256SUMS
+          cd ..
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$COMMIT" origin/main; then
+            echo "Refusing to publish ${TAG}: ${COMMIT} is not on origin/main."
+            exit 1
+          fi
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+          NOTES=$(mktemp)
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$PREV" ]; then
+              git log "${PREV}..${TAG}" --pretty=format:'- %s'
+            else
+              git log "$TAG" --pretty=format:'- %s'
+            fi
+            echo
+          } >"$NOTES"
+          mapfile -t names < build/assets.txt
+          files=()
+          for name in "${names[@]}"; do
+            [ -n "$name" ] || continue
+            files+=("build/$name")
+          done
+          PRE=()
+          case "$TAG" in
+            *-* ) PRE+=(--prerelease) ;;
+          esac
+          gh release create "$TAG" \
+            "${files[@]}" \
+            --title "$TAG" \
+            --notes-file "$NOTES" \
+            "${PRE[@]}"
