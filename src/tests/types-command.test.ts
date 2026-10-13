@@ -63,44 +63,49 @@ test("bolt types refreshes the declaration and keeps an existing tsconfig", () =
   expect(replaced.compilerOptions.paths.boltstack).toEqual(["./.bolt/types/boltstack.d.ts"]);
 });
 
-test("a compiled binary keeps definePlugin after the source text is set aside", async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "bolt-embed-"));
-  const entry = path.join(dir, "entry.ts");
-  const binary = path.join(dir, "embed-check");
-  const declaration = path.join(root, "src/plugin-declaration.ts");
-  writeFileSync(
-    entry,
-    `import { PLUGIN_DECLARATION_TEXT } from ${JSON.stringify(declaration)};\n` +
-      `if (!PLUGIN_DECLARATION_TEXT.includes("definePlugin")) process.exit(2);\n` +
-      `console.log("embedded");\n`,
-  );
-  const build = Bun.spawn(["bun", "build", entry, "--compile", "--outfile", binary], {
-    cwd: dir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const buildCode = await build.exited;
-  expect(buildCode).toBe(0);
+// bun build --compile overruns Bun's 5s default on a busy Windows runner.
+test(
+  "a compiled binary keeps definePlugin after the source text is set aside",
+  async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "bolt-embed-"));
+    const entry = path.join(dir, "entry.ts");
+    const binary = path.join(dir, "embed-check");
+    const declaration = path.join(root, "src/plugin-declaration.ts");
+    writeFileSync(
+      entry,
+      `import { PLUGIN_DECLARATION_TEXT } from ${JSON.stringify(declaration)};\n` +
+        `if (!PLUGIN_DECLARATION_TEXT.includes("definePlugin")) process.exit(2);\n` +
+        `console.log("embedded");\n`,
+    );
+    const build = Bun.spawn(["bun", "build", entry, "--compile", "--outfile", binary], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const buildCode = await build.exited;
+    expect(buildCode).toBe(0);
 
-  const textFile = path.join(root, "src/plugin-types.txt");
-  const hidden = path.join(dir, "plugin-types.txt");
-  // Temp and the repo can sit on different Windows volumes, where rename throws EXDEV.
-  copyFileSync(textFile, hidden);
-  unlinkSync(textFile);
-  try {
-    const run = Bun.spawn([binary], { cwd: dir, stdout: "pipe", stderr: "pipe" });
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(run.stdout).text(),
-      new Response(run.stderr).text(),
-      run.exited,
-    ]);
-    expect(code).toBe(0);
-    expect(`${stdout}\n${stderr}`).toContain("embedded");
-  } finally {
-    copyFileSync(hidden, textFile);
-    unlinkSync(hidden);
-  }
-});
+    const textFile = path.join(root, "src/plugin-types.txt");
+    const hidden = path.join(dir, "plugin-types.txt");
+    // Temp and the repo can sit on different Windows volumes, where rename throws EXDEV.
+    copyFileSync(textFile, hidden);
+    unlinkSync(textFile);
+    try {
+      const run = Bun.spawn([binary], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(run.stdout).text(),
+        new Response(run.stderr).text(),
+        run.exited,
+      ]);
+      expect(code).toBe(0);
+      expect(`${stdout}\n${stderr}`).toContain("embedded");
+    } finally {
+      copyFileSync(hidden, textFile);
+      unlinkSync(hidden);
+    }
+  },
+  process.platform === "win32" ? 120_000 : undefined,
+);
 
 test("bolt types is registered", async () => {
   const proc = Bun.spawn(["bun", "src/main.ts", "types", "--help"], {
