@@ -7,7 +7,7 @@ Replace a script-installed `bolt` with a GitHub release.
 ## Usage
 
 ```bash
-bolt self-update [--force] [--version <version>]
+bolt self-update [<version>] [--force] [--version <version>]
 ```
 
 ## Description
@@ -19,6 +19,16 @@ The receipt must say `"channel": "github"`, and its `path` must be the executabl
 The recorded asset is kept. An Intel macOS install stays on `bolt-mac-x64`; it is not replaced with `bolt-mac-arm64`.
 
 This command runs in the compiled binary. A dev process whose executable name starts with `bun` exits with an error.
+
+### Where releases come from
+
+Self-update does not need the GitHub API. It requests `https://github.com/jukrb0x/Bolt/releases/latest`, reads the tag from the redirect (`/releases/tag/vX.Y.Z`), and downloads `SHA256SUMS` and the asset from `https://github.com/jukrb0x/Bolt/releases/download/<tag>/<asset>`, the same URLs the install scripts use. An explicit version (`bolt self-update v2.1.0`) goes straight to that download URL.
+
+If the redirect cannot be read, it falls back to `api.github.com`, authenticated with the first of `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token` (when the GitHub CLI is installed and logged in), else anonymously. The token is only sent in the request header and is never printed. A `403` or `429` from GitHub prints a rate-limit message: set `GH_TOKEN`, or rerun the install one-liner.
+
+Requests go through Bun's `fetch`, which honours `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`.
+
+For testing, `BOLT_RELEASES_URL` replaces `https://github.com/jukrb0x/Bolt/releases`, `BOLT_RELEASES_API` forces the API path at another base, and `BOLT_INSTALL_BASE` (a directory with `SHA256SUMS` and the assets, as `install.ps1` uses) skips version lookup; the downloaded file's `version` decides whether it is newer.
 
 ### Checksum
 
@@ -38,8 +48,9 @@ When the executable path is under `node_modules`, WinGet, Scoop, or Homebrew, se
 | ----------- | ------------------------------------------------------------------------ |
 | `--force`   | Download and replace even when the current version is already the latest |
 | `--version` | Install this version instead of the latest, for example `2.1.0`          |
+| `<version>` | Same as `--version`, for example `v2.1.0`                                |
 
-Without `--force` or `--version`, a current version that is not older than the latest release prints `Already up to date (v2.1.1)` (the `v` plus the running version) and does not download.
+Without `--force` or a version, a current version that is not older than the latest release prints `Already up to date (v2.1.1)` (the `v` plus the running version) and does not download.
 
 ## Examples
 
@@ -47,6 +58,7 @@ Without `--force` or `--version`, a current version that is not older than the l
 bolt self-update
 bolt self-update --force
 bolt self-update --version 2.1.1
+bolt self-update v2.1.0
 ```
 
 ## Install scripts

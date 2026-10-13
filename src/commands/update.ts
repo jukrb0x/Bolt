@@ -8,13 +8,14 @@ import path from "path";
 import pc from "picocolors";
 import { RELEASE_BINARIES } from "../../scripts/release-targets";
 
-const GITHUB_REPO = "jukrb0x/Bolt";
-const PUBLIC_RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
-
-interface GHRelease {
-  tag_name: string;
-  assets: Array<{ name: string; browser_download_url: string }>;
-}
+import {
+  RATE_LIMIT_MESSAGE,
+  defaultResolveDeps,
+  normalizeTag,
+  resolveRelease,
+  type ResolvedRelease,
+} from "../release-source";
+export { releasesApiBase } from "../release-source";
 
 export interface InstallReceipt {
   channel: string;
@@ -263,32 +264,20 @@ export function cleanupInstalledBolt(execPath: string): void {
   cleanupStaleBinary(execPath, installed);
 }
 
-/** Public GitHub releases API, unless BOLT_RELEASES_API points at a local release. */
-export function releasesApiBase(override: string | undefined): string {
-  const trimmed = override?.trim();
-  if (!trimmed) return PUBLIC_RELEASES_API;
-  return trimmed.replace(/\/+$/, "");
-}
-
-function releaseApiUrl(version: string | undefined): string {
-  const base = releasesApiBase(process.env.BOLT_RELEASES_API);
-  if (!version) return `${base}/latest`;
-  const tag = version.startsWith("v") ? version : `v${version}`;
-  return `${base}/tags/${encodeURIComponent(tag)}`;
-}
-
-async function fetchRelease(version: string | undefined): Promise<GHRelease> {
-  const res = await fetch(releaseApiUrl(version), {
-    headers: { "User-Agent": "bolt-self-update", Accept: "application/vnd.github+json" },
-  });
-  if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
-  return (await res.json()) as GHRelease;
-}
-
 async function download(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { headers: { "User-Agent": "bolt-self-update" } });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  if (!res.ok) throw new Error(`Download failed: HTTP ${res.status} for ${url}`);
   return new Uint8Array(await res.arrayBuffer());
+}
+
+/** Message for a failed asset download. A 403/429 from GitHub is a rate limit. */
+export function downloadFailureMessage(
+  status: number | undefined,
+  tag: string | undefined,
+): string {
+  if (status === 403 || status === 429) return RATE_LIMIT_MESSAGE;
+  if (status === 404 && tag) return `Release ${tag} or its asset was not found (HTTP 404).`;
+  return "";
 }
 
 function readReceiptFile(): InstallReceipt | null {
@@ -327,9 +316,14 @@ export default defineCommand({
       default: false,
       description: "Re-download even if already up to date",
     },
+    tag: {
+      type: "positional",
+      required: false,
+      description: "Install this version instead of the latest, for example v2.1.0",
+    },
     version: {
       type: "string",
-      description: "Install this version instead of the latest, for example 2.1.0",
+      description: "Same as the positional version, for example 2.1.0",
     },
   },
   async run({ args }) {
@@ -355,48 +349,55 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const requested = typeof args.version === "string" && args.version ? args.version : undefined;
+    const positional = typeof args.tag === "string" && args.tag ? args.tag : undefined;
+    const flag = typeof args.version === "string" && args.version ? args.version : undefined;
+    const requested = positional ?? flag;
     console.log(pc.dim(`Current version: ${VERSION}`));
-    console.log(pc.dim(requested ? `Fetching ${requested}...` : "Checking for updates..."));
+    console.log(
+      pc.dim(requested ? `Fetching ${normalizeTag(requested)}...` : "Checking for updates..."),
+    );
 
-    let release: GHRelease;
-    try {
-      release = await fetchRelease(requested);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(pc.red(`Failed to fetch release info: ${message}`));
-      process.exit(1);
+    // BOLT_INSTALL_BASE is a directory holding SHA256SUMS and the assets, like install.ps1 uses.
+    // Its version is only known after the download runs.
+    const installBase = process.env.BOLT_INSTALL_BASE?.trim().replace(/\/+$/, "");
+    let release: ResolvedRelease | undefined;
+    let sumsUrl: string;
+    let assetUrl: string;
+    if (installBase && !requested) {
+      sumsUrl = `${installBase}/SHA256SUMS`;
+      assetUrl = `${installBase}/${plan.asset}`;
+    } else {
+      try {
+        release = await resolveRelease(
+          plan.asset,
+          requested,
+          defaultResolveDeps((line) => console.log(pc.dim(line))),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(pc.red(`Failed to fetch release info: ${message}`));
+        process.exit(1);
+      }
+      sumsUrl = release.sumsUrl;
+      assetUrl = release.assetUrl;
+      const latestVersion = release.tag.replace(/^v/, "");
+      if (!requested && !args.force && !isNewer(VERSION, latestVersion)) {
+        console.log(pc.green(`Already up to date (v${VERSION})`));
+        return;
+      }
     }
 
-    const latestTag = release.tag_name ?? "";
-    if (!latestTag) {
-      console.error(pc.red("Invalid release response: missing tag_name"));
-      process.exit(1);
-    }
-    const latestVersion = latestTag.replace(/^v/, "");
-    if (!requested && !args.force && !isNewer(VERSION, latestVersion)) {
-      console.log(pc.green(`Already up to date (v${VERSION})`));
-      return;
-    }
-
-    const sumsAsset = release.assets.find((asset) => asset.name === "SHA256SUMS");
-    const asset = release.assets.find((item) => item.name === plan.asset);
-    if (!sumsAsset || !asset) {
-      console.error(
-        pc.red(`Release ${latestTag} is missing ${plan.asset} or SHA256SUMS. Not replacing bolt.`),
-      );
-      process.exit(1);
-    }
-
-    console.log(pc.dim(`Downloading ${plan.asset} v${latestVersion}...`));
+    console.log(pc.dim(`Downloading ${plan.asset}${release ? ` ${release.tag}` : ""}...`));
     let sumsText: string;
     let bytes: Uint8Array;
     try {
-      sumsText = new TextDecoder().decode(await download(sumsAsset.browser_download_url));
-      bytes = await download(asset.browser_download_url);
+      sumsText = new TextDecoder().decode(await download(sumsUrl));
+      bytes = await download(assetUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(pc.red(message));
+      const status = Number(/HTTP (\d{3})/.exec(message)?.[1]) || undefined;
+      const hint = downloadFailureMessage(status, release?.tag);
+      console.error(pc.red(hint ? `${message}. ${hint}` : message));
       process.exit(1);
     }
 
@@ -427,7 +428,8 @@ export default defineCommand({
     }
 
     const probe = spawnSync(tmpPath, ["version"], { encoding: "utf8" });
-    if (!acceptedBinaryVersion(probe.status, probe.stdout ?? "")) {
+    const probedVersion = acceptedBinaryVersion(probe.status, probe.stdout ?? "");
+    if (!probedVersion) {
       try {
         unlinkSync(tmpPath);
       } catch {
@@ -437,6 +439,17 @@ export default defineCommand({
         pc.red("Downloaded bolt did not print a version. The installed bolt was not changed."),
       );
       process.exit(1);
+    }
+
+    const latestVersion = release ? release.tag.replace(/^v/, "") : probedVersion;
+    if (!release && !args.force && !isNewer(VERSION, latestVersion)) {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        // Left next to the binary; the next update overwrites it.
+      }
+      console.log(pc.green(`Already up to date (v${VERSION})`));
+      return;
     }
 
     try {

@@ -140,6 +140,25 @@ tasks:
 bolt run fix-dll build     # clean the bad DLLs, then rebuild
 ```
 
+### bolt self-update: GitHub API returned 403
+
+**Error**: `Failed to fetch release info: GitHub API returned 403` (or `429`), usually with a rate-limit message.
+
+**Cause**: Anonymous `api.github.com` requests are limited per IP address. On a shared office or VPN IP the limit runs out quickly. Since this release, `bolt self-update` reads the latest release from the `github.com/.../releases/latest` redirect and only uses the API if that fails. Older bolt versions always used the API.
+
+**Solution**: Any one of:
+
+- Set `GH_TOKEN` (or `GITHUB_TOKEN`) to a GitHub token, or log in with `gh auth login`, then run `bolt self-update` again.
+- Rerun the install one-liner, which downloads from `github.com` without the API:
+
+```powershell
+irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
+```
+
 ## Configuration Issues
 
 ### Invalid YAML Syntax
