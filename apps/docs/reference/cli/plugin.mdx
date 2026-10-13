@@ -1,0 +1,35 @@
+---
+title: "bolt plugin"
+description: "Manage bolt plugins"
+---
+
+{/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
+
+Source: [`src/commands/plugin.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/plugin.ts).
+
+Manage bolt plugins
+
+```bash
+bolt plugin <command>
+```
+
+### bolt plugin new
+
+Scaffold a new bolt plugin
+
+```bash
+bolt plugin new <name> [options]
+```
+
+| Argument | Type       | Alias | Required | Default | Description                                                |
+| -------- | ---------- | ----- | -------- | ------- | ---------------------------------------------------------- |
+| `name`   | positional |       | yes      |         | Plugin name (lowercase alphanumeric, hyphens, underscores) |
+| `--user` | boolean    |       |          | `false` | Create in user scope (~/.bolt/plugins/)                    |
+
+### bolt plugin list
+
+List active plugins and their handlers
+
+```bash
+bolt plugin list
+```

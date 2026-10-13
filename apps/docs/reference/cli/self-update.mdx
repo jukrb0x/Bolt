@@ -1,0 +1,20 @@
+---
+title: "bolt self-update"
+description: "Update a script-installed bolt to a GitHub release"
+---
+
+{/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
+
+Source: [`src/commands/update.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/update.ts).
+
+Update a script-installed bolt to a GitHub release
+
+```bash
+bolt self-update [tag] [options]
+```
+
+| Argument    | Type       | Alias | Required | Default | Description                                                    |
+| ----------- | ---------- | ----- | -------- | ------- | -------------------------------------------------------------- |
+| `--force`   | boolean    |       |          | `false` | Re-download even if already up to date                         |
+| `tag`       | positional |       |          |         | Install this version instead of the latest, for example v2.1.0 |
+| `--version` | string     |       |          |         | Same as the positional version, for example 2.1.0              |

@@ -1,0 +1,19 @@
+---
+title: "bolt migrate"
+description: "Rewrite a v2.0 bolt.yaml and bolt.local.yaml to the current format"
+---
+
+{/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
+
+Source: [`src/commands/migrate.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/migrate.ts).
+
+Rewrite a v2.0 bolt.yaml and bolt.local.yaml to the current format
+
+```bash
+bolt migrate [options]
+```
+
+| Argument    | Type    | Alias | Required | Default | Description                                                           |
+| ----------- | ------- | ----- | -------- | ------- | --------------------------------------------------------------------- |
+| `--dry-run` | boolean |       |          | `false` | Print the rewritten files without writing them                        |
+| `--force`   | boolean |       |          | `false` | Write the files even if the converted config does not pass bolt check |

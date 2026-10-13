@@ -1,0 +1,106 @@
+---
+title: "Architecture"
+description: "A concise, user-facing tour of how Bolt is put together and how a command flows through it. For the full engineering reference, see the internal architecture doc."
+---
+
+A concise, user-facing tour of how Bolt is put together and how a command flows through it. For the full engineering reference, see the internal architecture doc.
+
+## Repository Layout
+
+```
+src/
+├── main.ts               # CLI entry — citty command tree
+├── index.ts              # Library public API (run, createContext, loadConfig)
+├── api.ts                # High-level run() implementation
+├── config.ts             # Zod schema, loadConfig (optional local vars), checkConfig
+├── discover.ts           # Upward bolt.yaml search
+├── runner.ts             # Core execution engine (runTask / runFlow)
+├── interpolate.ts        # ${{ }} template engine
+├── logger.ts             # Logger (console + optional file sink)
+├── notify.ts             # Notifier: WeCom, Telegram providers
+├── plugin.ts             # BoltPlugin / BoltPluginContext + @param metadata
+├── plugin-registry.ts    # PluginRegistry, buildRegistry() (scope resolution)
+├── ai-context.ts         # generateAiContext() → .bolt/ai-context.md
+├── plugins/              # Built-ins: ue, ue-ini, git, svn, fs, json, path-guard
+├── commands/             # citty subcommands; init.ts scaffolds config
+└── tests/                # Bun test suite (co-located)
+```
+
+## Command Tree
+
+```
+bolt
+├── run <name...>          # run tasks (typed order) or a single flow
+├── list                   # list tasks and flows
+├── info                   # project + VCS summary
+├── check                  # validate bolt.yaml (and bolt.local.yaml when present)
+├── config                 # open bolt.yaml in $EDITOR
+├── init                   # scaffold bolt.yaml
+├── inspect <name...>      # show resolved steps without executing
+├── plugin
+│   ├── list               # active plugins + handlers
+│   └── new <name>         # scaffold a plugin
+├── ai                     # generate .bolt/ai-context.md
+├── self-update            # update to latest release
+└── version                # print version
+```
+
+Commands are registered in `main.ts` via citty's `subCommands`. citty handles `--help`, `--version`, and argument routing. All commands produce plain terminal output — the interactive `help` TUI and `init` wizard were removed in v2.
+
+## Execution Flow
+
+```
+CLI args
+  └── citty routes to command
+        └── discover(cwd)          # walk up to find bolt.yaml
+              └── loadConfig()      # parse bolt.yaml, merge optional local vars, Zod
+                    └── resolveRunPlan()      # resolve tasks/calls/params once
+                          └── Runner.executePlan()
+                                ├── call      # recursively owned task nodes
+                                ├── run       # shell command
+                                └── uses
+                                      ├── ./path      # local action
+                                      └── ns/handler → PluginRegistry
+```
+
+`bolt run a b c` resolves all named tasks into one plan in typed order. `bolt run <flow>` resolves the flow into the same structure, embedding its `continue_on_fail` policy. Execution and the one start notification consume that plan.
+
+## Config Split Loader
+
+`loadConfig` reads `bolt.yaml` (`version: 1`, project name, plugins, tasks, flows). Unreal engine, project, uproject, and targets live on the `ue` plugin. `bolt.local.yaml` is optional and may only override `vars`. A missing local file is fine; invalid content is an error. `loadConfig` records `configDir` as the directory containing `bolt.yaml`, and relative plugin paths resolve against it.
+
+## Plugin Scopes (resolution priority)
+
+Later scopes override earlier ones for the same namespace:
+
+1. Built-in (compiled into bolt) — lowest
+2. User — `~/.bolt/plugins/<name>/`
+3. Project auto — `.bolt/plugins/<name>/`
+4. Project explicit — declared in `bolt.yaml` `plugins:` — highest
+
+## Key Design Decisions
+
+**Params merge order:** CLI run params always win over YAML `with:` params (`{ ...yamlParams, ...params }`), consistent across all dispatch paths, and exposed as `${{ params.x }}` in interpolation.
+
+**Strict step union:** `uses` means a plugin/local action, `call` means a reusable task, and `run` means a shell command. `resolveRunPlan()` expands calls with cycle protection before execution or inspection.
+
+**One plan per invocation:** multi-task start notifications show the top-level task list and recursively owned nodes once per invocation.
+
+**Registry is per-Runner:** each `Runner` lazily builds its own registry on first `uses:` dispatch. Display-only paths (e.g. `plugin list`) call `buildRegistry()` directly.
+
+**Runtime abstraction:** `runtime/` selects Bun (native `Bun.spawn`) or Node (`child_process`) so the library runs on both; the CLI stays Bun-only.
+
+## Logging
+
+Every run is logged to both the console and a file under `.bolt/logs/`:
+
+```
+<project>/.bolt/logs/bolt_2024-01-15T10-30-00.log
+```
+
+Logs capture the timestamp, Bolt version, config path, tasks/flows executed, step output, timing, and any errors.
+
+## See Also
+
+- [Plugin System](/guides/plugin-system) - How plugins work
+- [Runtime](/guides/runtime) - Bun vs Node.js abstraction

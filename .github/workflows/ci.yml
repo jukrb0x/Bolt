@@ -60,6 +60,31 @@ jobs:
       - name: End-to-end
         run: bun run test:e2e
 
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generated docs are up to date
+        run: bun run docs:gen && git diff --exit-code -- apps/docs && test -z "$(git status --porcelain -- apps/docs)"
+
+      - name: Mintlify validate
+        working-directory: apps/docs
+        run: bunx mint validate
+
+      - name: Mintlify broken links
+        working-directory: apps/docs
+        run: bunx mint broken-links
+
   # Two compiled builds, served locally. The public `irm | iex` run is not here:
   # it has to hit a real GitHub Release, and that tag does not exist yet.
   windows-install:

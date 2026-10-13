@@ -11,5 +11,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": false
   },
-  "include": ["src/**/*", "e2e/**/*"]
+  "include": ["src/**/*", "e2e/**/*", "apps/docs/scripts/**/*"]
 }

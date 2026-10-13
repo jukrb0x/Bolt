@@ -1,0 +1,72 @@
+---
+title: "Plugin System"
+description: "A plugin is a TypeScript module that exports a plugin object: a namespace and async handlers. uses: steps call those handlers as namespace/handler."
+---
+
+A plugin is a TypeScript module that exports a plugin object: a namespace and async handlers. `uses:` steps call those handlers as `namespace/handler`.
+
+The manifest is built in memory from `@handler` or `defineHandler`. Bolt does not read a JSON or YAML manifest.
+
+## Discovery
+
+Later layers replace an earlier plugin with the same namespace.
+
+| Priority    | Scope    | Location                                      |
+| ----------- | -------- | --------------------------------------------- |
+| 1 (lowest)  | Built-in | Compiled into the bolt binary                 |
+| 2           | User     | `~/.bolt/plugins/<namespace>/`                |
+| 3           | Project  | `<project>/.bolt/plugins/<namespace>/`        |
+| 4 (highest) | Explicit | `plugins:` entry in `bolt.yaml` with a `path` |
+
+A `plugins:` entry with no `path` is config for a builtin. The `ue` entry is that kind of record. It is not imported.
+
+Project directories prefer `index.ts`. Bolt compiles it and caches the JavaScript under `<project>/.bolt/.cache/plugins/`. User directories (`~/.bolt/plugins/`) load `index.js` when that file exists, and `index.ts` otherwise. An explicit `path` may point at either file. A `.ts` path is compiled.
+
+`boltstack` and `zod` are left external. The host injects one module of each name, so the plugin and the core share a single `boltstack` and a single `zod`.
+
+## Host install
+
+While compiling a `.ts` entry, if `package.json` `dependencies` is non-empty and the directory has no `node_modules`, Bolt installs them by running its own executable:
+
+```text
+BUN_BE_BUN=1 <this bolt> install
+```
+
+That does not look up a `bun` binary on `PATH`. A prebuilt `index.js` is loaded without that install. `bolt plugin new` puts `boltstack` in `devDependencies`, not `dependencies`.
+
+## Brand
+
+`definePlugin` and `PluginBase` set `Symbol.for("boltstack.plugin")` and `apiVersion` `1`. The registry accepts a branded plugin only when `apiVersion` is `1`. A `manifest` getter without that symbol is an error. See [Plugin API](/api/plugin-api).
+
+## Scaffold
+
+```bash
+bolt plugin new myplugin
+bolt plugin new myplugin --user
+```
+
+Writes `index.ts` and `package.json` in the plugin directory. A plugin at `.bolt/plugins/myplugin/index.ts` is discovered with no `bolt.yaml` change. An explicit path:
+
+```yaml
+plugins:
+  - namespace: myplugin
+    path: ./tools/myplugin/index.ts
+```
+
+Core `bolt.yaml` stays `version: 1` with `project.name`. Unreal `targets` belong under the `ue` plugin's `config`, not at the root of the file.
+
+## Handler params
+
+`with:` values are interpolated, then overridden by `--key=value` on `bolt run`. `defineHandler` params are checked before the function runs.
+
+`ctx.dryRun` is true for `--dry-run`. `ctx.cfg.project` is `{ name }`. The name string is `ctx.cfg.project.name`. Plugin metadata, including Unreal paths, is on `ctx.cfg.plugins`. `ctx.configDir` is the `bolt.yaml` directory. `ctx.logger` is `info`, `warn`, `error`, `debug`, and `cmd`. `ctx.runtime` spawns processes.
+
+## Built-in plugins
+
+See [Built-in Handlers](/api/built-in-handlers). Overriding a builtin means shipping another plugin with the same namespace from a higher-priority scope, created with `definePlugin` so it carries the brand and `apiVersion` `1`.
+
+## See Also
+
+- [Plugin API](/api/plugin-api) - `definePlugin`, `defineHandler`, and context
+- [Plugin Development](/guides/plugin-development) - Tutorial
+- [bolt plugin](/cli/plugin) - CLI
