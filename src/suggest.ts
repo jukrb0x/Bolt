@@ -80,7 +80,13 @@ export function closestMatches(input: string, candidates: Iterable<string>): str
       continue;
     }
     const score = editDistance(clean, lower);
-    if (score < bestScore) {
+    // On a tie, prefer the candidate closer in exact case (`mrak` → `mark`, not `Mark`).
+    if (
+      score < bestScore ||
+      (score === bestScore &&
+        best !== undefined &&
+        editDistance(input, candidate) < editDistance(input, best))
+    ) {
       best = candidate;
       bestScore = score;
     }
