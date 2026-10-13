@@ -141,16 +141,19 @@ bolt run reset --dry-run             # preview without executing
 
 A v2.0 `bolt.yaml` had no `version`, kept `engine`/`project` repo identity under `project`, and put `targets` at the root. A v2.0 `bolt.local.yaml` held `engine_path`, `project_path`, `uproject`, and `use_tortoise`. `bolt check` lists each of these keys and prints the converted files. `bolt migrate` rewrites both files for you (see [bolt migrate](/cli/migrate.md)):
 
-| v2.0                              | Now                                          |
-| --------------------------------- | -------------------------------------------- |
-| `bolt.yaml` `project.engine`      | `plugins[ue].config.engine`                  |
-| `bolt.yaml` `project.project`     | `plugins[ue].config.project`                 |
-| `bolt.yaml` `targets`             | `plugins[ue].config.targets`                 |
-| other `bolt.yaml` `project.<key>` | `vars.<key>` (use `${{ vars.<key> }}`)       |
-| `bolt.local.yaml` `engine_path`   | `bolt.local.yaml` `plugins.ue.engine.path`   |
-| `bolt.local.yaml` `project_path`  | `bolt.local.yaml` `plugins.ue.project.path`  |
-| `bolt.local.yaml` `uproject`      | `bolt.local.yaml` `plugins.ue.uproject`      |
-| `bolt.local.yaml` `use_tortoise`  | `bolt.local.yaml` `plugins.svn.use_tortoise` |
+| v2.0                               | Now                                                   |
+| ---------------------------------- | ----------------------------------------------------- |
+| `bolt.yaml` `project.engine`       | `plugins[ue].config.engine`                           |
+| `bolt.yaml` `project.project`      | `plugins[ue].config.project`                          |
+| `bolt.yaml` `targets`              | `plugins[ue].config.targets`                          |
+| other `bolt.yaml` `project.<key>`  | `vars.<key>` (use `${{ vars.<key> }}`)                |
+| `bolt.local.yaml` `engine_path`    | `bolt.local.yaml` `plugins.ue.engine.path`            |
+| `bolt.local.yaml` `project_path`   | `bolt.local.yaml` `plugins.ue.project.path`           |
+| `bolt.local.yaml` `uproject`       | `bolt.local.yaml` `plugins.ue.uproject`               |
+| `bolt.local.yaml` `use_tortoise`   | `bolt.local.yaml` `plugins.svn.use_tortoise`          |
+| `${{ project.engine_repo.path }}`  | `${{ vars.engine_path }}` (set in `bolt.local.yaml`)  |
+| `${{ project.project_repo.path }}` | `${{ vars.project_path }}` (set in `bolt.local.yaml`) |
+| `${{ project.uproject }}`          | `${{ vars.uproject }}` (set in `bolt.local.yaml`)     |
 
 Multi-task start notifications are sent once per invocation and show the top-level task list plus recursively owned actions.
 

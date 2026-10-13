@@ -27,6 +27,12 @@ When either file still uses bolt v2.0 keys (no `version`, root `targets`,
 and prints the converted `bolt.yaml` and `bolt.local.yaml`. Run
 [`bolt migrate`](./migrate.md) to write them.
 
+`bolt check` also reports any `${{ project.<key> }}` in tasks or flows other than
+`${{ project.name }}`, since nothing else exists under `project`. Use a var instead.
+
+Errors in values that come from `bolt.local.yaml` overrides are labeled
+`bolt.local.yaml: plugins.<namespace>.<path>`.
+
 Every problem is reported as a `path → message` row.
 
 ## Options

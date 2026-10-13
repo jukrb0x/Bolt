@@ -209,7 +209,7 @@ A run emits one start notification. Multi-task runs show the top-level task list
 
 ## bolt.local.yaml (optional)
 
-A missing file is fine. Invalid YAML or any key other than `vars` and `plugins` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error.
+A missing file is fine. Invalid YAML or any key other than `vars` and `plugins` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error. A target override may set only some fields (for example just `config`); the merged target is validated.
 
 ```yaml
 vars:
