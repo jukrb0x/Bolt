@@ -218,6 +218,8 @@ bolt run build -- extra=--verbose # values starting with -- go after a bare --
 
 Argument parsing is strict: unknown flags, `--dry-run=<value>`, param values starting with `--`, flags before the command (`bolt --dry-run run …`), and the reserved names `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`, plus `help` (handled separately), used as params all fail with exit code 2 before anything runs. Mistyped commands and task names (`bolt rn mark`, `bolt run mrk`) also exit 2 with a "Did you mean" suggestion, and `bolt run` without a name lists the project's tasks. Reserved names are case-sensitive.
 
+`--dry-run` is a pure preview: it prints each step as `would run …` and executes nothing (no commands, no plugin loading, no hooks, no file writes). `--simulate` loads plugins and runs their handlers with `ctx.dryRun = true`. Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error (`bolt.yaml` missing or invalid), `4` permission denied.
+
 ### Flows
 
 A flow is a named, ordered goal composed of tasks. Flows are fail-fast — the first failing task aborts the run — unless a task is listed in `continue_on_fail`:

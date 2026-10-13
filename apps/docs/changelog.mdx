@@ -15,7 +15,7 @@ following now fail with `[ERROR] …` and exit code `2` before anything runs:
 3. **Param values starting with `--`**: `bolt run build --extra=--verbose` used to pass `--verbose` as the value. It now fails with exit code `2`: `Param value for "--extra" may not start with "--". Pass it after a "--" separator instead: bolt run ... -- extra=--verbose`
 4. **`bolt inspect --dry-run`**: `inspect` never executes, so it no longer accepts the flag. It fails with `Unknown flag "--dry-run" for "bolt inspect": bolt inspect never executes, it is already a side-effect-free preview. Remove --dry-run.`
 5. **Flags before the command**: `bolt --dry-run run deploy` used to drop the flag and **execute**. Only `-h`, `--help`, and `--version` are allowed before the command. A near miss such as `bolt --verison` suggests the match: `Unknown global flag "--verison". Did you mean "--version"?`. Help wins (`bolt --help --version` shows help, exit 0); `--version` otherwise must be alone and takes no value.
-6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`
+6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` and `--simulate` (added by BOLT-P0-1, see below) are implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`
 7. **`help` is also reserved after the command**, in addition to the 7 reserved names above (it is handled separately): `--help=<value>` and `help=<value>` after `--` used to be passed as a task param (so `bolt run mark --help=1` **ran the task**). Now `--help=1` fails with `--help takes no value. Use: bolt run --help. …`, and `-- help=1` fails with `"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=1.` Bare `--help` / `-h` still show help.
 
 Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary params.
@@ -25,6 +25,44 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 8. **Mistyped command**: `bolt rn mark` used to print the full usage and exit `1`. It now prints a short suggestion and the list of commands, and exits `2`: `Unknown command "rn". Did you mean "run"?` (also for nested commands, e.g. `bolt plugin nw`).
 9. **Unknown task or flow**: `bolt run mrk` / `bolt inspect mrk` exited `1` with `Unknown task or flow: "mrk"`. They now exit `2` with `Unknown task "mrk". Did you mean "mark"?` followed by the project's tasks and flows, before any log file is created. When the only match differs by case (`bolt run Mark` → `mark`), the message adds `Task names are case-sensitive.`
 10. **No task given**: `bolt run` / `bolt inspect` without a name exited `1` with a fixed `bolt run build start` example. They now exit `2` and list the project's actual tasks and flows (`Example: bolt run <first task>`); outside a project they point to `bolt list` / `bolt init`.
+
+### Breaking: `--dry-run` runs nothing and writes nothing (BOLT-P0-1)
+
+This is another dry-run behavior change after #27. `bolt run … --dry-run` is now a
+pure static preview: it reads `bolt.yaml`, resolves the plan like `bolt inspect`, and
+prints every step as `would run …`. It no longer:
+
+- imports, compiles, or installs plugins (no `.bolt/.cache`, no `bun install`);
+- calls plugin `onInit`, `onBeforeStep`, `onAfterStep`, or handlers;
+- executes local actions (`uses: ./…`); before, they **ran** during a dry run;
+- spawns any process, including `git` for notifications;
+- creates `.bolt/` or writes a log file under `.bolt/logs/`.
+
+The output ends with `Nothing was executed …` and points to `--simulate`. Built-in
+handler names and params, `call:` targets, and local action scripts are still checked;
+problems a real run would hit are marked with `!` and exit `1`. A dry run cannot show
+the exact command a plugin handler builds (for example the `Build.bat` line from
+`ue/build`), because the handler is not called.
+
+New flag `--simulate`: the previous plugin-level preview. Plugins load and their hooks
+and handlers run with `ctx.dryRun = true`; `run:` steps and local actions are skipped;
+a log file is written; notifications are not sent. Plugins may still have side effects.
+`--dry-run` and `--simulate` cannot be combined. With the library API, `dryRun: true`
+now also skips local actions.
+
+### Breaking: exit code `3` for config errors (BOLT-P0-1)
+
+`bolt.yaml` missing, unparseable, failing the schema, or describing an invalid task
+graph (unknown `call:` target, call cycle, malformed `uses:` ref, legacy `task/<name>`)
+now exits `3` instead of `1`, before anything runs and before a log file is created.
+This applies to `bolt run` (with or without `--dry-run`), `inspect`, `list`, `info`,
+`check`, `ai`, and `plugin list`. A `bolt.yaml` that exists but cannot be read exits `4`.
+Errors say how to fix them, for example
+`bolt.yaml not found in <dir> or any parent directory.` followed by
+`Run bolt from your project directory, or create one with bolt init.`
+
+Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
+`4` permission denied.
 
 ### Improved error hints
 
@@ -64,9 +102,18 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
   - Scripts that used `if [ $? -eq 1 ]` or PowerShell `if ($LASTEXITCODE -eq 1)` to
     mean "any failure" should use `-ne 0` instead (same operator in bash and PowerShell).
   - To distinguish usage errors from task failures: `2` = usage, `1` = task failure.
-  - Config errors (`bolt.yaml` missing/invalid) will exit `3` in this same release,
-    shipping together with **BOLT-P0-1**. Until BOLT-P0-1 lands on main they still
-    exit `1`; do not treat exit `1` as "config error".
+  - Config errors (`bolt.yaml` missing/invalid) exit `3` in this same release
+    (**BOLT-P0-1**, see above). Do not treat exit `1` as "config error".
+
+- **Config errors now exit `3`, not `1`.** Scripts that check `-eq 1` (bash) or
+  `$LASTEXITCODE -eq 1` (PowerShell) to detect a broken or missing `bolt.yaml` must
+  check `-eq 3` instead. `-ne 0` checks are unchanged. `bolt check` also exits `3`
+  when `bolt.yaml` is invalid or missing.
+- **Relying on `--dry-run` to run plugin code** (hooks, handler dry-run logging,
+  compiling a project plugin, `bun install`, or a log file): use `--simulate`
+  instead. To warm the plugin cache or install plugin dependencies, run any real
+  task or `bolt plugin list`. If you used `--dry-run` to execute a local action,
+  run the task for real.
 
 ### Changed
 
