@@ -16,10 +16,12 @@ function resolvePath(params: Record<string, string>): string {
 
 /**
  * Path for read-only handlers with `ai: true` (`git/info`, `svn/info`). A relative
- * path resolves against the bolt.yaml directory. A path outside the project is
- * literally outside the project (`../Engine`) is allowed with a warning; an in-project
- * path that resolves outside through a symlink gives no warning (as on main). AI invocations of these handlers are rejected by core
- * (the runner) before the handler runs.
+ * path resolves against the bolt.yaml directory.
+ * - Human runs: a path literally outside the project (`../Engine`) is allowed with a
+ *   warning. An in-project path that resolves outside through a symlink gives no
+ *   warning (as on main); its real path goes to the run log file only.
+ * - AI invocations: any path outside the project, literal or through a symlink, is
+ *   rejected by core (the runner) before the handler runs.
  */
 export function projectPath(
   params: Record<string, string>,
