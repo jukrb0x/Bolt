@@ -213,7 +213,10 @@ bolt run reset build start
 bolt run build --target=client --config=shipping
 bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 bolt run update build --dry-run
+bolt run build -- extra=--verbose # values starting with -- go after a bare --
 ```
+
+Argument parsing is strict: unknown flags, `--dry-run=<value>`, param values starting with `--`, flags before the command (`bolt --dry-run run …`), and the reserved names `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` used as params all fail with exit code 2 before anything runs.
 
 ### Flows
 

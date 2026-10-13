@@ -130,10 +130,13 @@ bolt run update build --dry-run     # skip run: steps; plugins still run
 
 ### Flags
 
-| Flag          | Effect                                                         |
-| ------------- | -------------------------------------------------------------- |
-| `--dry-run`   | Skip `run:` steps and local actions; plugin handlers still run |
-| `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`)     |
+| Flag           | Effect                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| `--dry-run`    | Skip `run:` steps and local actions; plugin handlers still run                            |
+| `--key=value`  | Pass a parameter to the whole run (e.g. `--target=client`)                                |
+| `-- key=value` | Params after a bare `--`; use when the value starts with `--` (e.g. `-- extra=--verbose`) |
+
+Flags go after the command (`bolt run build --dry-run`, never `bolt --dry-run run build`). Unknown flags, `--dry-run=<value>`, values starting with `--`, and reserved names (`dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`) as params fail with exit code 2.
 
 ### Introspection (when ai-context.md is insufficient)
 

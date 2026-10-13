@@ -2,7 +2,8 @@ import { expect, test, describe } from "bun:test";
 import { Runner } from "../runner";
 import { testCfg } from "./env";
 import type { BoltConfig } from "../config";
-import { parseRunArgs, dispatchRun, UsageError } from "../commands/run";
+import { parseRunArgs, dispatchRun, UsageError, RESERVED_FLAGS } from "../commands/run";
+import { checkGlobalArgs } from "../global-args";
 import { formatPlanNodes } from "../inspect-utils";
 import { resolveRunPlan } from "../run-plan";
 
@@ -202,4 +203,59 @@ test("formats a resolved call tree with effective CLI params", () => {
     "call: build",
     "  uses: ue/build  target=editor  config=shipping",
   ]);
+});
+
+describe("reserved flag names (design 0.4)", () => {
+  const usage = (args: string[], opts?: Parameters<typeof parseRunArgs>[1]) => {
+    try {
+      parseRunArgs(args, opts);
+    } catch (e) {
+      expect(e).toBeInstanceOf(UsageError);
+      return (e as Error).message;
+    }
+    throw new Error(`expected UsageError for ${args.join(" ")}`);
+  };
+  const unsupported = ["simulate", "json", "agent", "execute", "plan", "confirmed-by-user"];
+
+  test("all seven names are reserved", () => {
+    expect([...RESERVED_FLAGS].sort() as string[]).toEqual([...unsupported, "dry-run"].sort());
+  });
+
+  for (const name of unsupported) {
+    test(`--${name} is rejected in every form`, () => {
+      const msg = `--${name} is reserved and not supported yet`;
+      expect(usage(["build", `--${name}`])).toContain(msg);
+      expect(usage(["build", `--${name}=x`])).toContain(msg);
+      expect(usage(["build", "--", `${name}=x`])).toContain(msg);
+      expect(usage(["build", `--${name}=x`], { flags: [], command: "inspect" })).toContain(msg);
+    });
+  }
+
+  test("dry-run cannot be passed as a param after --", () => {
+    expect(usage(["build", "--", "dry-run=false"])).toContain("reserved flag name");
+  });
+
+  test("non-reserved look-alikes still pass", () => {
+    expect(parseRunArgs(["build", "--planner=x", "--", "jsonfile=a"]).params).toEqual({
+      planner: "x",
+      jsonfile: "a",
+    });
+  });
+});
+
+describe("checkGlobalArgs", () => {
+  test("allows help, a lone --version and nothing before the subcommand", () => {
+    expect(checkGlobalArgs([])).toBeUndefined();
+    expect(checkGlobalArgs(["--version"])).toBeUndefined();
+    expect(checkGlobalArgs(["-h"])).toBeUndefined();
+    expect(checkGlobalArgs(["--help", "run"])).toBeUndefined();
+    expect(checkGlobalArgs(["run", "build", "--dry-run"])).toBeUndefined();
+  });
+
+  test("rejects any other flag before the subcommand", () => {
+    expect(checkGlobalArgs(["--dry-run", "run", "deploy"])).toContain('"--dry-run"');
+    expect(checkGlobalArgs(["-x", "run", "build"])).toContain('"-x"');
+    expect(checkGlobalArgs(["--version", "run", "build"])).toContain('"--version"');
+    expect(checkGlobalArgs(["--bogus"])).toContain('"--bogus"');
+  });
 });
