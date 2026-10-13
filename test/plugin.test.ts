@@ -113,6 +113,7 @@ describe("definePlugin()", () => {
       version: "1.0.0",
       description: "A test plugin",
       metadata,
+      pluginApi: 1,
       handlers: {
         run: {
           description: "Run ${input}",

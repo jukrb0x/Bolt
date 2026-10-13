@@ -1,14 +1,16 @@
 import { createHash } from "crypto";
 import { spawnSync } from "child_process";
 import {
-  PLUGIN_API_VERSION,
   PLUGIN_BRAND,
+  assertClassCapabilities,
   assertPluginApiVersion,
+  checkStaticApiVersion,
   hasManifestGetter,
   isBrandedPlugin,
   isDefinedPlugin,
   markDefinedPlugin,
   reflectObjectManifest,
+  type AiMode,
   type BoltPlugin,
 } from "./plugin";
 import path from "path";
@@ -165,8 +167,26 @@ function installPluginDependencies(pluginName: string, sourceDir: string): void 
   }
 }
 
+export type PluginSource = "builtin" | "user" | "project" | "path";
+
+const SOURCE_RANK: Record<PluginSource, number> = { path: 0, project: 1, user: 2, builtin: 3 };
+
+export interface CapabilityMatch {
+  ref: string;
+  namespace: string;
+  handler: string;
+  ai: AiMode;
+  source: PluginSource;
+  capabilities: string[];
+}
+
 export class PluginRegistry {
   private plugins = new Map<string, BoltPlugin>();
+  private sources = new Map<string, PluginSource>();
+  /** Namespace order of `plugins[]` in bolt.yaml, used to order capability matches. */
+  private configOrder: string[] = [];
+  /** Non-fatal registration notes, e.g. a redundant `static apiVersion`. */
+  readonly warnings: string[] = [];
 
   /**
    * Branded plugins keep the manifest their copy already built.
@@ -174,21 +194,68 @@ export class PluginRegistry {
    */
   private normalize(plugin: BoltPlugin): BoltPlugin {
     if (isBrandedPlugin(plugin) || isDefinedPlugin(plugin)) {
+      const note = checkStaticApiVersion(plugin);
+      if (note) this.warnings.push(note);
       assertPluginApiVersion(plugin);
+      // Class plugins: tags are checked here because decorators run before the
+      // instance apiVersion is known. definePlugin already checked its own.
+      if (hasManifestGetter(plugin)) assertClassCapabilities(plugin);
       return plugin;
     }
     if (hasManifestGetter(plugin)) {
       throw new Error(
-        `Plugin "${plugin.namespace}" is missing Symbol.for("boltstack.plugin") and apiVersion ${PLUGIN_API_VERSION}.`,
+        `Plugin "${plugin.namespace}" has a manifest getter but is missing Symbol.for("boltstack.plugin") and an apiVersion (1 or 2). Fix: extend PluginBase or use definePlugin() from boltstack instead of a hand-written manifest getter.`,
       );
     }
     plugin.manifest = reflectObjectManifest(plugin);
     return plugin;
   }
 
-  register(plugin: BoltPlugin): void {
+  register(plugin: BoltPlugin, source: PluginSource = "builtin"): void {
     const loaded = this.normalize(plugin);
     this.plugins.set(loaded.namespace, loaded);
+    this.sources.set(loaded.namespace, source);
+  }
+
+  setConfigOrder(namespaces: string[]): void {
+    this.configOrder = [...namespaces];
+  }
+
+  /**
+   * Handlers that carry a capability tag. Exact match by default; `exact: false`
+   * also matches tags below `cap` on dot boundaries (`vcs` matches `vcs.sync`).
+   * Order: bolt.yaml `plugins[]` order, then source precedence, then ref.
+   * A shadowed namespace contributes nothing because only the winner is registered.
+   */
+  findByCapability(cap: string, opts: { exact?: boolean } = {}): CapabilityMatch[] {
+    const exact = opts.exact ?? true;
+    const hit = (tag: string) => tag === cap || (!exact && tag.startsWith(`${cap}.`));
+    const matches: CapabilityMatch[] = [];
+    for (const [namespace, plugin] of this.plugins) {
+      const handlers = plugin.manifest?.handlers ?? {};
+      for (const [handler, entry] of Object.entries(handlers)) {
+        const tags = entry.capabilities ?? [];
+        if (!tags.some(hit)) continue;
+        matches.push({
+          ref: `${namespace}/${handler}`,
+          namespace,
+          handler,
+          ai: entry.ai,
+          source: this.sources.get(namespace) ?? "builtin",
+          capabilities: [...tags],
+        });
+      }
+    }
+    const configRank = (ns: string) => {
+      const i = this.configOrder.indexOf(ns);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    return matches.sort(
+      (a, b) =>
+        configRank(a.namespace) - configRank(b.namespace) ||
+        SOURCE_RANK[a.source] - SOURCE_RANK[b.source] ||
+        (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0),
+    );
   }
 
   get(namespace: string): BoltPlugin | undefined {
@@ -248,7 +315,12 @@ export class PluginRegistry {
    * Load a plugin from a path. Handles both pre-compiled JS and raw TS.
    * For class exports, instantiates with no config.
    */
-  async loadFromPath(namespace: string, pluginPath: string, cacheRoot?: string): Promise<void> {
+  async loadFromPath(
+    namespace: string,
+    pluginPath: string,
+    cacheRoot?: string,
+    source: PluginSource = "path",
+  ): Promise<void> {
     const file = isTypeScript(pluginPath)
       ? await this.compilePlugin(namespace, pluginPath, cacheRoot ?? path.dirname(pluginPath))
       : pluginPath;
@@ -256,7 +328,7 @@ export class PluginRegistry {
     const exported = mod.default ?? mod;
 
     const plugin = this.resolvePluginExport(exported, namespace);
-    this.register(plugin);
+    this.register(plugin, source);
   }
 
   /**
@@ -307,7 +379,11 @@ export class PluginRegistry {
    * Load all plugins from a directory (auto-discovery).
    * Supports JIT compilation for .ts plugins when projectRoot is provided.
    */
-  async loadDirectory(dir: string, projectRoot?: string): Promise<void> {
+  async loadDirectory(
+    dir: string,
+    projectRoot?: string,
+    source: PluginSource = "project",
+  ): Promise<void> {
     if (!existsSync(dir)) return;
 
     for (const entry of readdirSync(dir)) {
@@ -335,7 +411,7 @@ export class PluginRegistry {
 
       if (candidate) {
         try {
-          await this.loadFromPath(entry, candidate);
+          await this.loadFromPath(entry, candidate, undefined, source);
         } catch (e: unknown) {
           throw pluginLoadError(entry, entryPath, e);
         }
@@ -353,6 +429,7 @@ export class PluginRegistry {
     config?: unknown,
     deps?: Record<string, BoltPlugin>,
     cacheRoot?: string,
+    source: PluginSource = "path",
   ): Promise<void> {
     const file = isTypeScript(pluginPath)
       ? await this.compilePlugin(namespace, pluginPath, cacheRoot ?? path.dirname(pluginPath))
@@ -360,7 +437,7 @@ export class PluginRegistry {
     const mod = await import(file);
     const exported = mod.default ?? mod;
     const plugin = this.resolvePluginExport(exported, namespace, config, deps);
-    this.register(plugin);
+    this.register(plugin, source);
   }
 }
 
@@ -376,11 +453,13 @@ export async function buildRegistry(
 
   // 2. User-scope: ~/.bolt/plugins/
   const userPluginsDir = path.join(os.homedir(), ".bolt", "plugins");
-  await reg.loadDirectory(userPluginsDir);
+  await reg.loadDirectory(userPluginsDir, undefined, "user");
 
   // 3. Project-scope auto-discovery: <project_root>/.bolt/plugins/
   const projectPluginsDir = path.join(configDir, ".bolt", "plugins");
-  await reg.loadDirectory(projectPluginsDir, configDir);
+  await reg.loadDirectory(projectPluginsDir, configDir, "project");
+
+  reg.setConfigOrder((cfg.plugins ?? []).map((entry) => entry.namespace));
 
   // 4. Project-scope explicit declarations (highest priority).
   // Pathless entries are builtin config (for example ue metadata) and are not imported.

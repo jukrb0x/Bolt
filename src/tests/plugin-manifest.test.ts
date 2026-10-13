@@ -42,9 +42,9 @@ test("string @handler on ue produces a manifest and does not invent params", () 
 
 test("object plugins are reflected as ai false with no params", () => {
   const reg = new PluginRegistry();
-  for (const plugin of [fsPlugin, jsonPlugin, gitPlugin, svnPlugin]) reg.register(plugin);
+  for (const plugin of [fsPlugin, jsonPlugin]) reg.register(plugin);
 
-  for (const plugin of [fsPlugin, jsonPlugin, gitPlugin, svnPlugin]) {
+  for (const plugin of [fsPlugin, jsonPlugin]) {
     const manifest = reg.get(plugin.namespace)?.manifest;
     expect(manifest?.namespace).toBe(plugin.namespace);
     expect(Object.keys(manifest?.handlers ?? {}).sort()).toEqual(
@@ -55,6 +55,45 @@ test("object plugins are reflected as ai false with no params", () => {
     }
   }
   expect("deps" in (fsPlugin.manifest ?? {})).toBe(false);
+});
+
+test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tags", () => {
+  const reg = new PluginRegistry();
+  reg.register(gitPlugin);
+  reg.register(svnPlugin);
+  const summary = (ns: string) =>
+    Object.fromEntries(
+      Object.entries(reg.get(ns)!.manifest!.handlers).map(([name, h]) => [
+        name,
+        { ai: h.ai, capabilities: h.capabilities },
+      ]),
+    );
+  expect(gitPlugin.apiVersion).toBe(2);
+  expect(svnPlugin.apiVersion).toBe(2);
+  expect(summary("git")).toEqual({
+    pull: { ai: false, capabilities: ["vcs.sync"] },
+    status: { ai: "confirm", capabilities: undefined },
+    info: { ai: true, capabilities: ["vcs.info"] },
+    checkout: { ai: false, capabilities: undefined },
+    clone: { ai: false, capabilities: undefined },
+  });
+  expect(summary("svn")).toEqual({
+    update: { ai: false, capabilities: ["vcs.sync"] },
+    cleanup: { ai: false, capabilities: undefined },
+    revert: { ai: false, capabilities: undefined },
+    info: { ai: true, capabilities: ["vcs.info"] },
+    commit: { ai: false, capabilities: undefined },
+    add: { ai: false, capabilities: undefined },
+    status: { ai: "confirm", capabilities: undefined },
+  });
+  expect(reg.findByCapability("vcs.sync").map((m) => m.ref)).toEqual(["git/pull", "svn/update"]);
+  expect(reg.findByCapability("vcs", { exact: false }).map((m) => m.ref)).toEqual([
+    "git/info",
+    "git/pull",
+    "svn/info",
+    "svn/update",
+  ]);
+  expect(reg.findByCapability("vcs")).toEqual([]);
 });
 
 test("a hand-written manifest on an object plugin is replaced", () => {
@@ -311,7 +350,8 @@ test("a manifest getter without the plugin brand is rejected", () => {
   });
   const reg = new PluginRegistry();
   expect(() => reg.register(plugin)).toThrow(/Symbol\.for\("boltstack\.plugin"\)/);
-  expect(() => reg.register(plugin)).toThrow(/apiVersion 1/);
+  expect(() => reg.register(plugin)).toThrow(/apiVersion \(1 or 2\)/);
+  expect(() => reg.register(plugin)).toThrow(/Fix: extend PluginBase or use definePlugin/);
 });
 
 test("an incompatible plugin apiVersion is rejected", () => {
@@ -326,12 +366,15 @@ test("an incompatible plugin apiVersion is rejected", () => {
     },
   };
   Object.defineProperty(plugin, PLUGIN_BRAND, { value: true });
-  (plugin as { apiVersion?: number }).apiVersion = 2;
+  (plugin as { apiVersion?: number }).apiVersion = 3;
   const reg = new PluginRegistry();
-  expect(() => reg.register(plugin)).toThrow(/plugin API v2/);
+  expect(() => reg.register(plugin)).toThrow(/plugin API v3/);
+  expect(() => reg.register(plugin)).toThrow(/supports plugin API v1 and v2/);
+  expect(() => reg.register(plugin)).toThrow(/bolt self-update/);
+  expect(() => reg.register(plugin)).toThrow(/bolt version --json/);
 });
 
-test("definePlugin stamps the host apiVersion", () => {
+test("definePlugin stamps apiVersion 1 when omitted, not the host version", () => {
   const plugin = definePlugin({
     namespace: "branded",
     version: "1.0.0",
@@ -339,17 +382,29 @@ test("definePlugin stamps the host apiVersion", () => {
     handlers: { run: defineHandler({}, async () => {}) },
   });
   expect(isBrandedPlugin(plugin)).toBe(true);
-  expect(plugin.apiVersion).toBe(PLUGIN_API_VERSION);
+  expect(PLUGIN_API_VERSION).toBe(2);
+  expect(plugin.apiVersion).toBe(1);
+  expect(plugin.manifest.pluginApi).toBe(1);
   expect((plugin as { [PLUGIN_BRAND]?: boolean })[PLUGIN_BRAND]).toBe(true);
-  expect(() =>
+  const v2 = definePlugin({
+    namespace: "v2",
+    version: "1.0.0",
+    description: "v2",
+    apiVersion: 2,
+    handlers: { run: defineHandler({}, async () => {}) },
+  });
+  expect(v2.apiVersion).toBe(2);
+  expect(v2.manifest.pluginApi).toBe(2);
+  const v3 = () =>
     definePlugin({
       namespace: "nope",
       version: "1.0.0",
       description: "nope",
-      apiVersion: 2,
+      apiVersion: 3 as 2,
       handlers: { run: defineHandler({}, async () => {}) },
-    }),
-  ).toThrow(/apiVersion 2/);
+    });
+  expect(v3).toThrow(/apiVersion 3 is not supported/);
+  expect(v3).toThrow(/bolt self-update/);
 });
 
 test("string false and true parse as booleans", async () => {
