@@ -1,14 +1,24 @@
 import { PluginBase, handler } from "../plugin";
-import type { BoltPluginContext } from "../plugin";
+import type { BoltPluginContext, HandlerResult } from "../plugin";
 import path from "path";
 import { existsSync, readdirSync, readFileSync, statSync, renameSync, mkdirSync } from "fs";
 import { z } from "zod";
 import { declaredPluginConfig, run, execRaw as exec } from "./helpers";
-import gitPlugin from "./git";
-import svnPlugin from "./svn";
+import gitPlugin, { gitInfo } from "./git";
+import svnPlugin, { svnInfo } from "./svn";
 import * as ueIni from "./ue-ini";
 import { BuildConfigSchema, normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
 import type { BuildConfig } from "../build-config";
+
+/** ue/info ignores result data, so print the git/svn info warn summary itself. */
+async function infoWithWarning(
+  info: (p: string, ctx: BoltPluginContext) => Promise<HandlerResult>,
+  p: string,
+  ctx: BoltPluginContext,
+): Promise<void> {
+  const result = await info(p, ctx);
+  if (result.status === "warn" && result.summary) ctx.logger.warn(result.summary);
+}
 
 const RepoSchema = z.object({
   path: z.string().min(1),
@@ -606,6 +616,8 @@ class UEPlugin extends PluginBase.withDescriptor({
     await this.build(params, ctx);
   }
 
+  // ai: false (string form). If this ever becomes AI-callable, add "ue/info" to
+  // AI_PATH_RESTRICTED in runner.ts so core checks its paths for AI invocations.
   @handler("Show VCS info")
   async info(params: Record<string, string>, ctx: BoltPluginContext) {
     const flavor = engineFlavor(ueConfig(ctx));
@@ -617,14 +629,14 @@ class UEPlugin extends PluginBase.withDescriptor({
     const projectPath = ueConfig(ctx).project.path;
 
     if (engineVcs === "git") {
-      await gitPlugin.handlers["info"]({ path: enginePath }, ctx);
+      await infoWithWarning(gitInfo, enginePath, ctx);
     } else {
-      await svnPlugin.handlers["info"]({ path: enginePath }, ctx);
+      await infoWithWarning(svnInfo, enginePath, ctx);
     }
     if (projectVcs === "svn") {
-      await svnPlugin.handlers["info"]({ path: projectPath }, ctx);
+      await infoWithWarning(svnInfo, projectPath, ctx);
     } else {
-      await gitPlugin.handlers["info"]({ path: projectPath }, ctx);
+      await infoWithWarning(gitInfo, projectPath, ctx);
     }
   }
 

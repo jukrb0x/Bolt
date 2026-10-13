@@ -1,9 +1,9 @@
 ---
 title: "Plugin API"
-description: 'Plugins import boltstack and zod. The running bolt process injects one instance of each. definePlugin and PluginBase stamp Symbol.for("boltstack.plugin") and apiVersion 1...'
+description: 'Plugins import boltstack and zod. The running bolt process injects one instance of each. definePlugin and PluginBase stamp Symbol.for("boltstack.plugin") and the declared apiVersion (1 by default)...'
 ---
 
-Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and `apiVersion` `1` (`PLUGIN_API_VERSION`).
+Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and the plugin's declared `apiVersion`. It defaults to `1`. This bolt accepts plugin API `1` and `2` (`SUPPORTED_PLUGIN_API_VERSIONS`; `PLUGIN_API_VERSION` is `2`, the highest). Plugin API v2 adds [handler results](#handler-results-plugin-api-v2), [capability tags](#capability-tags-plugin-api-v2), and `ctx.emit`. See [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2).
 
 The manifest is not a file. `defineHandler` and `@handler` fill it in memory when the plugin is defined.
 
@@ -43,13 +43,13 @@ export default definePlugin({
 | `namespace`   | yes      | Used as `uses: namespace/handler`                                             |
 | `version`     | yes      | Plugin version string, not the CLI version                                    |
 | `description` | yes      | Plugin summary                                                                |
-| `apiVersion`  | no       | Must be `1` when set. Omitted means `1`                                       |
+| `apiVersion`  | no       | `1` or `2`. Omitted means `1`. Declare `2` for capability tags and results    |
 | `metadata`    | no       | Zod schema for this plugin's `bolt.yaml` config. The runner does not check it |
 | `handlers`    | yes      | At least one `defineHandler()` result                                         |
 
 `definePlugin` used to return a descriptor for `withDescriptor`. It now returns the plugin object.
 
-A plugin that exposes a `manifest` getter without `Symbol.for("boltstack.plugin")` is rejected. A branded plugin whose `apiVersion` is not `1` is rejected. The registry does not rewrite a foreign `apiVersion` to `1`.
+A plugin that exposes a `manifest` getter without `Symbol.for("boltstack.plugin")` is rejected. A branded plugin whose `apiVersion` is not `1` or `2` is rejected; a higher version tells you to run `bolt self-update`. A branded export with no `apiVersion` at all is rejected too. The registry does not rewrite a foreign `apiVersion`.
 
 ## defineHandler
 
@@ -62,10 +62,99 @@ defineHandler(meta, fn);
 | `description` | none    | Task line. `${name}` is replaced from params                 |
 | `ai`          | `false` | `false`, `true`, or `"confirm"`. `"confirm"` does not prompt |
 | `params`      | none    | Flat zod object. Checked before `fn` runs                    |
+| `capability`  | none    | Tag or tags, e.g. `"doctor"`. Requires `apiVersion: 2`       |
 
 Allowed param fields: `z.string()`, `z.enum()`, `z.coerce.number()`, `z.coerce.boolean()`, with `.optional()`, `.default()`, and `.describe()` only.
 
-`fn` receives the parsed params and a `BoltPluginContext`.
+`fn` receives the parsed params and a `BoltPluginContext`. It may return a `HandlerResult`. Bolt acts on it only when the plugin declares `apiVersion: 2`. A plugin API v1 return value is ignored.
+
+## Handler results (plugin API v2)
+
+```typescript
+import { defineHandler, definePlugin, fail, ok, warn } from "boltstack";
+
+export default definePlugin({
+  namespace: "ue",
+  version: "1.3.0",
+  description: "Unreal helpers",
+  apiVersion: 2,
+  handlers: {
+    doctor_ddc: defineHandler({ ai: true, capability: "doctor" }, async () => {
+      const missing = await sharedDdcMissing();
+      if (!missing) return ok();
+      return warn("Shared DDC path unreachable", {
+        diagnostics: [
+          {
+            level: "warn",
+            code: "DDC_SHARED_MISSING",
+            message: "Shared DDC path unreachable",
+            fix: "Set [DerivedDataBackendGraph] Shared Path",
+          },
+        ],
+      });
+    }),
+  },
+});
+```
+
+```typescript
+interface HandlerResult<D extends JsonValue = JsonValue> {
+  status: "ok" | "warn" | "fail" | "skipped";
+  summary?: string; // one line, at most 200 characters
+  data?: D; // JSON only
+  artifacts?: { kind: string; path: string; sha256?: string; size?: number; label?: string }[];
+  diagnostics?: {
+    level: "info" | "warn" | "error";
+    code?: string; // UPPER_SNAKE_CASE
+    message: string;
+    file?: string;
+    line?: number;
+    fix?: string;
+  }[];
+  next?: { ref: string; params?: Record<string, string>; reason?: string }[]; // shown, never run
+  schema?: string; // reserved, not checked
+}
+```
+
+| Return value (v2 plugin)                                                         | Effect                                                                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `undefined`                                                                      | `ok`                                                                      |
+| `ok` / `warn` / `skipped`                                                        | Step succeeds. The summary and diagnostics are printed                    |
+| `fail`                                                                           | Step fails like a throw (`continue_on_fail`, notifications, exit code)    |
+| bad `status`, wrongly typed known field, non-JSON `data`, not a plain object     | Step fails with `RESULT_INVALID`, naming the field and the fix            |
+| unknown field (top level or inside a diagnostic, artifact, or next step)         | Warning `RESULT_UNKNOWN_KEY`. The field is dropped. The step is unchanged |
+| over a limit (8 KiB strings, 200 diagnostics/artifacts, 20 next, 256 KiB result) | Warning `RESULT_TRUNCATED`. The value is cut. The step is unchanged       |
+
+On `fail`, `onAfterStep` runs first, then the step fails with `HANDLER_FAILED`. The message is the summary, or the first error diagnostic, or `<ref> returned status "fail" without summary`. Backslashes in `diagnostics[].file` and `artifacts[].path` become `/`.
+
+`ok`, `warn`, `fail`, and `skipped` exist only on a bolt that supports plugin API v2. A v1 plugin that must run on older bolts returns an object literal instead.
+
+## Events
+
+```typescript
+ctx.emit?.({ type: "progress", message: "cooking", progress: { current: 1, total: 3 } });
+ctx.emit?.({ type: "log", message: "cache warm" });
+```
+
+`ctx.emit` works for v1 and v2 plugins and for `onInit`, `onBeforeStep`, and `onAfterStep`. It is synchronous and never throws. Bolt stamps each event with a run-wide `seq`, the step `ref`, and the step path. `type` uses lowercase dot-separated words. Invalid events are dropped with one `EVENT_INVALID` warning per type. An event sent after the step settled (the handler and `onAfterStep` finished) is dropped with one `EMIT_AFTER_SETTLE` warning (usually a missing `await`). At most 10,000 events per step are kept.
+
+Events are printed on the run output and written to the run log file (`.bolt/logs/bolt_<timestamp>.log`). `log` events print as info lines; other types print as a step detail line, for example `ue/build progress 1/3: cooking`. There is no structured event stream yet. Library callers can pass `onEvent` to `Runner`.
+
+`emit` is optional in `BoltPluginContext`, because bolts older than plugin API v2 do not provide it. Call `ctx.emit?.(...)`. `BoltPluginContextV2` is the same type with `emit` required, for v2 plugins that prefer it.
+
+## Capability tags (plugin API v2)
+
+A handler can declare the roles it fills with `capability`. Core uses tags to find handlers by role instead of by name.
+
+| Form          | Example        | Notes                                                                                              |
+| ------------- | -------------- | -------------------------------------------------------------------------------------------------- |
+| Core tag      | `doctor`       | `doctor`, `diagnose`, `detect`, `notify`, `vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store` |
+| Vendor tag    | `x-acme.audit` | `x-<vendor>.<name>`                                                                                |
+| Own namespace | `ue.cook`      | `<namespace>.<name>` of the declaring plugin                                                       |
+
+Unknown bare tags are rejected with a "did you mean" hint. The areas `doctor`, `diagnose`, `detect`, `notify`, `vcs`, and `artifact` are reserved for core tags, even for a plugin whose namespace matches. A handler has at most 8 tags. Tags are static: they must not depend on config.
+
+A plugin that uses `capability` without `apiVersion: 2` fails when it is defined (function plugins) or registered (class plugins), with the fix in the message.
 
 ## Class plugins
 
@@ -89,7 +178,7 @@ export default class DeployPlugin extends PluginBase.withDescriptor({
 }
 ```
 
-`@handler("...")` still works. The object form takes `description`, `ai`, `params`, and `alias`. Only decorated methods become handlers. `onInit`, `onBeforeStep`, and `onAfterStep` are lifecycle hooks on the instance. They are not copied into the manifest.
+`@handler("...")` still works. The object form takes `description`, `ai`, `params`, `alias`, and `capability`. A class plugin declares plugin API v2 with the instance field `apiVersion = 2;`. A `static apiVersion` is not read by bolt: it is an error when it differs from the instance field and a warning when it matches. Only decorated methods become handlers. `onInit`, `onBeforeStep`, and `onAfterStep` are lifecycle hooks on the instance. They are not copied into the manifest.
 
 The host compiles class files with legacy decorators. It does not read the project's `tsconfig`.
 
@@ -99,7 +188,7 @@ The host compiles class files with legacy decorators. It does not read the proje
 Symbol.for("boltstack.plugin");
 ```
 
-`definePlugin` and the `PluginBase` constructor set that symbol and `apiVersion: 1`. `instanceof` is not the check. Two copies of the library would fail `instanceof` even when the protocol matches, so the registry reads the shared symbol and the numeric `apiVersion`.
+`definePlugin` and the `PluginBase` constructor set that symbol and the declared `apiVersion` (default `1`). `instanceof` is not the check. Two copies of the library would fail `instanceof` even when the protocol matches, so the registry reads the shared symbol and the numeric `apiVersion`.
 
 Plain handler maps with no brand still load. Their manifest is reflected as `ai: false` and no params. New plugins should use `definePlugin`.
 
@@ -112,6 +201,7 @@ interface BoltPluginContext {
   dryRun: boolean;
   logger: BoltLogger;
   runtime: Runtime;
+  emit?: (event: BoltEvent) => void; // see Events
 }
 ```
 
@@ -122,6 +212,8 @@ interface BoltPluginContext {
 `runtime` is `spawn`, `spawnSync`, `shell`, and `parseYaml`.
 
 `dryRun` is true when `--dry-run` was passed. Return before side effects.
+
+For unit tests, `createTestContext(overrides?)` returns a context with a silent logger, a runtime stub, and `emit` recording into `.events`.
 
 ```typescript
 interface BoltLogger {
@@ -174,4 +266,5 @@ Import from `"boltstack"`. The release asset `bolt.d.ts` is wrapped as `declare 
 
 - [Plugin System](/guides/plugin-system) - Load order, cache, and `BUN_BE_BUN`
 - [Plugin Development](/guides/plugin-development) - Tutorial
+- [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2) - Results, events, and tags
 - [Built-in Handlers](/api/built-in-handlers) - `ue`, `fs`, `json`, and the rest

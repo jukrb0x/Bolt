@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import path from "path";
 import gitPlugin from "../../plugins/git";
 import { testCfg, mockRuntime, ENGINE_ROOT } from "../env";
 import type { BoltPluginContext } from "../../plugin";
@@ -41,9 +42,27 @@ test("status produces git status command", async () => {
 });
 
 test("info runs without throwing and logs output", async () => {
-  const ctx = makeCtx();
-  await gitPlugin.handlers["info"]({ path: ENGINE_ROOT }, ctx);
+  const root = path.resolve(ENGINE_ROOT);
+  const ctx = { ...makeCtx(), configDir: root };
+  const result = await gitPlugin.handlers["info"]({ path: root }, ctx);
   expect(ctx.logged.length).toBeGreaterThan(0);
+  expect(result).toMatchObject({ status: "ok", data: { path: root } });
+});
+
+test("info: human run with ../Engine outside the project only warns", async () => {
+  const ctx = makeCtx();
+  const result = await gitPlugin.handlers["info"]({ path: "../Engine" }, ctx);
+  const resolved = path.resolve(ctx.configDir, "../Engine");
+  expect(result).toMatchObject({ data: { path: resolved } });
+  const warning = ctx.logged.find((l) => l.includes("outside the project directory"));
+  expect(warning).toContain("AI invocations of git/info will reject this path");
+  expect(warning).toContain("Fix:");
+});
+
+test("info resolves a relative path against the project directory", async () => {
+  const ctx = makeCtx();
+  const result = await gitPlugin.handlers["info"]({ path: "sub" }, ctx);
+  expect(result).toMatchObject({ data: { path: path.join(ctx.configDir, "sub") } });
 });
 
 test("checkout produces git checkout command", async () => {

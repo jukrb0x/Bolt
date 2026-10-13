@@ -11,7 +11,20 @@ permissions:
   contents: write
 
 jobs:
+  placeholders:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.3"
+      - name: Fail on unreleased version placeholders
+        run: bun run scripts/check-release-placeholders.ts
+
   binaries:
+    needs: placeholders
     uses: ./.github/workflows/binaries.yml
     with:
       version: ${{ github.ref_name }}

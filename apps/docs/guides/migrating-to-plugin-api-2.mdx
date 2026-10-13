@@ -1,0 +1,118 @@
+---
+title: "Migrating to plugin API v2"
+description: "When to declare apiVersion 2, how results, events, and capability tags behave, and what older bolts do with your plugin."
+---
+
+Plugin API v2 adds three things: handler results that bolt acts on, `ctx.emit` events, and capability tags. Existing plugins keep working unchanged. A plugin without `apiVersion` is plugin API v1.
+
+## 1. Do you need v2?
+
+| You want                                                       | Plugin API                     |
+| -------------------------------------------------------------- | ------------------------------ |
+| Progress or log events                                         | v1 is enough. Use `ctx.emit?.` |
+| Return values only for your own tests                          | v1 is enough                   |
+| `capability` tags                                              | v2                             |
+| A returned `fail`, `warn`, `data`, or diagnostics bolt acts on | v2                             |
+
+## 2. Minimum bolt
+
+Check the bolt you need to support:
+
+```bash
+bolt version --json
+```
+
+Declare `apiVersion: 2` only when `plugin_api` includes `2` and `capabilities` includes `plugin-api-2`. The first release with plugin API v2 is `bolt <X>`. An older bolt prints only a version string for `bolt version --json`; treat it as plugin API v1 only.
+
+## 3. Declaring v2
+
+Function plugins:
+
+```typescript
+export default definePlugin({
+  namespace: "ue",
+  version: "1.3.0",
+  description: "Unreal helpers",
+  apiVersion: 2,
+  handlers: {/* ... */},
+});
+```
+
+Class plugins use the instance field, not `static`:
+
+```typescript
+export default class UePlugin extends PluginBase.withDescriptor({
+  namespace: "ue",
+  version: "1.3.0",
+  description: "Unreal helpers",
+}) {
+  apiVersion = 2;
+}
+```
+
+Bolt does not read `static apiVersion`. An older bolt would load such a plugin as v1 and silently drop its tags. A new bolt rejects a `static apiVersion` that differs from the instance field and warns when they match.
+
+## 4. Behaviour on older bolts
+
+| Plugin                           | Bolt without plugin API v2                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| v2 function plugin               | Fails when loaded: `definePlugin: apiVersion 2 is not supported. This bolt implements plugin API v1.` |
+| v2 class plugin                  | Fails when registered: `Plugin "ue" requires plugin API v2, but this bolt supports plugin API v1.`    |
+| v1 plugin calling `ctx.emit?.()` | Silent no-op                                                                                          |
+| v1 plugin calling `ctx.emit()`   | `TypeError`: `ctx.emit` is undefined, and the step fails                                              |
+| v1 plugin importing `ok`/`fail`  | The import is undefined, so calling it throws                                                         |
+| Any returned result              | Ignored                                                                                               |
+
+Those two error messages come from bolts that predate v2 and cannot be changed. The fix is to upgrade bolt (`bolt self-update`).
+
+On a bolt with plugin API v2, a plugin that asks for a newer plugin API than it supports gets an error that says to run `bolt self-update`.
+
+## 5. Emitting events portably
+
+```typescript
+ctx.emit?.({ type: "progress", message: "reading .uproject", progress: { current: 1, total: 2 } });
+```
+
+`?.` keeps the call safe on older bolts. Events are shown on the run output and in `.bolt/logs/bolt_<timestamp>.log`. See [Events](/api/plugin-api#events).
+
+`BoltPluginContext.emit` stays optional until the next plugin API major version. v2 plugins that want it required can type the context as `BoltPluginContextV2`.
+
+## 6. Returning results
+
+With `apiVersion: 2`, return `ok()`, `warn()`, `fail()`, `skipped()`, or a matching object literal. Returning nothing counts as `ok`.
+
+- `fail` fails the step exactly like a throw. `onAfterStep` still runs first.
+- A bad `status`, a wrongly typed known field, or non-JSON `data` fails the step with `RESULT_INVALID`. The message names the field.
+- An unknown field only warns (`RESULT_UNKNOWN_KEY`) and is dropped. A plugin that uses a field added by a newer bolt still runs on an older one.
+
+v1 plugins can return object literals for their own tests. Bolt ignores them. Do not import the constructors in a v1 plugin that must run on older bolts.
+
+## 7. Tagging handlers
+
+```typescript
+info: defineHandler({ ai: true, capability: "detect" }, async () => ok()),
+doctor_ddc: defineHandler({ ai: true, capability: ["doctor", "ue.ddc"] }, async () => ok()),
+```
+
+```typescript
+@handler({ capability: ["vcs.sync"] })
+async sync() {}
+```
+
+Allowed: core tags (`doctor`, `diagnose`, `detect`, `notify`, `vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store`), `x-<vendor>.<name>`, and `<your-namespace>.<name>`. The areas `doctor`, `diagnose`, `detect`, `notify`, `vcs`, and `artifact` are reserved for core tags. At most 8 tags per handler. Tags must not depend on config. Plain object plugins (a hand-written `handlers` map) cannot carry tags. Convert them to `definePlugin`.
+
+## 8. Tests
+
+```typescript
+import { createTestContext } from "boltstack";
+
+const ctx = createTestContext({ dryRun: true });
+const result = await plugin.handlers.info({}, ctx);
+expect(ctx.events).toEqual([{ type: "progress", progress: { current: 1, total: 2 } }]);
+```
+
+Hand-written context mocks keep compiling because `emit` is optional.
+
+## 9. After upgrading bolt
+
+Regenerate the AI context with `bolt ai`. The plugin manifest format changed (`bolt version --json` reports `manifest_format: 2`), capability tags now appear in the catalog, and the built-in `git` and `svn` handlers changed their `ai` permissions.

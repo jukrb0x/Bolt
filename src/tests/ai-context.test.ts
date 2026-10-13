@@ -269,3 +269,30 @@ test("ai command uses builtinPlugins instead of a hard-coded list", () => {
   expect(src).toContain("builtinPlugins");
   expect(src).not.toMatch(/uePlugin|fsPlugin|jsonPlugin|gitPlugin|svnPlugin/);
 });
+
+test("capability tags appear in the catalog and change the context hash", () => {
+  const configPath = writeProject("project: { name: Demo }\n");
+  const make = (capability?: string) =>
+    definePlugin({
+      namespace: "probe",
+      version: "1.0.0",
+      description: "Probe",
+      apiVersion: 2,
+      handlers: {
+        check: defineHandler(
+          { ai: true, description: "Check", ...(capability ? { capability } : {}) },
+          async () => {},
+        ),
+      },
+    });
+  const untagged = new PluginRegistry();
+  untagged.register(make());
+  const tagged = new PluginRegistry();
+  tagged.register(make("doctor"));
+  const before = generateAiContext(cfg, configPath, untagged);
+  const after = generateAiContext(cfg, configPath, tagged);
+  expect(after).toContain("<!-- manifest format: 2 -->");
+  expect(after).toContain("  - capabilities: doctor");
+  expect(before).not.toContain("capabilities:");
+  expect(hashOf(after)).not.toBe(hashOf(before));
+});

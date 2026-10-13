@@ -17,7 +17,9 @@ Prints the installed version of Bolt. Use this to verify your installation or wh
 
 ## Options
 
-None.
+| Option   | Description                                                                 |
+| -------- | --------------------------------------------------------------------------- |
+| `--json` | Print the version, supported plugin API versions, and capabilities as JSON. |
 
 ## Examples
 
@@ -27,6 +29,21 @@ bolt --version
 ```
 
 Both print the version compiled into that binary, for example `2.1.1`.
+
+```bash
+bolt version --json
+```
+
+```json
+{
+  "version": "2.1.1",
+  "plugin_api": [1, 2],
+  "manifest_format": 2,
+  "capabilities": ["handler-results", "capability-tags", "plugin-api-2"]
+}
+```
+
+`plugin_api` lists every plugin API version this bolt accepts. `capabilities` is append-only. Plugin authors check for `plugin-api-2` before declaring `apiVersion: 2`. An older bolt prints only the version string instead of JSON; treat it as plugin API v1 only.
 
 ## See Also
 

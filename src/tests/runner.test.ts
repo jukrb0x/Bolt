@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Runner } from "../runner";
 import { mockRuntime, testCfg } from "./env";
 import type { Runtime } from "../runtime/types";
@@ -424,4 +424,179 @@ test("a real run still looks up the git branch and runs shell steps", async () =
   await new Runner(cfg, { runtime: recordingRuntime(calls) }).runTask("a");
   expect(calls).toContain("spawnSync git branch --show-current");
   expect(calls).toContain("shell echo hi");
+});
+
+// ---------------------------------------------------------------------------
+// AI invocation: core rejects out-of-project paths for git/info and svn/info
+// ---------------------------------------------------------------------------
+
+for (const ref of ["git/info", "svn/info"]) {
+  test(`AI invocation of ${ref} with an out-of-project path is rejected by core`, async () => {
+    const aiCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { peek: [{ uses: ref, with: { path: "../Engine" } }] },
+    };
+    const calls: string[] = [];
+    const runner = new Runner(aiCfg, {
+      dryRun: true,
+      aiInvocation: true,
+      configDir: process.cwd(),
+      onStep: (s) => calls.push(s),
+    });
+    const run = runner.runTask("peek");
+    await expect(run).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+    await expect(
+      new Runner(aiCfg, { dryRun: true, aiInvocation: true }).runTask("peek"),
+    ).rejects.toThrow(/outside the project directory.*Fix:/);
+  });
+
+  test(`human run of ${ref} with the same path is not rejected by core`, async () => {
+    const humanCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { peek: [{ uses: ref, with: { path: "../Engine" } }] },
+    };
+    await expect(
+      new Runner(humanCfg, { dryRun: true, runtime: mockRuntime }).runTask("peek"),
+    ).resolves.toBeUndefined();
+  });
+}
+
+test("AI invocation fails closed when the path cannot be resolved (symlink loop); humans only warn", async () => {
+  if (process.platform === "win32") return;
+  const { mkdtempSync, rmSync, symlinkSync } = await import("fs");
+  const os = await import("os");
+  const pathMod = await import("path");
+  const dir = mkdtempSync(pathMod.join(os.tmpdir(), "bolt-ai-loop-"));
+  try {
+    symlinkSync(pathMod.join(dir, "b"), pathMod.join(dir, "a"));
+    symlinkSync(pathMod.join(dir, "a"), pathMod.join(dir, "b"));
+    const loopCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { peek: [{ uses: "git/info", with: { path: "a" } }] },
+    };
+    const ai = new Runner(loopCfg, { dryRun: true, aiInvocation: true, configDir: dir });
+    await expect(ai.runTask("peek")).rejects.toMatchObject({
+      code: "AI_FORBIDDEN",
+      message: expect.stringMatching(/cannot be verified.*symlink loop.*Fix:/),
+    });
+    const human = new Runner(loopCfg, { dryRun: true, configDir: dir, runtime: mockRuntime });
+    await expect(human.runTask("peek")).resolves.toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("fs/* and json/* through an in-project symlink to outside", () => {
+  const setup = async () => {
+    const { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = await import("fs");
+    const os = await import("os");
+    const p = await import("path");
+    const base = mkdtempSync(p.join(os.tmpdir(), "bolt-fs-link-"));
+    const root = p.join(base, "project");
+    const outside = p.join(base, "outside");
+    mkdirSync(root);
+    mkdirSync(outside);
+    writeFileSync(p.join(root, "in.txt"), "inside");
+    writeFileSync(p.join(outside, "secret.txt"), "outside");
+    symlinkSync(outside, p.join(root, "link"), process.platform === "win32" ? "junction" : "dir");
+    return { base, root, outside, p };
+  };
+
+  test("human fs/copy into the symlink succeeds with no warning (main behavior)", async () => {
+    const { base, root, outside, p } = await setup();
+    const { existsSync, rmSync } = await import("fs");
+    try {
+      const lines: string[] = [];
+      const { Logger } = await import("../logger");
+      const humanCfg: BoltConfig = {
+        ...testCfg,
+        tasks: { cp: [{ uses: "fs/copy", with: { src: "in.txt", dst: "link/copied.txt" } }] },
+      };
+      const runner = new Runner(humanCfg, {
+        configDir: root,
+        logger: new Logger({ sink: (l) => lines.push(l) }),
+      });
+      await runner.runTask("cp");
+      expect(existsSync(p.join(outside, "copied.txt"))).toBe(true);
+      expect(lines.some((l) => l.includes("WARN"))).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("AI invocation is rejected for read (src) and write (dst) through the symlink", async () => {
+    const { base, root, outside, p } = await setup();
+    const { existsSync, rmSync } = await import("fs");
+    try {
+      const aiCfg: BoltConfig = {
+        ...testCfg,
+        tasks: {
+          read: [{ uses: "fs/copy", with: { src: "link/secret.txt", dst: "got.txt" } }],
+          write: [{ uses: "fs/copy", with: { src: "in.txt", dst: "link/planted.txt" } }],
+          json: [{ uses: "json/set", with: { file: "link/x.json", key: "a", value: "1" } }],
+        },
+      };
+      const ai = () => new Runner(aiCfg, { configDir: root, aiInvocation: true });
+      await expect(ai().runTask("read")).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      await expect(ai().runTask("write")).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      await expect(ai().runTask("json")).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      expect(existsSync(p.join(root, "got.txt"))).toBe(false);
+      expect(existsSync(p.join(outside, "planted.txt"))).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("literal ../ is still rejected for human runs", async () => {
+    const humanCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { cp: [{ uses: "fs/copy", with: { src: "../x", dst: "y" } }] },
+    };
+    await expect(new Runner(humanCfg, { dryRun: true }).runTask("cp")).rejects.toThrow(
+      /escapes project root/,
+    );
+  });
+});
+
+describe("git/info and svn/info: symlinked vs literal out-of-project paths", () => {
+  for (const ref of ["git/info", "svn/info"]) {
+    test(`${ref}: human symlinked Engine dir has no warning; literal ../Engine warns; AI symlink is rejected`, async () => {
+      const { mkdirSync, mkdtempSync, rmSync, symlinkSync } = await import("fs");
+      const os = await import("os");
+      const p = await import("path");
+      const { Logger } = await import("../logger");
+      const base = mkdtempSync(p.join(os.tmpdir(), "bolt-info-link-"));
+      try {
+        const root = p.join(base, "project");
+        const engine = p.join(base, "Engine");
+        mkdirSync(root);
+        mkdirSync(engine);
+        symlinkSync(
+          engine,
+          p.join(root, "Engine"),
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        const cfgFor = (path: string): BoltConfig => ({
+          ...testCfg,
+          tasks: { peek: [{ uses: ref, with: { path } }] },
+        });
+        const human = async (path: string) => {
+          const lines: string[] = [];
+          await new Runner(cfgFor(path), {
+            configDir: root,
+            runtime: mockRuntime,
+            logger: new Logger({ sink: (l) => lines.push(l) }),
+          }).runTask("peek");
+          return lines.filter((l) => l.includes("outside the project directory"));
+        };
+        expect(await human("Engine")).toHaveLength(0);
+        expect(await human("../Engine")).toHaveLength(1);
+        await expect(
+          new Runner(cfgFor("Engine"), { configDir: root, aiInvocation: true }).runTask("peek"),
+        ).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    });
+  }
 });

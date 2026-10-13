@@ -1,6 +1,31 @@
 import type { BoltConfig } from "./config";
 import type { Runtime } from "./runtime/types";
 import type { ZodType, ZodTypeAny } from "zod";
+import type { BoltEvent, HandlerResult, JsonValue } from "./handler-result";
+import { normalizeCapabilities, type Capability } from "./capabilities";
+import {
+  PLUGIN_API_VERSION,
+  SUPPORTED_PLUGIN_API_VERSIONS,
+  isSupportedPluginApi,
+  pluginApi2Requirement,
+} from "./plugin-compat";
+
+export {
+  ok,
+  warn,
+  fail,
+  skipped,
+  createTestContext,
+  type Artifact,
+  type BoltEvent,
+  type Diagnostic,
+  type HandlerResult,
+  type HandlerStatus,
+  type JsonValue,
+  type NextStep,
+} from "./handler-result";
+export type { Capability, KnownCapability } from "./capabilities";
+export { PLUGIN_API_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./plugin-compat";
 
 /** Subset of Logger exposed to plugin handlers. */
 export interface BoltLogger {
@@ -17,12 +42,25 @@ export interface BoltPluginContext {
   dryRun: boolean;
   logger: BoltLogger;
   runtime: Runtime;
+  /**
+   * Report a progress or log event. Always present on a bolt that supports plugin
+   * API v2, absent on older ones, so plugins that support older bolts call
+   * `ctx.emit?.(...)`. It stays optional until the next plugin API major.
+   */
+  emit?: (event: BoltEvent) => void;
 }
 
+/** Context with a required `emit`, for plugins that declare `apiVersion: 2`. */
+export type BoltPluginContextV2 = BoltPluginContext & { emit: (event: BoltEvent) => void };
+
+/**
+ * A handler. Plugin API v1 return values are ignored; v2 return values are
+ * validated as a {@link HandlerResult}.
+ */
 export type BoltPluginHandler = (
   params: Record<string, string>,
   ctx: BoltPluginContext,
-) => Promise<void>;
+) => Promise<void | HandlerResult>;
 
 export type AiMode = false | true | "confirm";
 
@@ -40,6 +78,8 @@ export interface HandlerManifest {
   params?: ZodTypeAny;
   /** Draft-07 JSON Schema emitted from the flat zod subset. */
   paramsSchema?: Record<string, unknown>;
+  /** Sorted, deduped capability tags. Omitted when empty. */
+  capabilities?: string[];
 }
 
 /**
@@ -52,13 +92,17 @@ export interface PluginManifest {
   description: string;
   metadata?: ZodTypeAny;
   handlers: Record<string, HandlerManifest>;
+  /** Plugin API version the plugin declared. Absent on reflected object plugins (treated as 1). */
+  pluginApi?: number;
 }
 
 export interface HandlerDef<T = Record<string, unknown>> {
   description?: string;
   ai: AiMode;
   params?: ZodType<T>;
-  fn: (params: T, ctx: BoltPluginContext) => Promise<void>;
+  /** Requires plugin API v2 on the owning plugin. */
+  capabilities?: string[];
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult>;
 }
 
 export interface HandlerOptions {
@@ -66,6 +110,8 @@ export interface HandlerOptions {
   ai?: AiMode;
   params?: ZodTypeAny;
   alias?: string;
+  /** Requires the class field `apiVersion = 2`. */
+  capability?: Capability | Capability[];
 }
 
 // ---------------------------------------------------------------------------
@@ -99,18 +145,18 @@ const HANDLERS = Symbol.for("bolt:handlers");
 const HANDLER_DEF = Symbol.for("bolt:handler-def");
 const DEFINED_PLUGIN = Symbol.for("bolt:defined-plugin");
 const MANIFEST_CACHE = Symbol.for("bolt:manifest-cache");
+const RAW_CAPABILITY = Symbol.for("bolt:raw-capability");
 
 /** Cross-realm brand. `instanceof PluginBase` is false for another bundled copy. */
 export const PLUGIN_BRAND = Symbol.for("boltstack.plugin");
-
-/** Plugin protocol version. Independent of the CLI semver. */
-export const PLUGIN_API_VERSION = 1;
 
 interface StoredHandler {
   alias: string;
   description?: string;
   ai: AiMode;
   params?: ZodTypeAny;
+  /** Raw tags. Validated at registration, when the instance apiVersion is known. */
+  capability?: unknown;
 }
 
 type HandlerMap = Map<string, StoredHandler>;
@@ -307,6 +353,7 @@ function toManifestHandler(stored: {
   description?: string;
   ai: AiMode;
   params?: ZodTypeAny;
+  capabilities?: string[];
 }): HandlerManifest {
   const entry: HandlerManifest = { ai: stored.ai };
   if (stored.description !== undefined) entry.description = stored.description;
@@ -314,7 +361,20 @@ function toManifestHandler(stored: {
     entry.params = stored.params;
     entry.paramsSchema = zodParamsToJsonSchema(stored.params);
   }
+  if (stored.capabilities && stored.capabilities.length > 0) {
+    entry.capabilities = [...stored.capabilities];
+  }
   return entry;
+}
+
+/** Error for a capability on a plugin that did not declare plugin API v2. */
+export function capabilityNeedsApi2(label: string, classForm: boolean): Error {
+  const fix = classForm
+    ? "add the instance field `apiVersion = 2;` to the class (not `static`)"
+    : "add `apiVersion: 2` to definePlugin({ ... })";
+  return new Error(
+    `${label} uses capability, which requires plugin API v2. Fix: ${fix}. ${pluginApi2Requirement()}`,
+  );
 }
 
 function assertZodSchema(value: unknown, label: string): ZodTypeAny {
@@ -359,7 +419,7 @@ export function isBrandedPlugin(value: object): boolean {
 }
 
 /** Stamp the cross-copy brand and the protocol version the registry checks. */
-export function brandPlugin(plugin: object, apiVersion: number = PLUGIN_API_VERSION): void {
+export function brandPlugin(plugin: object, apiVersion: number = 1): void {
   Object.defineProperty(plugin, PLUGIN_BRAND, { value: true });
   Object.defineProperty(plugin, "apiVersion", {
     value: apiVersion,
@@ -369,18 +429,72 @@ export function brandPlugin(plugin: object, apiVersion: number = PLUGIN_API_VERS
   });
 }
 
+/** "plugin API v1 and v2" */
+function supportedText(): string {
+  const list = SUPPORTED_PLUGIN_API_VERSIONS.map((v) => `v${v}`);
+  return list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
+}
+
+/**
+ * Registration check for branded plugins. A branded export without any
+ * apiVersion is still an error: only a forged brand can produce one.
+ */
 export function assertPluginApiVersion(plugin: { namespace?: string; apiVersion?: unknown }): void {
-  if (plugin.apiVersion === PLUGIN_API_VERSION) return;
+  if (isSupportedPluginApi(plugin.apiVersion)) return;
   const version = plugin.apiVersion;
-  const found =
-    version === undefined
-      ? "none"
-      : typeof version === "number"
-        ? `v${version}`
-        : JSON.stringify(version);
+  const name = plugin.namespace ?? "(unknown)";
+  if (version === undefined) {
+    throw new Error(
+      `Plugin "${name}" requires plugin API none, but this bolt supports plugin API ${supportedText()}. The export carries Symbol.for("boltstack.plugin") without an apiVersion. Fix: create the plugin with definePlugin() or PluginBase from boltstack instead of setting the brand by hand.`,
+    );
+  }
+  const found = typeof version === "number" ? `v${version}` : JSON.stringify(version);
+  const newer = typeof version === "number" && version > PLUGIN_API_VERSION;
+  const fix = newer
+    ? ` Run \`bolt self-update\` to get a bolt that supports plugin API v${version}; \`bolt version --json\` lists the supported versions under plugin_api.`
+    : ` Fix: set apiVersion to one of ${SUPPORTED_PLUGIN_API_VERSIONS.join(", ")} (or omit it for v1).`;
   throw new Error(
-    `Plugin "${plugin.namespace ?? "(unknown)"}" requires plugin API ${found}, but this bolt supports plugin API v${PLUGIN_API_VERSION}.`,
+    `Plugin "${name}" requires plugin API ${found}, but this bolt supports plugin API ${supportedText()}.${fix}`,
   );
+}
+
+/**
+ * Class plugins declare the version with the instance field. A `static apiVersion`
+ * is invisible to older bolts, so it is rejected when it disagrees with the
+ * instance field and warned about when it agrees. A conflict fails plugin loading
+ * (the whole run), not just the tasks that use the plugin: the registry loads every
+ * plugin up front, the same as for an unsupported apiVersion, so a broken plugin is
+ * reported before any step runs instead of part-way through a flow.
+ */
+export function checkStaticApiVersion(plugin: object): string | undefined {
+  const ctor = (plugin as { constructor?: unknown }).constructor;
+  if (typeof ctor !== "function" || ctor === Object || !Object.hasOwn(ctor, "apiVersion")) {
+    return undefined;
+  }
+  const name = (plugin as { namespace?: string }).namespace ?? "(unknown)";
+  const staticVersion = (ctor as { apiVersion?: unknown }).apiVersion;
+  const instanceVersion = (plugin as { apiVersion?: unknown }).apiVersion;
+  if (staticVersion !== instanceVersion) {
+    throw new Error(
+      `Plugin "${name}": static apiVersion conflicts with the instance field (static ${JSON.stringify(staticVersion)}, instance ${JSON.stringify(instanceVersion)}). Fix: remove the static field and use the instance field \`apiVersion = ${JSON.stringify(staticVersion)};\`.`,
+    );
+  }
+  return `Plugin "${name}": static apiVersion is redundant (bolt reads only the instance field). Remove it; the instance field \`apiVersion = ${JSON.stringify(instanceVersion)};\` already declares the version.`;
+}
+
+/**
+ * Validate capability tags of a class plugin at registration, when the
+ * instance apiVersion is known. Returns the plugin's manifest unchanged.
+ */
+export function assertClassCapabilities(plugin: BoltPlugin): void {
+  const map = getHandlerMap(plugin);
+  if (!map) return;
+  for (const [, stored] of map) {
+    if (stored.capability === undefined) continue;
+    const label = `${plugin.namespace}/${stored.alias}`;
+    if (plugin.apiVersion !== 2) throw capabilityNeedsApi2(`handler "${label}"`, true);
+    normalizeCapabilities(stored.capability, plugin.namespace, `handler "${label}"`);
+  }
 }
 
 /** True when `manifest` is a getter. Without the brand this is not a plugin. */
@@ -427,12 +541,16 @@ function toStored(
     const ai = descriptionOrOptions.ai ?? false;
     assertAi(ai, `@handler ${methodName}`);
     if (descriptionOrOptions.params) zodParamsToJsonSchema(descriptionOrOptions.params);
-    return {
+    const stored: StoredHandler = {
       alias: descriptionOrOptions.alias ?? methodName,
       description: descriptionOrOptions.description,
       ai,
       params: descriptionOrOptions.params,
     };
+    if (descriptionOrOptions.capability !== undefined) {
+      stored.capability = descriptionOrOptions.capability;
+    }
+    return stored;
   }
   return {
     alias: alias ?? methodName,
@@ -491,9 +609,14 @@ function fillDescription(
   return description.replace(/\$\{([\w-]+)\}/g, (_, key) => params[key] ?? key);
 }
 
-export function defineHandler<T = Record<string, string>>(
-  meta: { description?: string; ai?: AiMode; params?: ZodType<T> },
-  fn: (params: T, ctx: BoltPluginContext) => Promise<void>,
+export function defineHandler<T = Record<string, string>, D extends JsonValue = JsonValue>(
+  meta: {
+    description?: string;
+    ai?: AiMode;
+    params?: ZodType<T>;
+    capability?: Capability | Capability[];
+  },
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult<D>>,
 ): HandlerDef<T> {
   if (!meta || typeof meta !== "object") throw new Error("defineHandler: meta object is required");
   if (typeof fn !== "function") throw new Error("defineHandler: fn must be a function");
@@ -506,6 +629,10 @@ export function defineHandler<T = Record<string, string>>(
     params: meta.params,
     fn,
   };
+  // Tags are validated by definePlugin, which knows the namespace and apiVersion.
+  if (meta.capability !== undefined) {
+    Object.defineProperty(def, RAW_CAPABILITY, { value: meta.capability });
+  }
   Object.defineProperty(def, HANDLER_DEF, { value: true });
   return def;
 }
@@ -514,8 +641,11 @@ export interface DefinePluginOptions<TMeta = unknown> {
   namespace: string;
   version: string;
   description: string;
-  /** Must be {@link PLUGIN_API_VERSION} when set. Omitted means the host version. */
-  apiVersion?: number;
+  /**
+   * Plugin API version this plugin is written against: 1 or 2. Omitted means 1.
+   * Declare 2 to use capability tags and returned results.
+   */
+  apiVersion?: 1 | 2;
   metadata?: ZodType<TMeta>;
   handlers: Record<string, HandlerDef<any>>;
 }
@@ -533,9 +663,14 @@ export function definePlugin<TMeta = unknown>(
   if (!opts.namespace) throw new Error("definePlugin: namespace is required");
   if (!opts.version) throw new Error("definePlugin: version is required");
   if (!opts.description) throw new Error("definePlugin: description is required");
-  if (opts.apiVersion !== undefined && opts.apiVersion !== PLUGIN_API_VERSION) {
+  const apiVersion: number = opts.apiVersion ?? 1;
+  if (!isSupportedPluginApi(apiVersion)) {
+    const newer = typeof apiVersion === "number" && apiVersion > PLUGIN_API_VERSION;
+    const fix = newer
+      ? ` Run \`bolt self-update\` to get a bolt that supports plugin API v${apiVersion}; \`bolt version --json\` lists the supported versions under plugin_api.`
+      : ` Fix: use apiVersion ${SUPPORTED_PLUGIN_API_VERSIONS.join(" or ")}, or omit it for v1.`;
     throw new Error(
-      `definePlugin: apiVersion ${opts.apiVersion} is not supported. This bolt implements plugin API v${PLUGIN_API_VERSION}.`,
+      `definePlugin: apiVersion ${JSON.stringify(apiVersion)} is not supported. This bolt implements plugin API ${supportedText()}.${fix}`,
     );
   }
   if (!opts.handlers || typeof opts.handlers !== "object" || Array.isArray(opts.handlers)) {
@@ -552,10 +687,15 @@ export function definePlugin<TMeta = unknown>(
       throw new Error(`definePlugin: handlers.${name} must be created with defineHandler()`);
     }
     handlers[name] = def.fn as BoltPluginHandler;
+    const label = `handler "${opts.namespace}/${name}"`;
+    const raw = (def as { [RAW_CAPABILITY]?: unknown })[RAW_CAPABILITY];
+    if (raw !== undefined && apiVersion !== 2) throw capabilityNeedsApi2(label, false);
+    const capabilities = normalizeCapabilities(raw, opts.namespace, label);
     manifestHandlers[name] = toManifestHandler({
       description: def.description,
       ai: def.ai,
       params: def.params as ZodTypeAny | undefined,
+      capabilities,
     });
   }
 
@@ -564,6 +704,7 @@ export function definePlugin<TMeta = unknown>(
     version: opts.version,
     description: opts.description,
     handlers: manifestHandlers,
+    pluginApi: apiVersion,
   };
   if (opts.metadata) manifest.metadata = assertZodSchema(opts.metadata, "definePlugin metadata");
 
@@ -576,7 +717,7 @@ export function definePlugin<TMeta = unknown>(
     },
   };
   markDefinedPlugin(plugin);
-  brandPlugin(plugin, PLUGIN_API_VERSION);
+  brandPlugin(plugin, apiVersion);
   return plugin;
 }
 
@@ -615,7 +756,15 @@ function buildClassManifest(plugin: PluginBase): PluginManifest {
   const handlers: PluginManifest["handlers"] = {};
   if (map) {
     for (const [, stored] of map) {
-      handlers[stored.alias] = toManifestHandler(stored);
+      const capabilities =
+        stored.capability === undefined || plugin.apiVersion !== 2
+          ? []
+          : normalizeCapabilities(
+              stored.capability,
+              plugin.namespace,
+              `handler "${plugin.namespace}/${stored.alias}"`,
+            );
+      handlers[stored.alias] = toManifestHandler({ ...stored, capabilities });
     }
   }
   const manifest: PluginManifest = {
@@ -623,6 +772,7 @@ function buildClassManifest(plugin: PluginBase): PluginManifest {
     version: plugin.version ?? "",
     description: plugin.description ?? "",
     handlers,
+    pluginApi: typeof plugin.apiVersion === "number" ? plugin.apiVersion : 1,
   };
   if (plugin.metadata) manifest.metadata = plugin.metadata;
   return manifest;
@@ -637,7 +787,8 @@ export abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
   version = "";
   description = "";
-  apiVersion = PLUGIN_API_VERSION;
+  /** Plugin API version. Override with the instance field `apiVersion = 2;` (not `static`). */
+  apiVersion: number = 1;
   /** Zod schema this plugin owns. Not checked by the runner. */
   metadata?: ZodTypeAny;
   config?: unknown;

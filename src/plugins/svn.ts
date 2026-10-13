@@ -1,5 +1,6 @@
 // src/plugins/svn.ts
-import type { BoltPlugin, BoltPluginContext } from "../plugin";
+import { defineHandler, definePlugin, type BoltPluginContext, type HandlerResult } from "../plugin";
+import { pathParams, projectPath } from "./git";
 import { existsSync } from "fs";
 import { z } from "zod";
 import { declaredPluginConfig } from "./helpers";
@@ -63,58 +64,91 @@ function resolvePath(params: Record<string, string>): string {
   return params.path;
 }
 
-const plugin: BoltPlugin = {
+/** Read-only query. Not path-restricted; ue/info calls it directly. */
+export async function svnInfo(p: string, ctx: BoltPluginContext): Promise<HandlerResult> {
+  ctx.logger.info(`=== SVN Info: ${p} ===`);
+  const result = ctx.runtime.spawnSync(["svn", "info", p]);
+  if (result.exitCode !== 0) {
+    return { status: "warn", summary: `SVN info unavailable for ${p}` };
+  }
+  const data: Record<string, string> = { path: p };
+  const keys: Record<string, string> = {
+    "URL:": "url",
+    "Revision:": "revision",
+    "Last Changed Rev:": "last_changed_rev",
+  };
+  for (const line of result.stdout.split("\n")) {
+    for (const [prefix, key] of Object.entries(keys)) {
+      if (line.startsWith(prefix)) {
+        ctx.logger.info(`SVN: ${line.trim()}`);
+        data[key] = line.slice(prefix.length).trim();
+      }
+    }
+  }
+  return { status: "ok", data };
+}
+
+const plugin = definePlugin({
   namespace: "svn",
+  version: "1.0.0",
+  description: "Built-in svn handlers.",
+  apiVersion: 2,
   handlers: {
-    update: async (params, ctx) => {
-      const p = resolvePath(params);
-      ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);
-      if (!ctx.dryRun) {
-        const result = await ctx.runtime.spawn([
-          "svn",
-          "update",
-          p,
-          "--non-interactive",
-          "--trust-server-cert",
-        ]);
-        if (result.exitCode !== 0) throw new Error(`svn update failed (exit ${result.exitCode})`);
-      }
-    },
-
-    cleanup: async (params, ctx) => {
-      const p = resolvePath(params);
-      const tortoiseProc = resolveTortoiseProc(ctx);
-      if (tortoiseProc) {
-        ctx.logger.cmd(
-          `TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`,
-        );
+    update: defineHandler(
+      { ai: false, capability: "vcs.sync", description: "svn update ${path}" },
+      async (params, ctx) => {
+        const p = resolvePath(params);
+        ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);
         if (!ctx.dryRun) {
-          const result = ctx.runtime.spawnSync([
-            tortoiseProc,
-            "/command:cleanup",
-            `/path:${p}`,
-            "/noui",
-            "/nodlg",
-            "/externals",
-            "/fixtimestamps",
-            "/vacuum",
-            "/breaklocks",
-            "/refreshshell",
+          const result = await ctx.runtime.spawn([
+            "svn",
+            "update",
+            p,
+            "--non-interactive",
+            "--trust-server-cert",
           ]);
-          if (result.exitCode !== 0)
-            throw new Error(`TortoiseProc cleanup failed (exit ${result.exitCode})`);
+          if (result.exitCode !== 0) throw new Error(`svn update failed (exit ${result.exitCode})`);
         }
-      } else {
-        ctx.logger.cmd(`svn cleanup "${p}"`);
-        if (!ctx.dryRun) {
-          const result = await ctx.runtime.spawn(["svn", "cleanup", p]);
-          if (result.exitCode !== 0)
-            throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
-        }
-      }
-    },
+      },
+    ),
 
-    revert: async (params, ctx) => {
+    cleanup: defineHandler(
+      { ai: false, description: "svn cleanup ${path}" },
+      async (params, ctx) => {
+        const p = resolvePath(params);
+        const tortoiseProc = resolveTortoiseProc(ctx);
+        if (tortoiseProc) {
+          ctx.logger.cmd(
+            `TortoiseProc /command:cleanup /path:"${p}" /noui /nodlg /externals /fixtimestamps /vacuum /breaklocks /refreshshell`,
+          );
+          if (!ctx.dryRun) {
+            const result = ctx.runtime.spawnSync([
+              tortoiseProc,
+              "/command:cleanup",
+              `/path:${p}`,
+              "/noui",
+              "/nodlg",
+              "/externals",
+              "/fixtimestamps",
+              "/vacuum",
+              "/breaklocks",
+              "/refreshshell",
+            ]);
+            if (result.exitCode !== 0)
+              throw new Error(`TortoiseProc cleanup failed (exit ${result.exitCode})`);
+          }
+        } else {
+          ctx.logger.cmd(`svn cleanup "${p}"`);
+          if (!ctx.dryRun) {
+            const result = await ctx.runtime.spawn(["svn", "cleanup", p]);
+            if (result.exitCode !== 0)
+              throw new Error(`svn cleanup failed (exit ${result.exitCode})`);
+          }
+        }
+      },
+    ),
+
+    revert: defineHandler({ ai: false, description: "svn revert ${path}" }, async (params, ctx) => {
       const p = resolvePath(params);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
@@ -143,28 +177,19 @@ const plugin: BoltPlugin = {
           if (result.exitCode !== 0) throw new Error(`svn revert failed (exit ${result.exitCode})`);
         }
       }
-    },
+    }),
 
-    info: async (params, ctx) => {
-      const p = resolvePath(params);
-      ctx.logger.info(`=== SVN Info: ${p} ===`);
-      const result = ctx.runtime.spawnSync(["svn", "info", p]);
-      if (result.exitCode === 0) {
-        for (const line of result.stdout.split("\n")) {
-          if (
-            line.startsWith("URL:") ||
-            line.startsWith("Revision:") ||
-            line.startsWith("Last Changed Rev:")
-          ) {
-            ctx.logger.info(`SVN: ${line.trim()}`);
-          }
-        }
-      } else {
-        ctx.logger.warn("SVN info unavailable");
-      }
-    },
+    info: defineHandler(
+      {
+        ai: true,
+        capability: "vcs.info",
+        description: "svn info ${path}",
+        params: pathParams("Working copy path inside the project"),
+      },
+      async (params, ctx) => svnInfo(projectPath(params, ctx, "svn/info"), ctx),
+    ),
 
-    commit: async (params, ctx) => {
+    commit: defineHandler({ ai: false, description: "svn commit ${path}" }, async (params, ctx) => {
       const p = resolvePath(params);
       const tortoiseProc = resolveTortoiseProc(ctx);
       if (tortoiseProc) {
@@ -183,26 +208,33 @@ const plugin: BoltPlugin = {
           if (result.exitCode !== 0) throw new Error(`svn commit failed (exit ${result.exitCode})`);
         }
       }
-    },
+    }),
 
-    add: async (params, ctx) => {
+    add: defineHandler({ ai: false, description: "svn add ${path}" }, async (params, ctx) => {
       if (!params.path) throw new Error("svn/add requires with: path:");
       ctx.logger.cmd(`svn add "${params.path}"`);
       if (!ctx.dryRun) {
         const result = await ctx.runtime.spawn(["svn", "add", params.path]);
         if (result.exitCode !== 0) throw new Error(`svn add failed (exit ${result.exitCode})`);
       }
-    },
+    }),
 
-    status: async (params, ctx) => {
-      const p = resolvePath(params);
-      ctx.logger.cmd(`svn status "${p}"`);
-      if (!ctx.dryRun) {
-        const result = await ctx.runtime.spawn(["svn", "status", p]);
-        if (result.exitCode !== 0) throw new Error(`svn status failed (exit ${result.exitCode})`);
-      }
-    },
+    status: defineHandler(
+      {
+        ai: "confirm",
+        description: "svn status ${path}",
+        params: pathParams("Working copy path"),
+      },
+      async (params, ctx) => {
+        const p = resolvePath(params);
+        ctx.logger.cmd(`svn status "${p}"`);
+        if (!ctx.dryRun) {
+          const result = await ctx.runtime.spawn(["svn", "status", p]);
+          if (result.exitCode !== 0) throw new Error(`svn status failed (exit ${result.exitCode})`);
+        }
+      },
+    ),
   },
-};
+});
 
 export default plugin;

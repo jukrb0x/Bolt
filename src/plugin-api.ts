@@ -39,6 +39,81 @@ export interface BoltPluginConfig {
   plugins: BoltPluginEntry[];
 }
 
+// --- Handler results and events (plugin API v2) ---
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type HandlerStatus = "ok" | "warn" | "fail" | "skipped";
+
+export interface Diagnostic {
+  level: "info" | "warn" | "error";
+  /** Upper snake case, e.g. `DDC_SHARED_MISSING`. */
+  code?: string;
+  message: string;
+  /** Core normalises `\` to `/`. */
+  file?: string;
+  line?: number;
+  /** A hint for the user. Never executed. */
+  fix?: string;
+}
+
+export interface Artifact {
+  kind: string;
+  path: string;
+  sha256?: string;
+  size?: number;
+  label?: string;
+}
+
+/** Display-only suggestion. Core never executes it. */
+export interface NextStep {
+  ref: string;
+  params?: Record<string, string>;
+  reason?: string;
+}
+
+/**
+ * Structured outcome of a handler. Core acts on it only for plugins that declare
+ * `apiVersion: 2`; plugin API v1 return values are ignored.
+ */
+export interface HandlerResult<D extends JsonValue = JsonValue> {
+  status: HandlerStatus;
+  /** One line, at most 200 characters. */
+  summary?: string;
+  data?: D;
+  artifacts?: Artifact[];
+  diagnostics?: Diagnostic[];
+  next?: NextStep[];
+  /** Reserved, e.g. "bolt.doctor/v1". Not enforced by core. */
+  schema?: string;
+}
+
+export interface BoltEvent {
+  /** Lowercase dot-separated words, e.g. "progress" or "log". */
+  type: string;
+  message?: string;
+  data?: JsonValue;
+  progress?: { current: number; total?: number; unit?: string };
+}
+
+/** Core capability tags. Plugins may also use `x-<vendor>.<name>` or `<namespace>.<name>`. */
+export type KnownCapability =
+  | "doctor"
+  | "diagnose"
+  | "detect"
+  | "notify"
+  | "vcs.sync"
+  | "vcs.info"
+  | "vcs.revision"
+  | "artifact.store";
+export type Capability = KnownCapability | (string & {});
+
 /** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
 export interface BoltPluginContext {
   cfg: BoltPluginConfig;
@@ -46,12 +121,21 @@ export interface BoltPluginContext {
   dryRun: boolean;
   logger: BoltLogger;
   runtime: Runtime;
+  /**
+   * Report a progress or log event. Present on every bolt that lists
+   * `plugin-api-2` in `bolt version --json`, absent on older ones. Plugins that
+   * support older bolts call `ctx.emit?.(...)`. Optional until the next plugin API major.
+   */
+  emit?: (event: BoltEvent) => void;
 }
+
+/** Context with a required `emit`, for plugins that declare `apiVersion: 2`. */
+export type BoltPluginContextV2 = BoltPluginContext & { emit: (event: BoltEvent) => void };
 
 export type BoltPluginHandler = (
   params: Record<string, string>,
   ctx: BoltPluginContext,
-) => Promise<void>;
+) => Promise<void | HandlerResult>;
 
 export type DescribeFunction = (
   handler: string,
@@ -66,6 +150,8 @@ export interface HandlerManifest {
   params?: import("zod").ZodTypeAny;
   /** Draft-07 JSON Schema emitted from the flat zod subset. */
   paramsSchema?: Record<string, unknown>;
+  /** Sorted, deduped capability tags. Omitted when empty. */
+  capabilities?: string[];
 }
 
 /**
@@ -78,15 +164,19 @@ export interface PluginManifest {
   description: string;
   metadata?: import("zod").ZodTypeAny;
   handlers: Record<string, HandlerManifest>;
+  /** Plugin API version the plugin declared. Absent on plain object plugins (treated as 1). */
+  pluginApi?: number;
 }
 
-/** Plugin protocol version stamped on definePlugin() objects and PluginBase instances. */
-export declare const PLUGIN_API_VERSION: 1;
+/** Highest plugin API version this bolt implements. Plugins declare their own version. */
+export declare const PLUGIN_API_VERSION: 2;
+/** Every plugin API version this bolt accepts. */
+export declare const SUPPORTED_PLUGIN_API_VERSIONS: readonly number[];
 
 export interface BoltPlugin {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
-  /** Present on plugins created by this bolt. Plain handler maps omit it. */
+  /** Declared plugin API version (1 or 2). Plain handler maps omit it and are treated as 1. */
   apiVersion?: number;
   manifest?: PluginManifest;
   describe?: DescribeFunction;
@@ -103,7 +193,7 @@ export interface HandlerDef<T = Record<string, unknown>> {
   description?: string;
   ai: AiMode;
   params?: import("zod").ZodType<T>;
-  fn: (params: T, ctx: BoltPluginContext) => Promise<void>;
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult>;
 }
 
 export interface PluginMeta<TMeta = unknown> {
@@ -132,6 +222,8 @@ export declare function handler(options: {
   ai?: AiMode;
   params?: import("zod").ZodTypeAny;
   alias?: string;
+  /** Requires the instance field `apiVersion = 2;` on the class (not `static`). */
+  capability?: Capability | Capability[];
 }): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
 
 /**
@@ -143,6 +235,7 @@ export declare abstract class PluginBase implements BoltPlugin {
   abstract namespace: string;
   version: string;
   description: string;
+  /** Defaults to 1. Declare v2 with the instance field `apiVersion = 2;` (not `static`). */
   apiVersion: number;
   metadata?: import("zod").ZodTypeAny;
   config?: unknown;
@@ -182,13 +275,15 @@ export declare abstract class PluginBase implements BoltPlugin {
  * Build one handler definition. `ai` defaults to false.
  * `params` must be the flat zod subset; the registry stores its JSON Schema.
  */
-export declare function defineHandler<T = Record<string, string>>(
+export declare function defineHandler<T = Record<string, string>, D extends JsonValue = JsonValue>(
   meta: {
     description?: string;
     ai?: AiMode;
     params?: import("zod").ZodType<T>;
+    /** Requires `apiVersion: 2` on definePlugin. */
+    capability?: Capability | Capability[];
   },
-  fn: (params: T, ctx: BoltPluginContext) => Promise<void>,
+  fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult<D>>,
 ): HandlerDef<T>;
 
 /**
@@ -200,8 +295,12 @@ export declare function definePlugin<TMeta = unknown>(def: {
   namespace: string;
   version: string;
   description: string;
-  /** Must be PLUGIN_API_VERSION when set. Omitted means the host version. */
-  apiVersion?: number;
+  /**
+   * Plugin API version this plugin is written against. Omitted means 1.
+   * Declare 2 for capability tags and returned results; check that
+   * `bolt version --json` lists "plugin-api-2" first.
+   */
+  apiVersion?: 1 | 2;
   metadata?: import("zod").ZodType<TMeta>;
   handlers: Record<string, HandlerDef<any>>;
 }): BoltPlugin & { manifest: PluginManifest };
@@ -220,3 +319,31 @@ export interface PluginLifecycleHooks {
     ctx: BoltPluginContext,
   ): Promise<void>;
 }
+
+type ResultExtra<D extends JsonValue> = Partial<Omit<HandlerResult<D>, "status" | "summary">>;
+
+/** Plugin API v2 only. Older bolts do not export these; v1 plugins return object literals. */
+export declare function ok<D extends JsonValue = JsonValue>(
+  summary?: string,
+  extra?: ResultExtra<D>,
+): HandlerResult<D>;
+export declare function warn<D extends JsonValue = JsonValue>(
+  summary: string,
+  extra?: ResultExtra<D>,
+): HandlerResult<D>;
+export declare function fail<D extends JsonValue = JsonValue>(
+  summary: string,
+  extra?: ResultExtra<D>,
+): HandlerResult<D>;
+export declare function skipped<D extends JsonValue = JsonValue>(
+  summary?: string,
+  extra?: ResultExtra<D>,
+): HandlerResult<D>;
+
+/**
+ * Plugin context for unit tests: records `ctx.emit` calls in `.events`, uses a
+ * silent logger and a runtime stub whose spawns fail. Pass overrides as needed.
+ */
+export declare function createTestContext(
+  overrides?: Partial<BoltPluginContext>,
+): BoltPluginContextV2 & { events: BoltEvent[] };

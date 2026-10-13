@@ -1,6 +1,6 @@
 import type { BoltPlugin } from "../plugin";
 import { readFileSync, writeFileSync } from "fs";
-import { safePath } from "./path-guard";
+import { projectFilePath } from "./path-guard";
 
 const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -18,7 +18,7 @@ const plugin: BoltPlugin = {
   namespace: "json",
   handlers: {
     set: async (p, ctx) => {
-      const file = safePath(p.file, ctx.configDir);
+      const file = projectFilePath(p.file, ctx, "json/set");
       const keys = p.key.split(".");
       for (const seg of keys) {
         if (FORBIDDEN_SEGMENTS.has(seg)) {
@@ -36,8 +36,8 @@ const plugin: BoltPlugin = {
       writeFileSync(file, JSON.stringify(data, null, 2));
     },
     merge: async (p, ctx) => {
-      const file = safePath(p.file, ctx.configDir);
-      const patch = safePath(p.patch, ctx.configDir);
+      const file = projectFilePath(p.file, ctx, "json/merge");
+      const patch = projectFilePath(p.patch, ctx, "json/merge");
       if (ctx.dryRun) {
         ctx.logger.info(`[dry-run] json/merge ${patch} -> ${file}`);
         return;
