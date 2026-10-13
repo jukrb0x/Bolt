@@ -7,7 +7,7 @@ import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
 import { VERSION } from "../version";
-import { closestMatches, formatDidYouMean, shellQuote } from "../suggest";
+import { closestFlagMatches, closestMatches, formatDidYouMean, shellQuote } from "../suggest";
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -168,7 +168,7 @@ const HELP_FLAGS = new Set(["--help", "-h"]);
 
 function suggest(name: string, known: string[]): string {
   const bare = name.replace(/^-+/, "");
-  const matches = closestMatches(bare, known).map((m) => `--${m}`);
+  const matches = closestFlagMatches(bare, known).map((m) => `--${m}`);
   return formatDidYouMean(matches);
 }
 

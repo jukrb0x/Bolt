@@ -36,7 +36,11 @@ export function checkGlobalArgs(argv: string[]): string | undefined {
     if (eq !== -1 && HELP.has(name)) {
       return `${name} takes no value. Use: bolt --help (or bolt <command> --help)`;
     }
-    const hint = formatDidYouMean(closestMatches(name, GLOBAL_FLAGS));
+    // `-v` / `-V` almost always mean the version, not `-h` (shared leading `-`).
+    const hint =
+      name === "-v" || name === "-V"
+        ? ' Did you mean "--version"?'
+        : formatDidYouMean(closestMatches(name, GLOBAL_FLAGS));
     return (
       `Unknown global flag "${arg}".${hint} ` +
       `Flags go after the command, e.g. bolt run <task> --dry-run. ` +
@@ -108,10 +112,7 @@ export function checkCommandName(
       if (alias) {
         return `Unknown command "${name}". Did you mean "${alias}"?\n${commandListMessage(prefix, names)}`;
       }
-      const matches = closestMatches(name, names);
-      if (matches.length > 0) {
-        return `Unknown command "${name}".${formatDidYouMean(matches)}\n${commandListMessage(prefix, names)}`;
-      }
+      // An exact task/flow name beats a fuzzy command match (`bolt lint` → `bolt run lint`, not `list`).
       if (projectNames) {
         for (const projectName of projectNames) {
           if (projectName === name) {
@@ -121,6 +122,10 @@ export function checkCommandName(
             );
           }
         }
+      }
+      const matches = closestMatches(name, names);
+      if (matches.length > 0) {
+        return `Unknown command "${name}".${formatDidYouMean(matches)}\n${commandListMessage(prefix, names)}`;
       }
       return `Unknown command "${name}".\n${commandListMessage(prefix, names)}`;
     }
