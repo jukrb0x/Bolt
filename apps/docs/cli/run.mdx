@@ -72,10 +72,10 @@ any step runs:
   tell you to rename a `help` param, e.g. to `my_help`. Bare `--help` / `-h`
   still show help. This matches `--help=<value>` before the command
   (`bolt --help=1` fails with `--help takes no value`).
-- Unknown task or flow names (`bolt run mrk`) fail with
-  `Unknown task "mrk". Did you mean "mark"?` and list the project's tasks and flows.
-  When the only match differs by case (`bolt run Mark`), the message adds
-  `Task names are case-sensitive.`
+- Unknown names (`bolt run mrk`) fail with `Unknown task "mrk". Did you mean "mark"?`
+  (or `Unknown flow "…"` when the closest match is a flow) and list the project's
+  tasks and flows in declaration order. When the only match differs by case
+  (`bolt run Mark` / `bolt run Build`), the message adds `Task names are case-sensitive.`
 - No name (`bolt run`) prints the usage with the project's actual tasks and flows;
   outside a project it points to `bolt list` and `bolt init`.
 

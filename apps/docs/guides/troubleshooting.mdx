@@ -42,9 +42,9 @@ plugins:
 
 If the file has `engine_path`, `project_path`, `uproject`, or `use_tortoise`, it is a bolt v2.0 file. Run `bolt migrate --dry-run` to see the converted files, then `bolt migrate` to write them.
 
-### Unknown task or flow
+### Unknown task / unknown flow
 
-**Error**: `Unknown task "foo". Did you mean "…"?` or `Unknown flow "foo". Did you mean "…"?` (exit code `2`)
+**Error**: `Unknown task "foo". Did you mean "…"?` or `Unknown flow "foo". Did you mean "…"?` (exit code `2`). A case-only mismatch adds `Task names are case-sensitive.`
 
 **Cause**: The name you passed to `bolt run` / `bolt inspect` isn't defined in this project's `bolt.yaml` (names are case-sensitive).
 

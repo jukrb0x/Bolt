@@ -174,9 +174,9 @@ Check `ai-context.md` for the exact task name — it varies per project. Typical
 
 ## Errors
 
-| Symptom                                          | Cause                                                         | Fix                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| "bolt.yaml not found"                            | Not in a Bolt project directory                               | `cd` to the project root                                                              |
-| "bolt.local.yaml missing or invalid"             | Per-machine config absent                                     | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
-| `Unknown task "…"` / `Unknown flow "…"` (exit 2) | Name not defined in this project's bolt.yaml (case-sensitive) | Use the "Did you mean" hint, or run `bolt list`                                       |
-| Build fails mid-flow                             | Build error in UE                                             | Check the log file path printed in output                                             |
+| Symptom                                                                                    | Cause                                                         | Fix                                                                                   |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| "bolt.yaml not found"                                                                      | Not in a Bolt project directory                               | `cd` to the project root                                                              |
+| "bolt.local.yaml missing or invalid"                                                       | Per-machine config absent                                     | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
+| `Unknown task "…"` / `Unknown flow "…"` (exit 2); may add `Task names are case-sensitive.` | Name not defined in this project's bolt.yaml (case-sensitive) | Use the "Did you mean" hint, or run `bolt list`                                       |
+| Build fails mid-flow                                                                       | Build error in UE                                             | Check the log file path printed in output                                             |
