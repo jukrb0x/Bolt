@@ -47,10 +47,10 @@ bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 
 ## Options
 
-| Flag              | Default | Description                                                                                                            |
-| ----------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `--dry-run`       | `false` | Print the steps; still calls plugin handlers (with `ctx.dryRun`) and runs local actions; only `run:` steps are skipped |
-| `--<key>=<value>` | -       | Pass a param to the whole run (overrides `with:`)                                                                      |
+| Flag              | Default | Description                                                                                                                                 |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--dry-run`       | `false` | Print the steps. Skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`) |
+| `--<key>=<value>` | -       | Pass a param to the whole run (overrides `with:`)                                                                                           |
 
 ## Arguments
 

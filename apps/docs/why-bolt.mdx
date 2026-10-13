@@ -46,8 +46,8 @@ overrides each step's `with:` values, so `bolt run build --target=client --confi
 same `build` task.
 
 **One plan for preview and execution.** `bolt inspect <names>` and `bolt run <names> --dry-run` show
-the resolved steps that `bolt run` would execute. In the current release, `--dry-run` still calls plugin
-handlers (with `ctx.dryRun=true`) and runs local actions; only `run:` shell steps are skipped.
+the resolved steps that `bolt run` would execute. In the current release,
+`--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`).
 
 **Layered plugins.** Bolt looks for plugins in four places: built-in, user (`~/.bolt/plugins`), project
 (`.bolt/plugins`), and explicit `path` entries in `bolt.yaml`. A later layer replaces a plugin with the

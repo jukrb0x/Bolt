@@ -39,9 +39,8 @@ use only the tasks and flows listed there, preview with `--dry-run` first, ask b
 tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
 
 <Note>
-  In the current release, `bolt run --dry-run` is not side-effect free. It calls plugin handlers with
-  `ctx.dryRun=true` (each handler decides what to skip) and runs local actions (`uses: ./x`). Only `run:`
-  shell steps are skipped. Do not auto-approve any `bolt run` command on the current release.
+  In the current release, `bolt run --dry-run` is not side-effect free: `--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`).
+  Each handler decides what to skip. Do not auto-approve any `bolt run` command on the current release.
 
 The current release also silently ignores unknown flags such as `--json`, `--agent`, and `--execute`,
 and treats `--plan=…` as a task param. The commands in the Planned section below **run for real** on

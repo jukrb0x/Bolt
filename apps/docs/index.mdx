@@ -34,8 +34,7 @@ own plugins in TypeScript.
   </Card>
   <Card title="See the plan first" icon="eye">
     `bolt inspect <names>` shows the resolved steps without loading plugins or running anything.
-    `bolt run <names> --dry-run` also lists the steps, but in the current release it still calls plugin
-    handlers and runs local actions.
+    `bolt run <names> --dry-run` also lists the steps. In the current release, `--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`).
   </Card>
   <Card title="Plugins" icon="plug">
     Steps call plugin handlers as `namespace/handler`. Add plugins per user (`~/.bolt/plugins`) or per

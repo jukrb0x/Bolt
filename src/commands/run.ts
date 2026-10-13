@@ -94,7 +94,7 @@ export default defineCommand({
       type: "boolean",
       default: false,
       description:
-        "Print steps; skips run: steps and local actions, plugin handlers still run with ctx.dryRun",
+        "Print steps. Skips run: steps and local actions, but still loads plugins and calls plugin hooks and handlers (with ctx.dryRun=true)",
     },
   },
   async run({ rawArgs }) {
