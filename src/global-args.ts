@@ -1,6 +1,16 @@
-import { closest } from "./suggest";
+import { closestMatches, formatDidYouMean } from "./suggest";
 
 const HELP = new Set(["-h", "--help"]);
+
+/** Global flags allowed before the subcommand; used for "Did you mean" suggestions. */
+const GLOBAL_FLAGS = ["-h", "--help", "--version"];
+
+/** Top-level typos that map to a full suggested invocation (not a subcommand name). */
+const COMMAND_ALIASES: Record<string, string> = {
+  help: "bolt --help",
+  update: "bolt self-update",
+  upgrade: "bolt self-update",
+};
 
 /**
  * Validate argv before citty sees it. citty silently drops every argument that comes
@@ -26,8 +36,10 @@ export function checkGlobalArgs(argv: string[]): string | undefined {
     if (eq !== -1 && HELP.has(name)) {
       return `${name} takes no value. Use: bolt --help (or bolt <command> --help)`;
     }
+    const hint = formatDidYouMean(closestMatches(name, GLOBAL_FLAGS));
     return (
-      `Unknown global flag "${arg}". Flags go after the command, e.g. bolt run <task> --dry-run. ` +
+      `Unknown global flag "${arg}".${hint} ` +
+      `Flags go after the command, e.g. bolt run <task> --dry-run. ` +
       `Only -h, --help and --version may come before it.`
     );
   }
@@ -50,13 +62,24 @@ function subCommandsOf(node: unknown): Record<string, unknown> | undefined {
   return Object.keys(subs).length > 0 ? (subs as Record<string, unknown>) : undefined;
 }
 
+function commandListMessage(prefix: string, names: string[]): string {
+  return `  Commands: ${names.join(", ")}\n` + `  Run ${prefix} --help for details.`;
+}
+
 /**
  * Validate subcommand names before citty sees them. citty answers an unknown command
  * (`bolt rn mark`) with the full usage dump and exit 1; this returns a short
  * `Unknown command "rn". Did you mean "run"?` plus the list of commands instead.
- * Walks nested subcommands too (`bolt plugin nw`). Returns undefined when argv is fine.
+ * Walks nested subcommands too (`bolt plugin nw`). A parent with no subcommand
+ * (`bolt plugin`) is also a usage error. Optional `projectNames` are task/flow names
+ * from the nearest bolt.yaml so `bolt build` can suggest `bolt run build`.
+ * Returns undefined when argv is fine.
  */
-export function checkCommandName(argv: string[], root: CommandNode): string | undefined {
+export function checkCommandName(
+  argv: string[],
+  root: CommandNode,
+  projectNames?: Iterable<string>,
+): string | undefined {
   if (argv.some((arg) => HELP.has(arg))) return undefined;
   let node: unknown = root;
   let rest = argv;
@@ -64,8 +87,13 @@ export function checkCommandName(argv: string[], root: CommandNode): string | un
   for (;;) {
     const subs = subCommandsOf(node);
     if (!subs) return undefined;
+    const names = Object.keys(subs);
     const index = rest.findIndex((arg) => !arg.startsWith("-"));
-    if (index === -1) return undefined;
+    if (index === -1) {
+      // Bare `bolt` still goes to citty. Nested parents need a subcommand (`bolt plugin`).
+      if (path.length === 1) return undefined;
+      return `No command specified.\n${commandListMessage(path.join(" "), names)}`;
+    }
     const name = rest[index];
     if (Object.hasOwn(subs, name)) {
       node = subs[name];
@@ -73,13 +101,32 @@ export function checkCommandName(argv: string[], root: CommandNode): string | un
       path.push(name);
       continue;
     }
-    const names = Object.keys(subs);
-    const best = closest(name, names);
     const prefix = path.join(" ");
+    // Top-level aliases and "forgot run" only apply at the root.
+    if (path.length === 1) {
+      const alias = COMMAND_ALIASES[name];
+      if (alias) {
+        return `Unknown command "${name}". Did you mean "${alias}"?\n${commandListMessage(prefix, names)}`;
+      }
+      const matches = closestMatches(name, names);
+      if (matches.length > 0) {
+        return `Unknown command "${name}".${formatDidYouMean(matches)}\n${commandListMessage(prefix, names)}`;
+      }
+      if (projectNames) {
+        for (const projectName of projectNames) {
+          if (projectName === name) {
+            return (
+              `Unknown command "${name}". Did you mean "bolt run ${name}"?\n` +
+              commandListMessage(prefix, names)
+            );
+          }
+        }
+      }
+      return `Unknown command "${name}".\n${commandListMessage(prefix, names)}`;
+    }
+    const matches = closestMatches(name, names);
     return (
-      `Unknown command "${name}".${best ? ` Did you mean "${best}"?` : ""}\n` +
-      `  Commands: ${names.join(", ")}\n` +
-      `  Run ${prefix} --help for details.`
+      `Unknown command "${name}".${formatDidYouMean(matches)}\n` + commandListMessage(prefix, names)
     );
   }
 }

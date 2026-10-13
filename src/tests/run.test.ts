@@ -4,7 +4,7 @@ import { testCfg } from "./env";
 import type { BoltConfig } from "../config";
 import { parseRunArgs, dispatchRun, UsageError, RESERVED_FLAGS } from "../commands/run";
 import { checkCommandName, checkGlobalArgs } from "../global-args";
-import { closest, shellQuote } from "../suggest";
+import { closest, closestMatches, formatDidYouMean, shellQuote } from "../suggest";
 import { commands } from "../commands";
 import { missingNameMessage, renamedParam, unknownNamesMessage } from "../commands/run";
 import { formatPlanNodes } from "../inspect-utils";
@@ -340,6 +340,13 @@ describe("checkGlobalArgs", () => {
 
   test("rejects any other flag before the subcommand", () => {
     expect(checkGlobalArgs(["--dry-run", "run", "deploy"])).toContain('"--dry-run"');
+    expect(checkGlobalArgs(["--dry-run", "run", "deploy"])).not.toContain("Did you mean");
+    expect(checkGlobalArgs(["--verison"])).toContain('Did you mean "--version"?');
+    expect(checkGlobalArgs(["--verison", "run"])).toBe(
+      'Unknown global flag "--verison". Did you mean "--version"? ' +
+        "Flags go after the command, e.g. bolt run <task> --dry-run. " +
+        "Only -h, --help and --version may come before it.",
+    );
     expect(checkGlobalArgs(["-x", "run", "build"])).toContain('"-x"');
     expect(checkGlobalArgs(["--version", "run", "build"])).toBe(
       "--version must be used on its own. Use: bolt --version",
@@ -390,16 +397,41 @@ describe("checkCommandName", () => {
     expect(checkCommandName(["rn", "--help"], root)).toBeUndefined();
     expect(checkCommandName([], root)).toBeUndefined();
   });
+  test("bolt plugin with no subcommand is a usage error", () => {
+    const msg = checkCommandName(["plugin"], root)!;
+    expect(msg).toStartWith("No command specified.");
+    expect(msg).toContain("Commands: new, list");
+    expect(msg).toContain("Run bolt plugin --help for details.");
+  });
+  test("aliases and forgot-run suggestions", () => {
+    expect(checkCommandName(["help"], root)).toContain('Did you mean "bolt --help"?');
+    expect(checkCommandName(["update"], root)).toContain('Did you mean "bolt self-update"?');
+    expect(checkCommandName(["upgrade"], root)).toContain('Did you mean "bolt self-update"?');
+    expect(checkCommandName(["build"], root, ["build", "deploy"])).toContain(
+      'Did you mean "bolt run build"?',
+    );
+    expect(checkCommandName(["build"], root)).toBe(
+      `Unknown command "build".\n  Commands: ${Object.keys(commands).join(", ")}\n  Run bolt --help for details.`,
+    );
+  });
 });
 
 describe("task suggestions and usage", () => {
   test("unknown task suggests the closest name and lists tasks", () => {
     const msg = unknownNamesMessage(cfg, ["gret"])!;
     expect(msg).toStartWith('Unknown task "gret". Did you mean "greet"?');
+    expect(msg).not.toContain("case-sensitive");
     expect(msg).toContain("Tasks: ");
     expect(msg).toContain("Run bolt list for details.");
     expect(unknownNamesMessage(cfg, ["daily"])).toBeUndefined();
     expect(unknownNamesMessage(cfg, ["zzzzzzzz"])).toStartWith('Unknown task "zzzzzzzz".\n');
+  });
+  test("case-only task mismatch notes that names are case-sensitive", () => {
+    const msg = unknownNamesMessage(cfg, ["Greet"])!;
+    expect(msg).toStartWith(
+      'Unknown task "Greet". Did you mean "greet"? Task names are case-sensitive.',
+    );
+    expect(msg).toContain("Run bolt list for details.");
   });
   test("missing task lists the project's tasks, or hints bolt list", () => {
     const msg = missingNameMessage("run", { kind: "loaded", cfg });
@@ -420,5 +452,66 @@ describe("task suggestions and usage", () => {
     expect(closest("qqq", ["run", "list"])).toBeUndefined();
     expect(shellQuote("abc")).toBe("abc");
     expect(shellQuote("a b")).toBe('"a b"');
+  });
+  test("ambiguous prefix lists candidates; long task lists truncate", () => {
+    const names = [
+      "build",
+      "build-editor",
+      "deploy",
+      ...Array.from({ length: 11 }, (_, i) => `task${String(i + 1).padStart(2, "0")}`),
+    ];
+    const wide = {
+      ...cfg,
+      tasks: Object.fromEntries(names.map((n) => [n, [{ run: "echo" }]])),
+    };
+    const msg = unknownNamesMessage(wide, ["bu"])!;
+    expect(msg).toStartWith('Unknown task "bu". Did you mean "build" or "build-editor"?');
+    expect(msg).toContain("and 4 more (see bolt list)");
+    expect(msg).toContain("task01");
+    expect(msg).not.toContain("task11");
+  });
+  test("flow typo says Unknown flow", () => {
+    const msg = unknownNamesMessage(cfg, ["daly"])!;
+    expect(msg).toStartWith('Unknown flow "daly". Did you mean "daily"?');
+  });
+});
+
+describe("closest threshold (P1)", () => {
+  const cmds = [
+    "run",
+    "list",
+    "info",
+    "check",
+    "migrate",
+    "config",
+    "init",
+    "types",
+    "plugin",
+    "inspect",
+    "self-update",
+    "ai",
+    "version",
+  ];
+  test("short inputs do not guess wildly", () => {
+    for (const input of ["x", "c", "l", "a", "i", "s"]) {
+      expect(closest(input, cmds)).toBeUndefined();
+    }
+    expect(closest("d", ["b", "build", "deploy"])).toBeUndefined();
+    expect(closest("c", ["b", "build"])).toBeUndefined();
+    expect(closest("zz", ["b"])).toBeUndefined();
+  });
+  test("real typos and prefixes still match", () => {
+    expect(closest("rn", cmds)).toBe("run");
+    expect(closest("lst", cmds)).toBe("list");
+    expect(closest("ver", cmds)).toBe("version");
+    expect(closest("--verison", ["--version", "--help", "-h"])).toBe("--version");
+    expect(closestMatches("bu", ["build", "build-editor", "deploy"])).toEqual([
+      "build",
+      "build-editor",
+    ]);
+    expect(closest("bu", ["build", "build-editor", "deploy"])).toBeUndefined();
+    expect(formatDidYouMean(["build", "build-editor"])).toBe(
+      ' Did you mean "build" or "build-editor"?',
+    );
   });
 });

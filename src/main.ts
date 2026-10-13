@@ -4,7 +4,7 @@ import { cleanupInstalledBolt } from "./commands/update";
 import { commands } from "./commands";
 import { VERSION } from "./version";
 import { checkCommandName, checkGlobalArgs } from "./global-args";
-import { USAGE_EXIT_CODE } from "./commands/run";
+import { loadUsageConfig, printUsageError, USAGE_EXIT_CODE } from "./commands/run";
 
 if (process.platform === "win32") cleanupInstalledBolt(process.execPath);
 
@@ -39,9 +39,29 @@ async function showUsage(cmd: CommandDef<any>, parent?: CommandDef<any>): Promis
 }
 
 const argv = process.argv.slice(2);
-const globalError = checkGlobalArgs(argv) ?? checkCommandName(argv, main);
+const globalError = checkGlobalArgs(argv);
 if (globalError) {
-  console.error(`[ERROR] ${globalError}`);
+  printUsageError(globalError);
+  process.exit(USAGE_EXIT_CODE);
+}
+
+const first = argv.find((arg) => !arg.startsWith("-"));
+const needsProjectNames =
+  first !== undefined &&
+  !Object.hasOwn(commands, first) &&
+  first !== "help" &&
+  first !== "update" &&
+  first !== "upgrade";
+
+const usage = needsProjectNames ? await loadUsageConfig() : undefined;
+const projectNames =
+  usage?.kind === "loaded"
+    ? [...Object.keys(usage.cfg.tasks), ...Object.keys(usage.cfg.flows)]
+    : undefined;
+
+const commandError = checkCommandName(argv, main, projectNames);
+if (commandError) {
+  printUsageError(commandError);
   process.exit(USAGE_EXIT_CODE);
 }
 
