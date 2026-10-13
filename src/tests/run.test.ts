@@ -543,3 +543,45 @@ describe("closest threshold (P1)", () => {
     );
   });
 });
+
+describe("suggestion follow-ups (PR #30 review P2)", () => {
+  test("top-level bolt zz and run b do not suggest", () => {
+    expect(checkCommandName(["zz"], { subCommands: commands })).not.toContain("Did you mean");
+    expect(closest("b", ["build", "bench", "deploy"])).toBeUndefined();
+    const bCfg = {
+      ...cfg,
+      tasks: { build: [{ run: "e" }], bench: [{ run: "e" }], deploy: [{ run: "e" }] },
+      flows: {},
+    };
+    expect(unknownNamesMessage(bCfg, ["b"])).not.toContain("Did you mean");
+  });
+  test("task list keeps declaration order (non-alphabetical)", () => {
+    const ordered = {
+      ...cfg,
+      tasks: { zeta: [{ run: "e" }], alpha: [{ run: "e" }], mid: [{ run: "e" }] },
+      flows: {},
+    };
+    expect(missingNameMessage("run", { kind: "loaded", cfg: ordered })).toContain(
+      "Tasks: zeta, alpha, mid",
+    );
+  });
+  test("exact task name beats fuzzy command match", () => {
+    const msg = checkCommandName(["lint"], { subCommands: commands }, ["lint", "build"])!;
+    expect(msg).toStartWith('Unknown command "lint". Did you mean "bolt run lint"?');
+  });
+  test("-v / -V suggest --version", () => {
+    expect(checkGlobalArgs(["-v"])).toContain('Did you mean "--version"?');
+    expect(checkGlobalArgs(["-V"])).toContain('Did you mean "--version"?');
+  });
+  test("--dryrn suggests --dry-run (separators ignored for flags)", () => {
+    expect(() => parseRunArgs(["build", "--dryrn"])).toThrow('Did you mean "--dry-run"?');
+  });
+  test("several case-insensitive exact matches are all listed", () => {
+    expect(closestMatches("MARK", ["mark", "Mark", "build"])).toEqual(["mark", "Mark"]);
+    expect(closestMatches("Mark", ["mark", "Mark"])).toEqual(["Mark"]);
+    const both = { ...cfg, tasks: { mark: [{ run: "e" }], Mark: [{ run: "e" }] }, flows: {} };
+    expect(unknownNamesMessage(both, ["MARK"])).toStartWith(
+      'Unknown task "MARK". Did you mean "mark" or "Mark"?',
+    );
+  });
+});

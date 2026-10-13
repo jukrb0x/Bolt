@@ -63,9 +63,11 @@ export function closestMatches(input: string, candidates: Iterable<string>): str
   const list = [...candidates];
 
   // Case-insensitive exact match must run before distance / prefix checks.
-  for (const candidate of list) {
-    if (candidate.toLowerCase() === clean) return [candidate];
-  }
+  // Prefer an exact-case match; otherwise list every case-insensitive match
+  // (`MARK` with both `mark` and `Mark` declared → both).
+  if (list.includes(input)) return [input];
+  const ciExact = list.filter((c) => c.toLowerCase() === clean);
+  if (ciExact.length > 0) return ciExact.slice(0, 3);
 
   const prefixes: string[] = [];
   let best: string | undefined;
@@ -89,6 +91,23 @@ export function closestMatches(input: string, candidates: Iterable<string>): str
   if (best === undefined) return [];
   if (!withinThreshold(clean.length, bestScore, best, clean)) return [];
   return [best];
+}
+
+/**
+ * Like {@link closestMatches} for flag names: `-` and `_` are ignored when comparing,
+ * so `dryrn` still reaches `dry-run` (one edit once separators are dropped).
+ * Returns the original candidate spellings.
+ */
+export function closestFlagMatches(input: string, candidates: Iterable<string>): string[] {
+  const direct = closestMatches(input, candidates);
+  if (direct.length > 0) return direct;
+  const strip = (s: string) => s.replace(/[-_]/g, "");
+  const byStripped = new Map<string, string>();
+  for (const c of candidates) {
+    const key = strip(c);
+    if (key && !byStripped.has(key)) byStripped.set(key, c);
+  }
+  return closestMatches(strip(input), byStripped.keys()).map((k) => byStripped.get(k) ?? k);
 }
 
 /**
