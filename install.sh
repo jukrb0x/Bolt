@@ -48,13 +48,46 @@ if [ "${BOLT_INSTALL_PRINT_ASSET:-}" = "1" ]; then
 fi
 
 ASSET=$(resolve_asset "$(uname -s)" "$(uname -m)")
-DEFAULT_DEST="${HOME}/.bolt/bin"
+# Strip trailing slashes so "$HOME/" and "$HOME" give the same paths.
+HOME_DIR=$(printf '%s' "$HOME" | sed 's:/*$::')
+DEFAULT_DEST="${HOME_DIR}/.bolt/bin"
 DEST="$DEFAULT_DEST"
 
-# Package-manager copies (npm, Homebrew) are left to their manager.
+# Print a directory as an absolute physical path without a trailing slash.
+norm_dir() {
+  (cd "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1" | sed 's:/*$::'
+}
+
+# Run "<bolt> version" with a timeout. stderr is discarded. Uses timeout(1) or
+# gtimeout (Homebrew coreutils on macOS), else a background job that is killed.
+PROBE_TIMEOUT="${BOLT_INSTALL_PROBE_TIMEOUT:-15}"
+probe_version() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$PROBE_TIMEOUT" "$1" version 2>/dev/null
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$PROBE_TIMEOUT" "$1" version 2>/dev/null
+  else
+    probe_out=$(mktemp)
+    "$1" version >"$probe_out" 2>/dev/null &
+    probe_pid=$!
+    (
+      sleep "$PROBE_TIMEOUT"
+      kill -9 "$probe_pid" 2>/dev/null
+    ) >/dev/null 2>&1 &
+    probe_watch=$!
+    probe_status=0
+    wait "$probe_pid" || probe_status=$?
+    kill "$probe_watch" 2>/dev/null || true
+    if [ "$probe_status" -eq 0 ]; then cat "$probe_out"; fi
+    rm -f "$probe_out"
+    return "$probe_status"
+  fi
+}
+
+# Package-manager copies (npm, Homebrew, chocolatey) are left to their manager.
 is_managed_path() {
   case "$1" in
-    */node_modules/* | */Cellar/* | */cellar/* | */homebrew/* | */Homebrew/* | */linuxbrew/*) return 0 ;;
+    */node_modules/* | */Cellar/* | */cellar/* | */homebrew/* | */Homebrew/* | */linuxbrew/* | */chocolatey/*) return 0 ;;
   esac
   return 1
 }
@@ -71,7 +104,7 @@ case "$existing" in
     elif [ ! -f "$existing" ] || [ ! -w "$existing_dir" ]; then
       echo "Ignoring ${existing} on PATH: ${existing_dir} is not writable. Installing to ${DEFAULT_DEST}."
     else
-      existing_version=$("$existing" version 2>/dev/null | tr -d '[:space:]' || true)
+      existing_version=$(probe_version "$existing" | tr -d '[:space:]' || true)
       case "$existing_version" in
         [0-9]*.[0-9]*.[0-9]*)
           case "$existing_version" in
@@ -87,9 +120,9 @@ case "$existing" in
     fi
     ;;
 esac
-RECEIPT="${HOME}/.bolt/install.json"
+RECEIPT="${HOME_DIR}/.bolt/install.json"
 
-mkdir -p "$DEST" "${HOME}/.bolt"
+mkdir -p "$DEST" "${HOME_DIR}/.bolt"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -143,22 +176,37 @@ EOF
 
 PATH_LINE='export PATH="$HOME/.bolt/bin:$PATH"'
 SHELL_RC=""
-if [ "$DEST" = "$DEFAULT_DEST" ]; then
+if [ "$(norm_dir "$DEST")" = "$(norm_dir "$DEFAULT_DEST")" ]; then
   case "${SHELL:-}" in
-    */zsh) SHELL_RC="$HOME/.zshrc" ;;
-    */bash) SHELL_RC="$HOME/.bashrc" ;;
+    */zsh) SHELL_RC="${HOME_DIR}/.zshrc" ;;
+    */bash)
+      if [ "$(uname -s)" = "Darwin" ]; then
+        # Terminal.app starts bash as a login shell, which reads the first of these.
+        SHELL_RC="${HOME_DIR}/.bash_profile"
+        for f in "${HOME_DIR}/.bash_profile" "${HOME_DIR}/.bash_login" "${HOME_DIR}/.profile"; do
+          if [ -f "$f" ]; then
+            SHELL_RC="$f"
+            break
+          fi
+        done
+      else
+        SHELL_RC="${HOME_DIR}/.bashrc"
+      fi
+      ;;
     *)
-      if [ -f "$HOME/.zshrc" ]; then
-        SHELL_RC="$HOME/.zshrc"
-      elif [ -f "$HOME/.bashrc" ]; then
-        SHELL_RC="$HOME/.bashrc"
-      elif [ -f "$HOME/.profile" ]; then
-        SHELL_RC="$HOME/.profile"
+      if [ -f "${HOME_DIR}/.zshrc" ]; then
+        SHELL_RC="${HOME_DIR}/.zshrc"
+      elif [ -f "${HOME_DIR}/.bashrc" ]; then
+        SHELL_RC="${HOME_DIR}/.bashrc"
+      elif [ -f "${HOME_DIR}/.profile" ]; then
+        SHELL_RC="${HOME_DIR}/.profile"
       fi
       ;;
   esac
   if [ -n "$SHELL_RC" ]; then
-    if ! grep -F '.bolt/bin' "$SHELL_RC" >/dev/null 2>&1; then
+    # Accept our exact line or any uncommented line that already mentions .bolt/bin.
+    if ! grep -Fx "$PATH_LINE" "$SHELL_RC" >/dev/null 2>&1 &&
+      ! grep -E '^[[:space:]]*[^#[:space:]][^#]*\.bolt/bin' "$SHELL_RC" >/dev/null 2>&1; then
       printf '\n%s\n' "$PATH_LINE" >>"$SHELL_RC"
       echo "Added ~/.bolt/bin to PATH in $SHELL_RC"
     fi
@@ -167,6 +215,21 @@ if [ "$DEST" = "$DEFAULT_DEST" ]; then
     echo "  $PATH_LINE"
   fi
 fi
+
+# Another bolt earlier on PATH would still win. Say so instead of failing silently.
+# When the rc file has our PATH line, new shells put ~/.bolt/bin first, so check that PATH.
+check_path="$PATH"
+if [ -n "$SHELL_RC" ]; then
+  check_path="${DEST}:${PATH}"
+fi
+resolved=$(PATH="$check_path" command -v bolt 2>/dev/null || true)
+case "$resolved" in
+  /*)
+    if [ "$(norm_dir "$(dirname "$resolved")")/$(basename "$resolved")" != "$(norm_dir "$DEST")/bolt" ]; then
+      echo "Warning: bolt on your PATH is ${resolved}, not ${installed_path}. It comes first on PATH. Remove it or put $(dirname "$installed_path") ahead of it."
+    fi
+    ;;
+esac
 
 echo "Installed ${ASSET} to ${DEST}/bolt (${version})"
 echo "Open a new shell, then run: bolt version"
