@@ -28,7 +28,15 @@ If the redirect cannot be read, it falls back to `api.github.com`, authenticated
 
 Requests go through Bun's `fetch`, which honours `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`.
 
-For testing, `BOLT_RELEASES_URL` replaces `https://github.com/jukrb0x/Bolt/releases`, `BOLT_RELEASES_API` forces the API path at another base, and `BOLT_INSTALL_BASE` (a directory with `SHA256SUMS` and the assets, as `install.ps1` uses) skips version lookup; the downloaded file's `version` decides whether it is newer.
+Test-only settings: `BOLT_RELEASES_URL` replaces `https://github.com/jukrb0x/Bolt/releases`, `BOLT_RELEASES_API` forces the API path at another base, and `BOLT_INSTALL_BASE` (a directory with `SHA256SUMS` and the assets, as `install.ps1` uses) skips version lookup; the downloaded file's `version` decides whether it is newer. Each must be an `https` URL; plain `http` is accepted only for `localhost` and `127.0.0.1`. Leave them unset for normal updates.
+
+The token is only sent to `https://api.github.com`. If GitHub rejects it (`401`), the request is retried without it. The rate-limit message appears only for `429`, or for a `403` with `x-ratelimit-remaining: 0`; any other `403` is reported as is.
+
+Versions compare by semver precedence, so `2.2.0` is newer than `2.2.0-rc.1`.
+
+### Explicit versions
+
+`bolt self-update v2.1.0` and `bolt self-update --version 2.1.0` do the same thing; a `v` prefix is optional. After the download passes the checksum, the new file must report that exact version, or nothing is replaced.
 
 ### Checksum
 
@@ -44,11 +52,11 @@ When the executable path is under `node_modules`, WinGet, Scoop, or Homebrew, se
 
 ## Options
 
-| Flag        | Description                                                              |
-| ----------- | ------------------------------------------------------------------------ |
-| `--force`   | Download and replace even when the current version is already the latest |
-| `--version` | Install this version instead of the latest, for example `2.1.0`          |
-| `<version>` | Same as `--version`, for example `v2.1.0`                                |
+| Flag        | Description                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `--force`   | Download and replace even when the current version is already the latest                 |
+| `--version` | Install this version instead of the latest, for example `2.1.0`                          |
+| `<version>` | Same as `--version`, for example `v2.1.0`. Giving both with different values is an error |
 
 Without `--force` or a version, a current version that is not older than the latest release prints `Already up to date (v2.1.1)` (the `v` plus the running version) and does not download.
 

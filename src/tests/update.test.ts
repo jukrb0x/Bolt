@@ -52,7 +52,8 @@ test("isNewer: handles v-prefixed latest tag", () => {
 
 test("isNewer: dev-suffixed current does not suppress updates", () => {
   expect(isNewer("0.1.0-dev", "0.1.1")).toBe(true);
-  expect(isNewer("0.1.0-dev", "0.1.0")).toBe(false);
+  // Semver: the final release outranks its prerelease.
+  expect(isNewer("0.1.0-dev", "0.1.0")).toBe(true);
 });
 
 test("releaseAssetName: Intel macOS downloads bolt-mac-x64", () => {

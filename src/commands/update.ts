@@ -10,7 +10,9 @@ import { RELEASE_BINARIES } from "../../scripts/release-targets";
 
 import {
   RATE_LIMIT_MESSAGE,
+  checkOverrideUrl,
   defaultResolveDeps,
+  isRateLimited,
   normalizeTag,
   resolveRelease,
   type ResolvedRelease,
@@ -39,19 +41,62 @@ const PACKAGE_MANAGER_COMMANDS: Record<string, string> = {
   brew: "No Homebrew formula is published yet. Upgrade the formula that installed this bolt.",
 };
 
+/** Compare two versions by semver precedence. "v" prefixes and build metadata are ignored. */
+export function compareVersions(left: string, right: string): number {
+  const parse = (v: string) => {
+    const [core, ...pre] = v.trim().replace(/^v/, "").replace(/\+.*$/, "").split("-");
+    const nums = core.split(".").map((part) => parseInt(part, 10) || 0);
+    return { nums: [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0], pre: pre.join("-") };
+  };
+  const a = parse(left);
+  const b = parse(right);
+  for (let i = 0; i < 3; i++) if (a.nums[i] !== b.nums[i]) return a.nums[i] - b.nums[i];
+  // A final release outranks any prerelease of the same version.
+  if (a.pre === b.pre) return 0;
+  if (!a.pre) return 1;
+  if (!b.pre) return -1;
+  const ap = a.pre.split(".");
+  const bp = b.pre.split(".");
+  for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
+    if (ap[i] === undefined) return -1;
+    if (bp[i] === undefined) return 1;
+    const an = /^\d+$/.test(ap[i]);
+    const bn = /^\d+$/.test(bp[i]);
+    if (an && bn) {
+      const d = Number(ap[i]) - Number(bp[i]);
+      if (d !== 0) return d;
+    } else if (an !== bn) {
+      return an ? -1 : 1;
+    } else if (ap[i] !== bp[i]) {
+      return ap[i] < bp[i] ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 export function isNewer(current: string, latest: string): boolean {
-  // Strip "v" prefix and any pre-release suffix (e.g. "0.1.0-dev" → "0.1.0")
-  const parse = (v: string) =>
-    v
-      .replace(/^v/, "")
-      .replace(/-.*$/, "")
-      .split(".")
-      .map((s) => parseInt(s, 10));
-  const [ca, cb, cc] = parse(current);
-  const [la, lb, lc] = parse(latest);
-  if (la !== ca) return la > ca;
-  if (lb !== cb) return lb > cb;
-  return lc > cc;
+  return compareVersions(latest, current) > 0;
+}
+
+/** Same version, ignoring a "v" prefix and build metadata. */
+export function sameVersion(left: string, right: string): boolean {
+  return compareVersions(left, right) === 0;
+}
+
+/**
+ * The version a user asked for. The positional form and --version are the same
+ * option; giving both with different values is an error.
+ */
+export function requestedVersion(
+  positional: unknown,
+  flag: unknown,
+): { version?: string; error?: string } {
+  const p = typeof positional === "string" && positional.trim() ? positional.trim() : undefined;
+  const f = typeof flag === "string" && flag.trim() ? flag.trim() : undefined;
+  if (p && f && !sameVersion(p, f)) {
+    return { error: `Two different versions were given (${p} and --version ${f}). Pass one.` };
+  }
+  return { version: p ?? f };
 }
 
 /**
@@ -264,18 +309,35 @@ export function cleanupInstalledBolt(execPath: string): void {
   cleanupStaleBinary(execPath, installed);
 }
 
+class DownloadError extends Error {
+  constructor(
+    readonly status: number,
+    readonly rateLimited: boolean,
+    url: string,
+  ) {
+    super(`Download failed: HTTP ${status} for ${url}`);
+  }
+}
+
 async function download(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { headers: { "User-Agent": "bolt-self-update" } });
-  if (!res.ok) throw new Error(`Download failed: HTTP ${res.status} for ${url}`);
+  if (!res.ok) {
+    throw new DownloadError(
+      res.status,
+      isRateLimited(res.status, res.headers.get("x-ratelimit-remaining")),
+      url,
+    );
+  }
   return new Uint8Array(await res.arrayBuffer());
 }
 
-/** Message for a failed asset download. A 403/429 from GitHub is a rate limit. */
+/** Message for a failed asset download. Rate-limit wording only when GitHub says so. */
 export function downloadFailureMessage(
   status: number | undefined,
   tag: string | undefined,
+  rateLimited = status === 429,
 ): string {
-  if (status === 403 || status === 429) return RATE_LIMIT_MESSAGE;
+  if (rateLimited) return RATE_LIMIT_MESSAGE;
   if (status === 404 && tag) return `Release ${tag} or its asset was not found (HTTP 404).`;
   return "";
 }
@@ -349,9 +411,12 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const positional = typeof args.tag === "string" && args.tag ? args.tag : undefined;
-    const flag = typeof args.version === "string" && args.version ? args.version : undefined;
-    const requested = positional ?? flag;
+    const picked = requestedVersion(args.tag, args.version);
+    if (picked.error) {
+      console.error(pc.red(picked.error));
+      process.exit(1);
+    }
+    const requested = picked.version;
     console.log(pc.dim(`Current version: ${VERSION}`));
     console.log(
       pc.dim(requested ? `Fetching ${normalizeTag(requested)}...` : "Checking for updates..."),
@@ -359,7 +424,14 @@ export default defineCommand({
 
     // BOLT_INSTALL_BASE is a directory holding SHA256SUMS and the assets, like install.ps1 uses.
     // Its version is only known after the download runs.
-    const installBase = process.env.BOLT_INSTALL_BASE?.trim().replace(/\/+$/, "");
+    // Test-only, like BOLT_RELEASES_URL and BOLT_RELEASES_API: https, or http for localhost.
+    let installBase: string | undefined;
+    try {
+      installBase = checkOverrideUrl("BOLT_INSTALL_BASE", process.env.BOLT_INSTALL_BASE);
+    } catch (error) {
+      console.error(pc.red(error instanceof Error ? error.message : String(error)));
+      process.exit(1);
+    }
     let release: ResolvedRelease | undefined;
     let sumsUrl: string;
     let assetUrl: string;
@@ -395,8 +467,10 @@ export default defineCommand({
       bytes = await download(assetUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const status = Number(/HTTP (\d{3})/.exec(message)?.[1]) || undefined;
-      const hint = downloadFailureMessage(status, release?.tag);
+      const hint =
+        error instanceof DownloadError
+          ? downloadFailureMessage(error.status, release?.tag, error.rateLimited)
+          : "";
       console.error(pc.red(hint ? `${message}. ${hint}` : message));
       process.exit(1);
     }
@@ -437,6 +511,20 @@ export default defineCommand({
       }
       console.error(
         pc.red("Downloaded bolt did not print a version. The installed bolt was not changed."),
+      );
+      process.exit(1);
+    }
+
+    if (requested && !sameVersion(probedVersion, requested)) {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        console.error(pc.dim(`Downloaded file left at: ${tmpPath}`));
+      }
+      console.error(
+        pc.red(
+          `Downloaded bolt reports ${probedVersion}, not the requested ${normalizeTag(requested).slice(1)}. The installed bolt was not changed.`,
+        ),
       );
       process.exit(1);
     }

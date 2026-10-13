@@ -10,6 +10,8 @@
  * Tokens are only ever sent in an Authorization header and never printed.
  */
 import { spawnSync } from "child_process";
+import { existsSync, statSync } from "fs";
+import path from "path";
 
 export const GITHUB_REPO = "jukrb0x/Bolt";
 export const PUBLIC_RELEASES_WEB = `https://github.com/${GITHUB_REPO}/releases`;
@@ -25,6 +27,48 @@ export class RateLimitError extends Error {
   constructor(status: number) {
     super(`GitHub API returned ${status}. ${RATE_LIMIT_MESSAGE}`);
     this.name = "RateLimitError";
+  }
+}
+
+/**
+ * A 403 is only a rate limit when GitHub says no requests remain. 429 always is.
+ * Other 403s (blocked token, SSO, proxy) keep their plain status.
+ */
+export function isRateLimited(status: number, remaining: string | null | undefined): boolean {
+  if (status === 429) return true;
+  return status === 403 && remaining?.trim() === "0";
+}
+
+/**
+ * Check a BOLT_* release override. They exist for tests and local fixtures, so plain
+ * http is only allowed for localhost and 127.0.0.1.
+ */
+export function checkOverrideUrl(name: string, value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error(`${name} is not a URL: ${trimmed}`);
+  }
+  const local =
+    url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  if (url.protocol === "https:" || (url.protocol === "http:" && local)) {
+    return trimmed.replace(/\/+$/, "");
+  }
+  throw new Error(
+    `${name} must be an https URL (plain http only for localhost or 127.0.0.1). It is a test-only setting; unset it for normal updates.`,
+  );
+}
+
+/** Only api.github.com gets the token, never a fixture or proxy host. */
+export function mayAttachToken(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && parsed.hostname === "api.github.com";
+  } catch {
+    return false;
   }
 }
 
@@ -53,14 +97,14 @@ function trimBase(value: string | undefined, fallback: string): string {
   return trimmed ? trimmed.replace(/\/+$/, "") : fallback;
 }
 
-/** github.com releases page, unless BOLT_RELEASES_URL points at a local release. */
+/** github.com releases page, unless BOLT_RELEASES_URL (test-only) points at a local release. */
 export function releasesWebBase(override: string | undefined): string {
-  return trimBase(override, PUBLIC_RELEASES_WEB);
+  return trimBase(checkOverrideUrl("BOLT_RELEASES_URL", override), PUBLIC_RELEASES_WEB);
 }
 
-/** Public GitHub releases API, unless BOLT_RELEASES_API points at a local release. */
+/** Public GitHub releases API, unless BOLT_RELEASES_API (test-only) points at a local release. */
 export function releasesApiBase(override: string | undefined): string {
-  return trimBase(override, PUBLIC_RELEASES_API);
+  return trimBase(checkOverrideUrl("BOLT_RELEASES_API", override), PUBLIC_RELEASES_API);
 }
 
 export function normalizeTag(version: string): string {
@@ -91,10 +135,48 @@ export function findToken(deps: Pick<ResolveDeps, "env" | "ghToken">): string | 
   return deps.ghToken();
 }
 
+/**
+ * Absolute path of `name` on PATH, skipping empty, ".", relative, and current-directory
+ * entries so a gh.exe dropped in the working directory is never run (Windows searches
+ * the current directory first when a bare name is spawned).
+ */
+export function findOnPath(
+  name: string,
+  env: Record<string, string | undefined>,
+  platform: string = process.platform,
+  cwd: string = process.cwd(),
+): string | undefined {
+  const pathValue = env.PATH ?? env.Path ?? "";
+  const sep = platform === "win32" ? ";" : ":";
+  // gh ships as gh.exe on Windows; .cmd/.bat shims are not run.
+  const exts = platform === "win32" ? [".exe"] : [""];
+  const norm = (p: string) => {
+    const r = path.resolve(p).replace(/[\\/]+$/, "");
+    return platform === "win32" ? r.toLowerCase() : r;
+  };
+  const here = norm(cwd);
+  for (const raw of pathValue.split(sep)) {
+    const dir = raw.trim().replace(/^"|"$/g, "");
+    if (!dir || dir === "." || !path.isAbsolute(dir)) continue;
+    if (norm(dir) === here) continue;
+    for (const ext of exts) {
+      const candidate = path.join(dir, name + ext);
+      try {
+        if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+      } catch {
+        // Unreadable entry; keep looking.
+      }
+    }
+  }
+  return undefined;
+}
+
 /** `gh auth token` when gh is installed and logged in. Output is never printed. */
 export function ghAuthToken(): string | undefined {
+  const gh = findOnPath("gh", process.env);
+  if (!gh) return undefined;
   try {
-    const result = spawnSync("gh", ["auth", "token"], {
+    const result = spawnSync(gh, ["auth", "token"], {
       encoding: "utf8",
       timeout: 5000,
       stdio: ["ignore", "pipe", "ignore"],
@@ -135,15 +217,23 @@ async function releaseFromApi(
   const url = requested
     ? `${apiBase}/tags/${encodeURIComponent(normalizeTag(requested))}`
     : `${apiBase}/latest`;
-  const token = findToken(deps);
+  const token = mayAttachToken(url) ? findToken(deps) : undefined;
   const headers: Record<string, string> = {
     "User-Agent": USER_AGENT,
     Accept: "application/vnd.github+json",
   };
   if (token) headers.Authorization = `Bearer ${token}`;
   deps.log(token ? "Asking the GitHub API (authenticated)..." : "Asking the GitHub API...");
-  const res = await deps.fetch(url, { headers });
-  if (res.status === 403 || res.status === 429) throw new RateLimitError(res.status);
+  let res = await deps.fetch(url, { headers });
+  if (res.status === 401 && token) {
+    // A stale or revoked token. Public releases do not need one.
+    deps.log("The GitHub token was rejected (401). Retrying without it...");
+    const { Authorization: _dropped, ...anonymous } = headers;
+    res = await deps.fetch(url, { headers: anonymous });
+  }
+  if (isRateLimited(res.status, res.headers.get("x-ratelimit-remaining"))) {
+    throw new RateLimitError(res.status);
+  }
   if (res.status === 404 && requested)
     throw new Error(`Release ${normalizeTag(requested)} not found`);
   if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
