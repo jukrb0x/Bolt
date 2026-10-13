@@ -8,7 +8,7 @@ Preview the resolved steps for a task or flow without executing them.
 ## Usage
 
 ```bash
-bolt inspect <name...> [--key=value ...]
+bolt inspect <name...> [--key=value ...] [-- key=value ...]
 ```
 
 ## Description
@@ -29,11 +29,18 @@ Resolution mirrors `bolt run`:
 - Trailing `--key=value` params shallow-override each step's `with:` values
   (params win), exactly as they would at run time.
 
+Argument parsing is as strict as `bolt run`: unknown flags (including
+`--dry-run`, since `inspect` never executes anything), reserved names, and param
+values starting with `--` fail with exit code `2`. Pass such values after `--`:
+`bolt inspect build -- extra=--verbose`. See
+[strict argument parsing](/cli/run#strict-argument-parsing).
+
 ## Options
 
-| Flag              | Description                                          |
-| ----------------- | ---------------------------------------------------- |
-| `--<key>=<value>` | Params to apply during resolution (override `with:`) |
+| Flag               | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| `--<key>=<value>`  | Params to apply during resolution (override `with:`) |
+| `-- <key>=<value>` | Params after `--`; values may start with `--`        |
 
 ## Arguments
 

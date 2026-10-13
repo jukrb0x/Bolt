@@ -645,3 +645,70 @@ test("dry-run does not run local actions, write .bolt/logs, or spawn git", async
     dispose(project.dir);
   }
 });
+
+test("run rejects unknown flags, valued boolean flags and --prefixed values (exit 2, nothing runs)", async () => {
+  const project = makeProject({
+    tasks: `tasks:
+  mark:
+    - run: echo "\${{ params.extra }}" > marker.txt
+`,
+  });
+  const marker = path.join(project.dir, "marker.txt");
+  try {
+    const cases: Array<[string[], string]> = [
+      [["run", "mark", "--dryrun"], 'Did you mean "--dry-run"?'],
+      [["run", "mark", "-x"], 'Unknown flag "-x"'],
+      [["run", "mark", "--dry-run=false"], "does not take a value"],
+      [["run", "mark", "--extra=--dry-run"], "-- extra=--dry-run"],
+      [["run", "mark", "--", "--execute"], "Malformed param"],
+      [["inspect", "mark", "--bogus"], 'Unknown flag "--bogus" for "bolt inspect"'],
+      [["--dry-run", "run", "mark"], 'Unknown global flag "--dry-run"'],
+      [["-x", "run", "mark"], 'Unknown global flag "-x"'],
+      [
+        ["run", "mark", "--plan=x"],
+        "--plan is reserved by bolt and not supported yet. If this is a task param",
+      ],
+      [["run", "mark", "--json=v1"], "--json is reserved by bolt and not supported yet"],
+      [["run", "mark", "--help=1"], "--help takes no value. Use: bolt run --help"],
+      [
+        ["run", "mark", "--", "help=x"],
+        '"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=x.',
+      ],
+      [["inspect", "mark", "--", "dry-run=1"], "already a side-effect-free preview"],
+      [["run", "mark", "--execute"], "--execute is reserved by bolt and not supported yet"],
+      [["run", "mark", "--", "plan=x"], "in bolt.yaml use build_plan and pass -- build_plan=x"],
+      [["run", "mark", "--", "dry-run=false"], "pass -- build_dry_run=false"],
+      [["inspect", "mark", "--json"], "--json is reserved by bolt and not supported yet"],
+      [["--version=1"], "--version takes no value. Use: bolt --version"],
+      [["--version", "run", "mark"], "--version must be used on its own. Use: bolt --version"],
+    ];
+    for (const [args, message] of cases) {
+      const result = await bolt(project.dir, args);
+      expect(result.exitCode).toBe(2);
+      expect(result.output).toContain(message);
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(path.join(project.dir, ".bolt"))).toBe(false);
+    }
+
+    for (const args of [
+      ["--help", "--version"],
+      ["--version", "--help"],
+      ["-h", "--version", "run", "mark"],
+    ]) {
+      const help = await bolt(project.dir, args);
+      expect(help.exitCode).toBe(0);
+      expect(help.output).toContain("USAGE");
+      expect(existsSync(marker)).toBe(false);
+    }
+
+    const passthrough = await bolt(project.dir, ["run", "mark", "--", "extra=--verbose"]);
+    expect(passthrough.exitCode).toBe(0);
+    expect(readFileSync(marker, "utf8").replace(/"/g, "").trim()).toBe("--verbose");
+
+    const param = await bolt(project.dir, ["run", "mark", "--extra=plain"]);
+    expect(param.exitCode).toBe(0);
+    expect(readFileSync(marker, "utf8").replace(/"/g, "").trim()).toBe("plain");
+  } finally {
+    dispose(project.dir);
+  }
+});

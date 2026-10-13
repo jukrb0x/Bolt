@@ -3,13 +3,13 @@ import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
 import { formatPlanNodes } from "../inspect-utils";
 import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
-import { parseRunArgs } from "./run";
+import { parseRunArgsOrExit } from "./run";
 
 export default defineCommand({
   meta: { description: "Inspect resolved steps for a task or flow without executing" },
   args: {},
   async run({ rawArgs }) {
-    const { names, params } = parseRunArgs(rawArgs ?? []);
+    const { names, params } = parseRunArgsOrExit(rawArgs ?? [], { flags: [], command: "inspect" });
     if (names.length === 0) {
       console.error("[ERROR] Usage: bolt inspect <task|flow> [--k=v ...]");
       process.exit(1);

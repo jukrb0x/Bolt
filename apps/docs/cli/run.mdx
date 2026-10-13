@@ -8,7 +8,7 @@ Run tasks (in the order you type) or a single flow defined in `bolt.yaml`.
 ## Usage
 
 ```bash
-bolt run <name...> [--dry-run] [--key=value ...]
+bolt run <name...> [--dry-run] [--key=value ...] [-- key=value ...]
 ```
 
 ## Description
@@ -45,12 +45,49 @@ bolt run build --config=dev          # resolves to development
 bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 ```
 
+### Strict argument parsing
+
+`bolt run` rejects anything it does not understand, with exit code `2`, before
+any step runs:
+
+- Unknown flags, long or short (`--dryrun`, `-x`, `-xyz`). A close match is suggested.
+- A value on a boolean flag (`--dry-run=false`).
+- A param value that starts with `--` (`--extra=--verbose`).
+- Flags before the command (`bolt --dry-run run deploy`). Flags go after the
+  command: `bolt run deploy --dry-run`. Only `-h`, `--help`, and `--version`
+  are allowed before it. A help flag wins (`bolt --help --version` shows help);
+  otherwise `--version` must be used on its own (`bolt --version`) and takes no value.
+- Reserved names: `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`,
+  `confirmed-by-user`. Only `--dry-run` is implemented; the others fail with
+  `--<name> is reserved by bolt and not supported yet`. None of them can be used
+  as a param name, neither as `--name=value` nor as `name=value` after `--`;
+  the error tells you to rename the param, e.g. `plan` → `build_plan` in
+  `bolt.yaml`, then pass `-- build_plan=x`. Valued forms such as `--json=v1` or
+  `--plan=<hash>` also report that the flag is not supported yet.
+- `help` with a value (in addition to the 7 reserved names above, handled
+  separately): `--help=<value>` fails with `--help takes no value. Use: bolt run --help`,
+  and `-- help=<value>` fails with `"help" cannot be used as a param name`. Both
+  tell you to rename a `help` param, e.g. to `my_help`. Bare `--help` / `-h`
+  still show help.
+
+To pass a value that starts with `--` (for example a flag forwarded to an
+external tool), put it after a bare `--` separator. Everything after `--` is
+parsed only as `key=value` params:
+
+```bash
+bolt run build -- extra=--verbose
+```
+
+For tool flags that never change, prefer putting them in `bolt.yaml`
+(`with:` or `vars`) instead of the command line.
+
 ## Options
 
-| Flag              | Default | Description                                                                                                                                 |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--dry-run`       | `false` | Print the steps. Skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`) |
-| `--<key>=<value>` | -       | Pass a param to the whole run (overrides `with:`)                                                                                           |
+| Flag               | Default | Description                                                                                                                                 |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--dry-run`        | `false` | Print the steps. Skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`) |
+| `--<key>=<value>`  | -       | Pass a param to the whole run (overrides `with:`)                                                                                           |
+| `-- <key>=<value>` | -       | Params after `--`; values may start with `--`                                                                                               |
 
 ## Arguments
 
