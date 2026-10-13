@@ -69,7 +69,6 @@ export async function svnInfo(p: string, ctx: BoltPluginContext): Promise<Handle
   ctx.logger.info(`=== SVN Info: ${p} ===`);
   const result = ctx.runtime.spawnSync(["svn", "info", p]);
   if (result.exitCode !== 0) {
-    ctx.logger.warn("SVN info unavailable");
     return { status: "warn", summary: `SVN info unavailable for ${p}` };
   }
   const data: Record<string, string> = { path: p };
