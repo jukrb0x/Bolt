@@ -224,21 +224,54 @@ describe("reserved flag names (design 0.4)", () => {
   for (const name of unsupported) {
     test(`--${name} is rejected in every form`, () => {
       const rename = `build_${name.replace(/-/g, "_")}`;
-      const param = `"${name}" is reserved by bolt and cannot be used as a param name. Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=x.`;
+      const rn = `rename it, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=x.`;
+      const flagForm = `--${name} is reserved by bolt and not supported yet. If this is a task param, ${rn}`;
+      const param = `"${name}" cannot be used as a param name (--${name} is reserved by bolt and not supported yet). R${rn.slice(1).replace("it,", "the param,")}`;
       expect(usage(["build", `--${name}`])).toBe(
         `--${name} is reserved by bolt and not supported yet. Remove it from the command.`,
       );
-      expect(usage(["build", `--${name}=x`])).toBe(param);
+      expect(usage(["build", `--${name}=x`])).toBe(flagForm);
       expect(usage(["build", "--", `${name}=x`])).toBe(param);
-      expect(usage(["build", `--${name}=x`], { flags: [], command: "inspect" })).toBe(param);
+      expect(usage(["build", `--${name}=x`], { flags: [], command: "inspect" })).toBe(flagForm);
     });
   }
 
   test("dry-run cannot be passed as a param after --", () => {
     const msg = usage(["build", "--", "dry-run=false"]);
-    expect(msg).toContain('"dry-run" is reserved by bolt');
+    expect(msg).toContain('"dry-run" cannot be used as a param name');
     expect(msg).toContain("use build_dry_run and pass -- build_dry_run=false");
     expect(msg).toContain("pass --dry-run without a value");
+  });
+
+  test("valued forms of future flags say not supported yet and offer a rename", () => {
+    expect(usage(["build", "--json=v1"])).toBe(
+      "--json is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use build_json and pass -- build_json=v1.",
+    );
+    expect(usage(["build", "--plan=abc123"])).toContain(
+      "--plan is reserved by bolt and not supported yet. If this is a task param",
+    );
+    expect(usage(["build", "--", "json=v1"])).toContain(
+      "--json is reserved by bolt and not supported yet",
+    );
+  });
+
+  test("inspect never suggests --dry-run", () => {
+    const msg = usage(["build", "--", "dry-run=1"], { flags: [], command: "inspect" });
+    expect(msg).not.toContain("pass --dry-run");
+    expect(msg).toContain("bolt inspect never executes, it is already a side-effect-free preview");
+    expect(msg).toContain("pass -- build_dry_run=1");
+  });
+
+  test("--help with a value and help= after -- are rejected", () => {
+    const expected =
+      "--help takes no value. Use: bolt run --help. If this is a task param, rename it, e.g. in bolt.yaml use my_help and pass -- my_help=1.";
+    expect(usage(["build", "--help=1"])).toBe(expected);
+    expect(usage(["build", "--", "help=1"])).toBe(expected);
+    expect(usage(["build", "--help="], { flags: [], command: "inspect" })).toContain(
+      "Use: bolt inspect --help",
+    );
+    expect(parseRunArgs(["build", "--help"]).names).toEqual(["build"]);
+    expect(parseRunArgs(["build", "-h"]).names).toEqual(["build"]);
   });
 
   test("non-reserved look-alikes still pass", () => {
