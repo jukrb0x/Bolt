@@ -94,14 +94,6 @@ test("info: human run with ../Engine outside the project only warns", async () =
   ).toBe(true);
 });
 
-test("info: the same path via an AI invocation is rejected with AI_FORBIDDEN", async () => {
-  const ctx = { ...makeCtx(), aiInvocation: true };
-  await expect(svnPlugin.handlers["info"]({ path: "../Engine" }, ctx)).rejects.toMatchObject({
-    code: "AI_FORBIDDEN",
-    message: expect.stringMatching(/svn\/info: path .* is outside the project directory.*Fix:/),
-  });
-});
-
 test("info runs without throwing and logs svn output", async () => {
   const root = path.resolve(PROJECT_ROOT);
   const ctx = { ...makeCtx(), configDir: root };

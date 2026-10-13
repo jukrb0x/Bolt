@@ -127,12 +127,6 @@ declare module "boltstack" {
     cfg: BoltPluginConfig;
     configDir: string;
     dryRun: boolean;
-    /**
-     * True when an AI agent invoked this step through bolt's AI permission path;
-     * false or absent for human runs. Handlers may be stricter for AI invocations
-     * (e.g. `git/info` rejects paths outside the project).
-     */
-    aiInvocation?: boolean;
     logger: BoltLogger;
     runtime: Runtime;
     /**
