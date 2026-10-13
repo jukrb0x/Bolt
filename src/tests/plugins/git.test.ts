@@ -49,12 +49,24 @@ test("info runs without throwing and logs output", async () => {
   expect(result).toMatchObject({ status: "ok", data: { path: root } });
 });
 
-test("info (ai: true) rejects a path outside the project directory", async () => {
+test("info: human run with ../Engine outside the project only warns", async () => {
   const ctx = makeCtx();
-  const outside = path.resolve(ctx.configDir, "..", "other-repo");
-  const call = gitPlugin.handlers["info"]({ path: outside }, ctx);
-  await expect(call).rejects.toThrow(/outside the project directory/);
-  await expect(gitPlugin.handlers["info"]({ path: outside }, ctx)).rejects.toThrow(/Fix:/);
+  const result = await gitPlugin.handlers["info"]({ path: "../Engine" }, ctx);
+  const resolved = path.resolve(ctx.configDir, "../Engine");
+  expect(result).toMatchObject({ data: { path: resolved } });
+  const warning = ctx.logged.find((l) => l.includes("outside the project directory"));
+  expect(warning).toContain("[WARN]");
+  expect(warning).toContain("AI invocations of git/info will reject this path");
+  expect(warning).toContain("Fix:");
+});
+
+test("info: the same path via an AI invocation is rejected with AI_FORBIDDEN", async () => {
+  const ctx = { ...makeCtx(), aiInvocation: true };
+  const call = gitPlugin.handlers["info"]({ path: "../Engine" }, ctx);
+  await expect(call).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+  await expect(gitPlugin.handlers["info"]({ path: "../Engine" }, ctx)).rejects.toThrow(
+    /outside the project directory.*Fix:/,
+  );
 });
 
 test("info resolves a relative path against the project directory", async () => {

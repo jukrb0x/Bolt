@@ -129,6 +129,9 @@ const CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 const RESULT_KEYS = ["status", "summary", "data", "artifacts", "diagnostics", "next", "schema"];
 
 /** A step error with a stable code (`RESULT_INVALID`, `HANDLER_FAILED`). */
+/** Exit code when an AI invocation is not allowed to run a step (`AI_FORBIDDEN`, permission denied). */
+export const AI_FORBIDDEN_EXIT_CODE = 4;
+
 export class BoltStepError extends Error {
   constructor(
     readonly code: string,

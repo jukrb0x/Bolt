@@ -2,6 +2,7 @@ import { defineCommand } from "citty";
 import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
 import { Runner, wasReported } from "../runner";
+import { AI_FORBIDDEN_EXIT_CODE, BoltStepError } from "../handler-result";
 import { Logger } from "../logger";
 import { Notifier } from "../notify";
 import path from "path";
@@ -144,7 +145,9 @@ export default defineCommand({
       if (!wasReported(e)) logger.error(e.message);
       logger.info(`Log: ${logFile}`);
       logger.close();
-      process.exit(1);
+      process.exit(
+        e instanceof BoltStepError && e.code === "AI_FORBIDDEN" ? AI_FORBIDDEN_EXIT_CODE : 1,
+      );
     }
   },
 });

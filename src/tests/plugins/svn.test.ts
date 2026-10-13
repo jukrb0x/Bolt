@@ -86,12 +86,22 @@ test("revert uses with:path when provided", async () => {
   expect(ctx.logged.some((l) => l.includes("C:/CustomPath"))).toBe(true);
 });
 
-test("info (ai: true) rejects a path outside the project directory", async () => {
+test("info: human run with ../Engine outside the project only warns", async () => {
   const ctx = makeCtx();
-  const outside = path.resolve(ctx.configDir, "..", "other-wc");
-  await expect(svnPlugin.handlers["info"]({ path: outside }, ctx)).rejects.toThrow(
-    /svn\/info: path .* is outside the project directory/,
-  );
+  await svnPlugin.handlers["info"]({ path: "../Engine" }, ctx);
+  expect(
+    ctx.logged.some(
+      (l) => l.includes("[WARN]") && l.includes("AI invocations of svn/info will reject this path"),
+    ),
+  ).toBe(true);
+});
+
+test("info: the same path via an AI invocation is rejected with AI_FORBIDDEN", async () => {
+  const ctx = { ...makeCtx(), aiInvocation: true };
+  await expect(svnPlugin.handlers["info"]({ path: "../Engine" }, ctx)).rejects.toMatchObject({
+    code: "AI_FORBIDDEN",
+    message: expect.stringMatching(/svn\/info: path .* is outside the project directory.*Fix:/),
+  });
 });
 
 test("info runs without throwing and logs svn output", async () => {
