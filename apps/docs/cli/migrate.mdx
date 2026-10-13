@@ -34,10 +34,11 @@ YAML comments are not carried over; they remain in the backups. A version 1 conf
 
 ## Exit Codes
 
-| Code | Description                                                                                  |
-| ---- | -------------------------------------------------------------------------------------------- |
-| 0    | Nothing to migrate, dry run printed, or files rewritten and valid                            |
-| 1    | `bolt.yaml` not found, or the converted config has errors (nothing written unless `--force`) |
+| Code | Description                                                        |
+| ---- | ------------------------------------------------------------------ |
+| 0    | Nothing to migrate, dry run printed, or files rewritten and valid  |
+| 1    | The converted config has errors (nothing written unless `--force`) |
+| 3    | `bolt.yaml` not found                                              |
 
 ## See Also
 

@@ -140,8 +140,12 @@ What a dry run can check statically:
 
 What it cannot show: the exact command a handler would build (for example the
 `Build.bat` line from `ue/build`), and whether a project or user plugin accepts its
-params. Use `--simulate` for that. Problems a real run would hit are marked with `!`
-and the dry run exits `1`.
+params. Use `--simulate` for that. Third-party plugin params are not validated and are
+not an error. Config problems a real run would hit (unknown plugin namespace or op, bad
+built-in params, missing action script) are marked with `!` and the dry run exits `3`.
+
+The library API (`dryRun: true`) still behaves like `--simulate`: plugins load and hooks
+run. A pure library dry run is tracked as BOLT-DX-3.
 
 `--simulate` loads plugins and runs their hooks and handlers with `ctx.dryRun = true`.
 Handlers that honor `ctx.dryRun` log what they would do instead of doing it.
@@ -152,13 +156,13 @@ and a plugin can still have side effects. Notifications are not sent.
 
 ## Exit codes
 
-| Code | Meaning                                                                                                                                                            |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0`  | Success (a dry run with no problems)                                                                                                                               |
-| `1`  | Task failure, or a dry run found a problem a real run would hit                                                                                                    |
-| `2`  | Usage error: unknown flag, command, task, or flow; malformed param; no task given                                                                                  |
-| `3`  | Config error: `bolt.yaml` missing, unparseable, failing the schema, or an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref) |
-| `4`  | Permission denied reading `bolt.yaml`                                                                                                                              |
+| Code | Meaning                                                                                                                                                                                                   |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success (a dry run with no problems)                                                                                                                                                                      |
+| `1`  | Task failure (a step failed while running)                                                                                                                                                                |
+| `2`  | Usage error: unknown flag, command, task, or flow; malformed param; no task given                                                                                                                         |
+| `3`  | Config error: `bolt.yaml` missing, unparseable, failing the schema, an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref), or a config problem found by `--dry-run` |
+| `4`  | Permission denied reading `bolt.yaml`                                                                                                                                                                     |
 
 Config errors are reported before anything runs and before a log file is created.
 

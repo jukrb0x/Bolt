@@ -24,7 +24,7 @@ The editor is resolved in this order:
 2. The `$EDITOR` environment variable
 3. The `$VISUAL` environment variable
 
-If none is set, the command exits with an error.
+If none is set, the command exits with an error (exit code `1`). If no `bolt.yaml` is found and there is no `bolt.template.yaml` to copy, it exits `3`.
 
 ## Options
 
