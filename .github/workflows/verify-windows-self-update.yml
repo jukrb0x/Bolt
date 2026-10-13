@@ -3,8 +3,23 @@ name: Verify Windows self-update
 # Live release, so this follows a successful Release run rather than every pull request.
 # workflow_run, not `release: published`: Release publishes with GITHUB_TOKEN, which
 # does not start workflows that listen for the release event.
+#
+# The published v2.1.0 binary's self-update calls api.github.com with no Authorization
+# header. It reads no GH_TOKEN or GITHUB_TOKEN. The only override is BOLT_RELEASES_API
+# (the base it appends /latest to). A shared runner IP gets 403 once the anonymous
+# hourly cap is spent, and retrying inside this 15-minute job does not wait that out.
+# This job fetches the triggering tag with the workflow token and serves that JSON on
+# localhost. The binary still downloads assets from their public GitHub URLs.
+#
+# /releases/latest is the newest non-prerelease, so a prerelease tag would be verified
+# as the previous stable release. Release runs on a tag push; head_branch is that tag.
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to update to, for example v2.1.6 or v2.2.0-rc.1
+        required: true
+        type: string
   workflow_run:
     workflows: ["Release"]
     types: [completed]
@@ -21,14 +36,16 @@ jobs:
     steps:
       - name: Update the published v2.1.0 binary
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
         run: |
           $ErrorActionPreference = "Stop"
           # main's install.ps1 installs the latest release and would skip 2.1.0.
           # The v2.1.0 installer, pointed at that tag's public assets, writes the
-          # receipt self-update requires. BOLT_RELEASES_API stays unset so the
-          # binary talks to the public GitHub Release API.
+          # receipt self-update requires. BOLT_RELEASES_API stays unset until the
+          # local fixture below, so the installer talks to the public download.
           if ($env:BOLT_RELEASES_API) {
-            throw "BOLT_RELEASES_API is set ($env:BOLT_RELEASES_API). This job must use the public GitHub Release."
+            throw "BOLT_RELEASES_API is set ($env:BOLT_RELEASES_API). This job must install from the public v2.1.0 assets."
           }
           $env:BOLT_INSTALL_BASE = "https://github.com/jukrb0x/Bolt/releases/download/v2.1.0"
           Write-Host "Start release URL: https://github.com/jukrb0x/Bolt/releases/tag/v2.1.0"
@@ -69,34 +86,108 @@ jobs:
           Write-Host "bolt --version: $installed"
           if ($installed -cne "2.1.0") { throw "bolt --version '$installed' is not 2.1.0" }
 
-          $latest = Invoke-RestMethod -Headers @{
-            "User-Agent"    = "bolt-self-update"
-            Accept          = "application/vnd.github+json"
-            Authorization   = "Bearer ${{ github.token }}"
-          } -Uri "https://api.github.com/repos/jukrb0x/Bolt/releases/latest"
-          $updateTag = [string]$latest.tag_name
-          $updateUrl = [string]$latest.html_url
-          if ($updateTag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
-            throw "latest tag '$updateTag' is not a public version"
+          $tag = [string]$env:RELEASE_TAG
+          # Same shape the Release workflow stamps. A hyphen marks a prerelease.
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
+            throw "release tag '$tag' is not a public version"
           }
+          if ($tag -ceq "v2.1.0") {
+            throw "release tag is still v2.1.0, so self-update would not replace the binary"
+          }
+          $resp = Invoke-WebRequest -UseBasicParsing -Headers @{
+            Authorization = "Bearer ${{ github.token }}"
+            Accept        = "application/vnd.github+json"
+            "User-Agent"  = "bolt-self-update"
+          } -Uri "https://api.github.com/repos/jukrb0x/Bolt/releases/tags/$tag"
+          $raw = $resp.Content
+          if ($raw -is [byte[]]) { $raw = [Text.Encoding]::UTF8.GetString($raw) }
+          $release = $raw | ConvertFrom-Json
+          if ([string]$release.tag_name -cne $tag) {
+            throw "release tag_name '$($release.tag_name)' did not match $tag"
+          }
+          $updateUrl = [string]$release.html_url
           if ($updateUrl -notmatch '^https://github\.com/jukrb0x/Bolt/releases/tag/v') {
             throw "update release URL is not a public Bolt tag: $updateUrl"
           }
-          $want = $updateTag.Substring(1)
-          if ($want -eq "2.1.0") {
-            throw "latest public release is still 2.1.0, so self-update would not replace the binary"
+          $updateAsset = $release.assets | Where-Object { $_.name -eq "bolt-win-x64.exe" } | Select-Object -First 1
+          $sumsAsset = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
+          if (-not $updateAsset -or -not $sumsAsset) { throw "$tag is missing bolt-win-x64.exe or SHA256SUMS" }
+          $expectedAsset = "https://github.com/jukrb0x/Bolt/releases/download/$tag/bolt-win-x64.exe"
+          $expectedSums = "https://github.com/jukrb0x/Bolt/releases/download/$tag/SHA256SUMS"
+          if ([string]$updateAsset.browser_download_url -cne $expectedAsset) {
+            throw "update asset URL is not the public download: $($updateAsset.browser_download_url)"
+          }
+          if ([string]$sumsAsset.browser_download_url -cne $expectedSums) {
+            throw "checksum URL is not the public download: $($sumsAsset.browser_download_url)"
           }
           Write-Host "Release URL used for the update: $updateUrl"
-          $updateAsset = $latest.assets | Where-Object { $_.name -eq "bolt-win-x64.exe" } | Select-Object -First 1
-          if (-not $updateAsset) { throw "latest release has no bolt-win-x64.exe" }
-          Write-Host "Update asset URL: $($updateAsset.browser_download_url)"
+          Write-Host "Update asset URL: $expectedAsset"
 
-          if ($env:BOLT_RELEASES_API) {
-            throw "BOLT_RELEASES_API is set ($env:BOLT_RELEASES_API). Refusing to update."
+          $listener = $null
+          $server = $null
+          $async = $null
+          $runspace = $null
+          try {
+            $listener = [System.Net.HttpListener]::new()
+            $listener.Prefixes.Add("http://127.0.0.1:8765/")
+            $listener.Start()
+            $runspace = [runspacefactory]::CreateRunspace()
+            $runspace.Open()
+            $server = [powershell]::Create()
+            $server.Runspace = $runspace
+            [void]$server.AddScript({
+              param($Listener, $Body)
+              $bytes = [System.Text.Encoding]::UTF8.GetBytes($Body)
+              while ($Listener.IsListening) {
+                try { $ctx = $Listener.GetContext() } catch { break }
+                try {
+                  $ctx.Response.StatusCode = 200
+                  $ctx.Response.ContentType = "application/json"
+                  $ctx.Response.ContentLength64 = $bytes.LongLength
+                  $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+                } finally {
+                  try { $ctx.Response.OutputStream.Close() } catch {}
+                }
+              }
+            }).AddArgument($listener).AddArgument($raw)
+            $async = $server.BeginInvoke()
+
+            $fixture = "http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases/latest"
+            $probe = $null
+            for ($i = 0; $i -lt 20; $i++) {
+              try {
+                $probe = Invoke-RestMethod -Uri $fixture -TimeoutSec 2
+                break
+              } catch {
+                Start-Sleep -Milliseconds 100
+              }
+            }
+            if (-not $probe) { throw "local release fixture did not answer at $fixture" }
+            if ([string]$probe.tag_name -cne $tag) {
+              throw "local fixture tag '$($probe.tag_name)' did not match $tag"
+            }
+
+            $env:BOLT_RELEASES_API = "http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases"
+            # v2.1.0 drops the prerelease suffix before comparing versions, so a tag
+            # such as v2.1.0-rc.2 would otherwise exit 0 without replacing the binary.
+            Write-Host "running: bolt self-update --force"
+            & bolt self-update --force
+            if ($LASTEXITCODE -ne 0) { throw "bolt self-update exited $LASTEXITCODE" }
+          } finally {
+            Remove-Item Env:BOLT_RELEASES_API -ErrorAction SilentlyContinue
+            if ($listener) {
+              try { $listener.Stop() } catch {}
+              try { $listener.Close() } catch {}
+            }
+            if ($server) {
+              try { if ($async) { $server.EndInvoke($async) } } catch {}
+              try { $server.Dispose() } catch {}
+            }
+            if ($runspace) {
+              try { $runspace.Close() } catch {}
+              try { $runspace.Dispose() } catch {}
+            }
           }
-          Write-Host "running: bolt self-update"
-          & bolt self-update
-          if ($LASTEXITCODE -ne 0) { throw "bolt self-update exited $LASTEXITCODE" }
 
           if (-not (Test-Path -LiteralPath $old)) {
             throw "self-update did not rename the running exe to bolt.exe.old"
@@ -107,6 +198,7 @@ jobs:
 
           Write-Host "later launch: bolt --version"
           $updated = (& bolt --version | Out-String).Trim()
+          $want = $tag.Substring(1)
           Write-Host "bolt --version: $updated"
           if ($updated -cne $want) {
             throw "bolt --version '$updated' did not match '$want' from $updateUrl"
@@ -115,7 +207,7 @@ jobs:
           Write-Host "later launch removed bolt.exe.old"
 
           $newSumsFile = Join-Path $env:TEMP "bolt-updated-SHA256SUMS"
-          Invoke-WebRequest -Uri "https://github.com/jukrb0x/Bolt/releases/download/$updateTag/SHA256SUMS" -OutFile $newSumsFile -UseBasicParsing
+          Invoke-WebRequest -Uri "https://github.com/jukrb0x/Bolt/releases/download/$tag/SHA256SUMS" -OutFile $newSumsFile -UseBasicParsing
           $expectedNew = $null
           foreach ($line in @(Get-Content -LiteralPath $newSumsFile)) {
             if ($line -match '^([a-fA-F0-9]{64})  (\S+)$' -and $Matches[2] -eq "bolt-win-x64.exe") {
@@ -123,14 +215,14 @@ jobs:
             }
           }
           if (-not $expectedNew) {
-            Write-Host "---- $updateTag SHA256SUMS ----"
+            Write-Host "---- $tag SHA256SUMS ----"
             Get-Content -LiteralPath $newSumsFile | ForEach-Object { Write-Host $_ }
-            throw "$updateTag SHA256SUMS has no bolt-win-x64.exe entry"
+            throw "$tag SHA256SUMS has no bolt-win-x64.exe entry"
           }
           $newHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $boltDest).Hash.ToLower()
           Write-Host "updated sha256: $newHash"
           if ($newHash -ne $expectedNew) {
-            throw "updated bolt.exe is not the published $updateTag bolt-win-x64.exe"
+            throw "updated bolt.exe is not the published $tag bolt-win-x64.exe"
           }
           if ($newHash -eq $installedHash) { throw "self-update left the v2.1.0 bytes in place" }
           Write-Host "bolt --version moved from 2.1.0 to $updated"

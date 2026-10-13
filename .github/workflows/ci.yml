@@ -122,32 +122,6 @@ jobs:
         shell: pwsh
         run: ${{ matrix.host }}.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-e2e.ps1
 
-  # Same name the old live-release job used. Branch protection may require it.
-  # This run is the local fixture above, not the published GitHub Release.
-  windows-self-update:
-    name: windows-latest self-update from v2.1.0
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    runs-on: windows-latest
-    timeout-minutes: 45
-    steps:
-      - name: Keep LF line endings
-        run: git config --global core.autocrlf false
-
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.4.3"
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install from a local release and self-update
-        shell: pwsh
-        run: pwsh.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-e2e.ps1
-
   # Pull requests and main. Tag pushes are built by the Release workflow.
   binaries:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'

@@ -3,8 +3,17 @@ name: Verify Windows release install
 # Live release, so this follows a successful Release run rather than every pull request.
 # workflow_run, not `release: published`: Release publishes with GITHUB_TOKEN, which
 # does not start workflows that listen for the release event.
+#
+# The newest-release URL skips prereleases, so a tag such as v2.2.0-rc.1 would be
+# checked as the previous stable release. Release runs on a tag push, and that
+# run's head_branch is the tag. A manual run passes the same tag as an input.
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to install, for example v2.1.6 or v2.2.0-rc.1
+        required: true
+        type: string
   workflow_run:
     workflows: ["Release"]
     types: [completed]
@@ -18,25 +27,50 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     steps:
-      - name: Install from the public release
+      - name: Install from the published release
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
         run: |
           $ErrorActionPreference = "Stop"
-          $release = Invoke-RestMethod "https://api.github.com/repos/jukrb0x/Bolt/releases/latest" -Headers @{ Authorization = "Bearer ${{ github.token }}" }
-          # install.ps1 runs in this scope and assigns $Expected, so keep the tag in the environment.
-          $env:BOLT_RELEASE_TAG = [string]$release.tag_name
-          Write-Host "Release URL: $($release.html_url)"
-          if (-not $env:BOLT_RELEASE_TAG.StartsWith("v") -or $env:BOLT_RELEASE_TAG.Length -lt 2) {
-            throw "latest release tag '$($env:BOLT_RELEASE_TAG)' has no version after v"
+          $tag = [string]$env:RELEASE_TAG
+          # Same shape the Release workflow stamps. A hyphen marks a prerelease.
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
+            throw "release tag '$tag' is not a public version"
           }
+          $release = Invoke-RestMethod -Headers @{
+            Authorization = "Bearer ${{ github.token }}"
+            Accept        = "application/vnd.github+json"
+            "User-Agent"  = "bolt-self-update"
+          } -Uri "https://api.github.com/repos/jukrb0x/Bolt/releases/tags/$tag"
+          if ([string]$release.tag_name -cne $tag) {
+            throw "release tag_name '$($release.tag_name)' did not match $tag"
+          }
+          $updateUrl = [string]$release.html_url
+          if ($updateUrl -notmatch '^https://github\.com/jukrb0x/Bolt/releases/tag/v') {
+            throw "release URL is not a public Bolt tag: $updateUrl"
+          }
+          $asset = $release.assets | Where-Object { $_.name -eq "bolt-win-x64.exe" } | Select-Object -First 1
+          if (-not $asset) { throw "$tag has no bolt-win-x64.exe" }
+          $assetUrl = [string]$asset.browser_download_url
+          $expectedAsset = "https://github.com/jukrb0x/Bolt/releases/download/$tag/bolt-win-x64.exe"
+          if ($assetUrl -cne $expectedAsset) {
+            throw "asset URL is not the public download: $assetUrl"
+          }
+          # install.ps1 assigns $Expected, so keep the tag in the environment.
+          # Without BOLT_INSTALL_BASE the script downloads the newest stable release.
+          $env:BOLT_RELEASE_TAG = $tag
+          $env:BOLT_INSTALL_BASE = "https://github.com/jukrb0x/Bolt/releases/download/$tag"
+          Write-Host "Release URL: $updateUrl"
+          Write-Host "Install base: $env:BOLT_INSTALL_BASE"
           irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
           # install.ps1 updates the user Path and says to open a new terminal.
           $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
           Write-Host "bolt: $((Get-Command bolt).Source)"
           $got = (bolt --version | Out-String).Trim()
-          $want = $env:BOLT_RELEASE_TAG.Substring(1)
+          $want = $tag.Substring(1)
           Write-Host "bolt --version: $got"
           if ($got -cne $want) {
-            throw "bolt --version '$got' did not match '$want' from tag $($env:BOLT_RELEASE_TAG)"
+            throw "bolt --version '$got' did not match '$want' from tag $tag"
           }
-          Write-Host "bolt --version matched tag $($env:BOLT_RELEASE_TAG)"
+          Write-Host "bolt --version matched tag $tag"
