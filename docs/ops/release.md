@@ -41,6 +41,8 @@ Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. 
 
 `bun run release:dry` prints these steps and does not tag or upload.
 
+`scripts/publish-release.ts` calls `gh api --paginate --slurp`, which needs gh 2.48 or later. GitHub-hosted runners already ship a newer gh.
+
 ## When a re-run fails
 
 The publish job leaves a release untouched when it refuses it. Deleting a release by id keeps the tag. Re-run the failed workflow with `gh run rerun <run-id>`.
