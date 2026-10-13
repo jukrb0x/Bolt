@@ -8,7 +8,7 @@ import path from "path";
 import { mkdirSync, writeFileSync } from "fs";
 
 export default defineCommand({
-  meta: { description: "Generate .bolt/ai-context.md for LLM tool integration" },
+  meta: { name: "ai", description: "Generate .bolt/ai-context.md for LLM tool integration" },
   args: {
     stdout: {
       type: "boolean",

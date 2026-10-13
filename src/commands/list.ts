@@ -4,7 +4,7 @@ import { loadConfig } from "../config";
 import pc from "picocolors";
 
 export default defineCommand({
-  meta: { description: "List tasks and flows defined in bolt.yaml" },
+  meta: { name: "list", description: "List tasks and flows defined in bolt.yaml" },
   async run() {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {

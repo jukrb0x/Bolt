@@ -67,7 +67,7 @@ export default definePlugin({
 }
 
 export default defineCommand({
-  meta: { description: "Scaffold a new bolt plugin" },
+  meta: { name: "new", description: "Scaffold a new bolt plugin" },
   args: {
     name: {
       type: "positional" as const,

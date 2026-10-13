@@ -11,12 +11,29 @@ Bolt no longer silently ignores arguments it does not understand. All of the
 following now fail with `[ERROR] …` and exit code `2` before anything runs:
 
 1. **Unknown flags**, long or short: `bolt run build --dryrun` (suggests `--dry-run`), `-x`, `-xyz`.
-2. **`--dry-run=<value>`**: boolean flags take no value. Before, `--dry-run=false` executed the run.
-3. **Param values starting with `--`**: `bolt run build --extra=--verbose`.
-4. **`bolt inspect --dry-run`**: `inspect` never executes, so it no longer accepts the flag.
+2. **`--dry-run=<value>`**: boolean flags take no value. Before, `--dry-run=false` executed the run. Now it fails with `Flag "--dry-run" does not take a value. To run for real, just remove --dry-run.`
+3. **Param values starting with `--`**: `bolt run build --extra=--verbose` used to pass `--verbose` as the value. It now fails with exit code `2`: `Param value for "--extra" may not start with "--". Pass it after a "--" separator instead: bolt run ... -- extra=--verbose`
+4. **`bolt inspect --dry-run`**: `inspect` never executes, so it no longer accepts the flag. It fails with `Unknown flag "--dry-run" for "bolt inspect": bolt inspect never executes, it is already a side-effect-free preview. Remove --dry-run.`
 5. **Flags before the command**: `bolt --dry-run run deploy` used to drop the flag and **execute**. Only `-h`, `--help`, and `--version` are allowed before the command. Help wins (`bolt --help --version` shows help, exit 0); `--version` otherwise must be alone and takes no value.
-6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use build_plan and pass -- build_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use build_plan and pass -- build_plan=x.`
+6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`
 7. **`help` is also reserved after the command**, in addition to the 7 reserved names above (it is handled separately): `--help=<value>` and `help=<value>` after `--` used to be passed as a task param (so `bolt run mark --help=1` **ran the task**). Now `--help=1` fails with `--help takes no value. Use: bolt run --help. …`, and `-- help=1` fails with `"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=1.` Bare `--help` / `-h` still show help.
+
+Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary params.
+
+### Breaking: exit code `2` for unknown commands, unknown tasks, and a missing task
+
+8. **Mistyped command**: `bolt rn mark` used to print the full usage and exit `1`. It now prints a short suggestion and the list of commands, and exits `2`: `Unknown command "rn". Did you mean "run"?` (also for nested commands, e.g. `bolt plugin nw`).
+9. **Unknown task or flow**: `bolt run mrk` / `bolt inspect mrk` exited `1` with `Unknown task or flow: "mrk"`. They now exit `2` with `Unknown task "mrk". Did you mean "mark"?` followed by the project's tasks and flows, before any log file is created.
+10. **No task given**: `bolt run` / `bolt inspect` without a name exited `1` with a fixed `bolt run build start` example. They now exit `2` and list the project's actual tasks and flows (`Example: bolt run <first task>`); outside a project they point to `bolt list` / `bolt init`.
+
+Scripts that check for exit code `1` on these mistakes should check for a non-zero code (or `2`). Task failures still exit `1`.
+
+### Improved error hints
+
+- Rename hints for a reserved param name now use one neutral form for every name: `my_<name>` with `-` turned into `_` (`plan` → `my_plan`, `dry-run` → `my_dry_run`, `help` → `my_help`).
+- Values in suggested commands are quoted when needed, so they copy-paste correctly: `-- plan="yes please"` suggests `-- my_plan="yes please"`.
+- `-- dry-run=false` (or `0`, `no`, `off`) says to just remove `--dry-run` to run for real.
+- `bolt run --help`, `bolt plugin new --help` and other command help now show `USAGE bolt run …` instead of the script path (for example `/$bunfs/root/bolt`).
 
 ### Migration
 
@@ -33,7 +50,7 @@ following now fail with `[ERROR] …` and exit code `2` before anything runs:
 - Tool flags that never change: put them in `bolt.yaml` (`with:` or `vars`)
   instead of on the command line.
 - A step param named like a reserved flag (for example `plan`): rename it
-  (for example `build_plan`) in `bolt.yaml` and on the command line.
+  (for example `my_plan`) in `bolt.yaml` and on the command line.
 - A step param named `help`: before, `bolt run x --help=foo` passed `help=foo`
   to steps; now it exits with code `2`. Rename the param (for example `my_help`)
   everywhere at once: the step `with:` keys and every `${{ params.help }}`

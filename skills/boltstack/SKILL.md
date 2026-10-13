@@ -136,7 +136,7 @@ bolt run update build --dry-run     # preview without executing
 | `--key=value`  | Pass a parameter to the whole run (e.g. `--target=client`)                                |
 | `-- key=value` | Params after a bare `--`; use when the value starts with `--` (e.g. `-- extra=--verbose`) |
 
-Flags go after the command (`bolt run build --dry-run`, never `bolt --dry-run run build`). Unknown flags, `--dry-run=<value>`, values starting with `--`, and reserved names (`dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`; plus `help`, handled separately) as params fail with exit code 2.
+Flags go after the command (`bolt run build --dry-run`, never `bolt --dry-run run build`). Unknown flags, `--dry-run=<value>`, values starting with `--`, and reserved names (`dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`; plus `help`, handled separately) as params fail with exit code 2. Unknown commands and task names also exit 2 with `Did you mean "<name>"?` and the available names; `bolt run` with no name lists the project's tasks (use `bolt list` for details). If a param clashes with a reserved name, rename it to `my_<name>`. Reserved names are case-sensitive.
 
 ### Introspection (when ai-context.md is insufficient)
 

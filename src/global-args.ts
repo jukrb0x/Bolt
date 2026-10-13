@@ -1,3 +1,5 @@
+import { closest } from "./suggest";
+
 const HELP = new Set(["-h", "--help"]);
 
 /**
@@ -35,4 +37,49 @@ export function checkGlobalArgs(argv: string[]): string | undefined {
     return "--version must be used on its own. Use: bolt --version";
   }
   return undefined;
+}
+
+/** A command tree node: only the parts needed to resolve subcommand names. */
+export interface CommandNode {
+  subCommands?: unknown;
+}
+
+function subCommandsOf(node: unknown): Record<string, unknown> | undefined {
+  const subs = (node as CommandNode | undefined)?.subCommands;
+  if (!subs || typeof subs !== "object") return undefined;
+  return Object.keys(subs).length > 0 ? (subs as Record<string, unknown>) : undefined;
+}
+
+/**
+ * Validate subcommand names before citty sees them. citty answers an unknown command
+ * (`bolt rn mark`) with the full usage dump and exit 1; this returns a short
+ * `Unknown command "rn". Did you mean "run"?` plus the list of commands instead.
+ * Walks nested subcommands too (`bolt plugin nw`). Returns undefined when argv is fine.
+ */
+export function checkCommandName(argv: string[], root: CommandNode): string | undefined {
+  if (argv.some((arg) => HELP.has(arg))) return undefined;
+  let node: unknown = root;
+  let rest = argv;
+  const path = ["bolt"];
+  for (;;) {
+    const subs = subCommandsOf(node);
+    if (!subs) return undefined;
+    const index = rest.findIndex((arg) => !arg.startsWith("-"));
+    if (index === -1) return undefined;
+    const name = rest[index];
+    if (Object.hasOwn(subs, name)) {
+      node = subs[name];
+      rest = rest.slice(index + 1);
+      path.push(name);
+      continue;
+    }
+    const names = Object.keys(subs);
+    const best = closest(name, names);
+    const prefix = path.join(" ");
+    return (
+      `Unknown command "${name}".${best ? ` Did you mean "${best}"?` : ""}\n` +
+      `  Commands: ${names.join(", ")}\n` +
+      `  Run ${prefix} --help for details.`
+    );
+  }
 }

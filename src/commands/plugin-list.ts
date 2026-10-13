@@ -7,7 +7,7 @@ import path from "path";
 import pc from "picocolors";
 
 export default defineCommand({
-  meta: { description: "List active plugins and their handlers" },
+  meta: { name: "list", description: "List active plugins and their handlers" },
   async run() {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {

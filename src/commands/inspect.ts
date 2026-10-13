@@ -3,16 +3,25 @@ import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
 import { formatPlanNodes } from "../inspect-utils";
 import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
-import { parseRunArgsOrExit } from "./run";
+import {
+  missingNameMessage,
+  parseRunArgsOrExit,
+  loadUsageConfig,
+  unknownNamesMessage,
+  USAGE_EXIT_CODE,
+} from "./run";
 
 export default defineCommand({
-  meta: { description: "Inspect resolved steps for a task or flow without executing" },
+  meta: {
+    name: "inspect",
+    description: "Inspect resolved steps for a task or flow without executing",
+  },
   args: {},
   async run({ rawArgs }) {
     const { names, params } = parseRunArgsOrExit(rawArgs ?? [], { flags: [], command: "inspect" });
     if (names.length === 0) {
-      console.error("[ERROR] Usage: bolt inspect <task|flow> [--k=v ...]");
-      process.exit(1);
+      console.error(`[ERROR] ${missingNameMessage("inspect", await loadUsageConfig())}`);
+      process.exit(USAGE_EXIT_CODE);
     }
 
     const configPath = await findConfig(process.cwd());
@@ -27,6 +36,12 @@ export default defineCommand({
     } catch (e: any) {
       console.error(`[ERROR] ${e.message}`);
       process.exit(1);
+    }
+
+    const unknown = unknownNamesMessage(cfg, names, "inspect");
+    if (unknown) {
+      console.error(`[ERROR] ${unknown}`);
+      process.exit(USAGE_EXIT_CODE);
     }
 
     console.log(`Config: ${configPath}`);
