@@ -319,8 +319,11 @@ function describeExtras() {
       writeFileSync(path.join(good, "gh"), "good");
       const env = { PATH: [".", "work", cwd, good].join(";"), PATHEXT: ".COM;.EXE;.BAT" };
       expect(findOnPath("gh", env, "win32", cwd)).toBe(path.join(good, "gh.exe"));
-      const posix = { PATH: [".", "", cwd, good].join(":") };
-      expect(findOnPath("gh", posix, "linux", cwd)).toBe(path.join(good, "gh"));
+      if (process.platform !== "win32") {
+        // A ':'-separated PATH cannot hold Windows drive paths.
+        const posix = { PATH: [".", "", cwd, good].join(":") };
+        expect(findOnPath("gh", posix, "linux", cwd)).toBe(path.join(good, "gh"));
+      }
       expect(findOnPath("gh", { PATH: `.;${cwd}` }, "win32", cwd)).toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });

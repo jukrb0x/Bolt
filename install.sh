@@ -80,8 +80,11 @@ probe_version() {
       sleep "$PROBE_TIMEOUT" &
       probe_sleep=$!
       wait "$probe_sleep"
-      # Whole process group when monitor mode gave the probe one, else its children, then it.
+      # Whole process group when monitor mode gave the probe one. Otherwise
+      # stop the probe first so it cannot print once its children die, then
+      # kill its children and it.
       if ! kill -9 -"$probe_pid" 2>/dev/null; then
+        kill -STOP "$probe_pid" 2>/dev/null
         pkill -9 -P "$probe_pid" 2>/dev/null
         kill -9 "$probe_pid" 2>/dev/null
       fi
