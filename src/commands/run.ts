@@ -15,41 +15,148 @@ function timestamp(): string {
 export interface ParsedRun {
   /** Positional task/flow names, in the order typed. */
   names: string[];
-  /** Trailing `--k=v` flags collected as global params. */
+  /** `--k=v` flags (and `k=v` after a bare `--`) collected as global params. */
   params: Record<string, string>;
   dryRun: boolean;
 }
 
+/** Exit code for command-line usage errors (unknown flag, malformed param). */
+export const USAGE_EXIT_CODE = 2;
+
+/** A command-line usage error. Callers print the message and exit with USAGE_EXIT_CODE. */
+export class UsageError extends Error {
+  readonly code = "USAGE";
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageError";
+  }
+}
+
+export interface ParseRunOptions {
+  /** Boolean flags this command accepts (without the leading `--`). Default: `["dry-run"]`. */
+  flags?: string[];
+  /** Command name used in error messages. Default: `run`. */
+  command?: string;
+}
+
+/** Flags citty handles itself before `run()` is called. */
+const HELP_FLAGS = new Set(["--help", "-h"]);
+
+function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return row[b.length];
+}
+
+function suggest(name: string, known: string[]): string {
+  const clean = name.replace(/^-+/, "").toLowerCase();
+  let best: string | undefined;
+  let bestScore = Infinity;
+  for (const flag of known) {
+    const score = editDistance(clean, flag);
+    if (score < bestScore) {
+      best = flag;
+      bestScore = score;
+    }
+  }
+  if (best && bestScore <= Math.max(2, Math.floor(best.length / 3))) {
+    return ` Did you mean "--${best}"?`;
+  }
+  return "";
+}
+
+function parseParam(text: string, origin: string): [string, string] {
+  const eq = text.indexOf("=");
+  const key = eq === -1 ? "" : text.slice(0, eq);
+  if (eq === -1 || key === "" || key.startsWith("-")) {
+    throw new UsageError(`Malformed param "${origin}". Params must look like key=value.`);
+  }
+  return [key, text.slice(eq + 1)];
+}
+
 /**
- * Parse raw argv into positional names + `--k=v` params + `--dry-run`.
+ * Parse raw argv into positional names + `--k=v` params + known boolean flags.
  * Names are collected in typed order (that order IS execution order — spec D3).
  * `--k=v` flags apply to the whole invocation (spec D4). No `:variant`, no shared-param fill.
+ *
+ * Strict: unknown flags (long or short), values on boolean flags, and param values
+ * starting with `--` throw a UsageError. Everything after a bare `--` is parsed only as
+ * `key=value` params, so values there may start with `--` (e.g. `-- extra=--verbose`).
  */
-export function parseRunArgs(rawArgs: string[]): ParsedRun {
+export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
+  const flags = opts.flags ?? ["dry-run"];
+  const command = opts.command ?? "run";
+  const known = [...flags, "help"];
   const names: string[] = [];
   const params: Record<string, string> = {};
   let dryRun = false;
 
-  for (const arg of rawArgs) {
-    if (arg === "--dry-run") {
-      dryRun = true;
-      continue;
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+
+    if (arg === "--") {
+      for (const rest of rawArgs.slice(i + 1)) {
+        const [k, v] = parseParam(rest, rest);
+        params[k] = v;
+      }
+      break;
     }
+    if (HELP_FLAGS.has(arg)) continue;
+
     if (arg.startsWith("--")) {
       const inner = arg.slice(2);
       const eq = inner.indexOf("=");
-      if (eq === -1) continue; // unknown boolean-style flag — ignore
-      const k = inner.slice(0, eq);
-      const v = inner.slice(eq + 1);
-      if (k === "dry-run") continue;
+      const name = eq === -1 ? inner : inner.slice(0, eq);
+      if (flags.includes(name)) {
+        if (eq !== -1) throw new UsageError(`Flag "--${name}" does not take a value.`);
+        if (name === "dry-run") dryRun = true;
+        continue;
+      }
+      if (eq === -1) {
+        throw new UsageError(
+          `Unknown flag "${arg}" for "bolt ${command}".${suggest(name, known)} ` +
+            `Params must be given as --key=value.`,
+        );
+      }
+      const [k, v] = parseParam(inner, arg);
+      if (v.startsWith("--")) {
+        throw new UsageError(
+          `Param value for "--${k}" may not start with "--". ` +
+            `Pass it after a "--" separator instead: bolt ${command} ... -- ${k}=${v}`,
+        );
+      }
       params[k] = v;
       continue;
     }
-    if (arg.startsWith("-")) continue; // ignore other short flags
+
+    if (arg.startsWith("-") && arg.length > 1) {
+      throw new UsageError(`Unknown flag "${arg}" for "bolt ${command}".${suggest(arg, known)}`);
+    }
     names.push(arg);
   }
 
   return { names, params, dryRun };
+}
+
+/** Parse argv for a command, printing usage errors and exiting with USAGE_EXIT_CODE. */
+export function parseRunArgsOrExit(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
+  try {
+    return parseRunArgs(rawArgs, opts);
+  } catch (e) {
+    if (e instanceof UsageError) {
+      console.error(`[ERROR] ${e.message}`);
+      process.exit(USAGE_EXIT_CODE);
+    }
+    throw e;
+  }
 }
 
 /**
@@ -98,7 +205,7 @@ export default defineCommand({
     },
   },
   async run({ rawArgs }) {
-    const { names, params, dryRun } = parseRunArgs(rawArgs ?? []);
+    const { names, params, dryRun } = parseRunArgsOrExit(rawArgs ?? []);
 
     if (names.length === 0) {
       console.error("[ERROR] No task or flow specified. Example: bolt run build start");

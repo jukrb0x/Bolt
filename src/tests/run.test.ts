@@ -2,7 +2,7 @@ import { expect, test, describe } from "bun:test";
 import { Runner } from "../runner";
 import { testCfg } from "./env";
 import type { BoltConfig } from "../config";
-import { parseRunArgs, dispatchRun } from "../commands/run";
+import { parseRunArgs, dispatchRun, UsageError } from "../commands/run";
 import { formatPlanNodes } from "../inspect-utils";
 import { resolveRunPlan } from "../run-plan";
 
@@ -42,6 +42,66 @@ describe("parseRunArgs", () => {
     expect(parseRunArgs(["build", "--config=dev"]).params).toEqual({ config: "dev" });
     expect(parseRunArgs(["build", "--config=dbg"]).params).toEqual({ config: "dbg" });
     expect(parseRunArgs(["build", "--config=DebugGame"]).params).toEqual({ config: "DebugGame" });
+  });
+});
+
+describe("parseRunArgs strictness (BOLT-FIX-3)", () => {
+  const usage = (args: string[], opts?: Parameters<typeof parseRunArgs>[1]) => {
+    try {
+      parseRunArgs(args, opts);
+    } catch (e) {
+      expect(e).toBeInstanceOf(UsageError);
+      return (e as Error).message;
+    }
+    throw new Error(`expected UsageError for ${args.join(" ")}`);
+  };
+
+  test("rejects unknown long flags and suggests the closest known flag", () => {
+    expect(usage(["build", "--dryrun"])).toContain('Did you mean "--dry-run"?');
+    expect(usage(["build", "--dry"])).toContain('Unknown flag "--dry"');
+    expect(usage(["build", "--frobnicate"])).not.toContain("Did you mean");
+  });
+
+  test("rejects unknown short flags, including bundles", () => {
+    expect(usage(["build", "-x"])).toContain('Unknown flag "-x"');
+    expect(usage(["build", "-xyz"])).toContain('Unknown flag "-xyz"');
+    expect(usage(["build", "-n"])).toContain('Unknown flag "-n"');
+  });
+
+  test("help flags are left to citty", () => {
+    expect(parseRunArgs(["build", "-h"]).names).toEqual(["build"]);
+    expect(parseRunArgs(["build", "--help"]).names).toEqual(["build"]);
+  });
+
+  test("boolean flags take no value", () => {
+    expect(usage(["build", "--dry-run=false"])).toContain('"--dry-run" does not take a value');
+    expect(usage(["build", "--dry-run=true"])).toContain("does not take a value");
+  });
+
+  test("param values may not start with --", () => {
+    expect(usage(["build", "--target=--dry-run"])).toContain("-- target=--dry-run");
+    expect(usage(["build", "--=x"])).toContain("Malformed param");
+  });
+
+  test("everything after -- is key=value params only", () => {
+    const parsed = parseRunArgs(["build", "--dry-run", "--", "extra=--verbose", "a=b=c"]);
+    expect(parsed.names).toEqual(["build"]);
+    expect(parsed.dryRun).toBe(true);
+    expect(parsed.params).toEqual({ extra: "--verbose", a: "b=c" });
+    expect(usage(["build", "--", "--execute"])).toContain("Malformed param");
+    expect(usage(["build", "--", "--dry-run"])).toContain("Malformed param");
+    expect(usage(["build", "--", "start"])).toContain("Malformed param");
+  });
+
+  test("a bare -- with nothing after it is allowed", () => {
+    expect(parseRunArgs(["build", "--"])).toEqual({ names: ["build"], params: {}, dryRun: false });
+  });
+
+  test("inspect accepts no boolean flags", () => {
+    expect(usage(["build", "--dry-run"], { flags: [], command: "inspect" })).toContain(
+      'Unknown flag "--dry-run" for "bolt inspect"',
+    );
+    expect(parseRunArgs(["build", "--k=v"], { flags: [] }).params).toEqual({ k: "v" });
   });
 });
 
