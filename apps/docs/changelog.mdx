@@ -86,9 +86,11 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 - **Migration: `git/info` and `svn/info` resolve a relative `path` against the `bolt.yaml` directory**, not the current working directory. Example: with `bolt.yaml` in `/proj` and running from `/proj/tools`, `path: ../Engine` used to resolve to `<cwd>/../Engine` (`/proj/Engine`); it now resolves to `<bolt.yaml dir>/../Engine` (`/Engine`). To keep the old target, use an absolute path or adjust the relative path so it is relative to the `bolt.yaml` directory (here `path: Engine`).
 - Plugin API version errors now list the supported versions and, for a newer plugin, tell you to run `bolt self-update`. A class plugin with a `static apiVersion` that differs from its instance field is rejected; a matching one warns.
 - Manifest format is now 2. After upgrading, run `bolt ai` to regenerate `.bolt/ai-context.md`; `bolt run` warns (`AI_CONTEXT_STALE`) until you do.
+- **AI invocations: project paths are checked after resolving symlinks.** For `git/info`, `svn/info`, `fs/*`, and `json/*`, an AI invocation is rejected with `AI_FORBIDDEN` (exit code `4`) when a path, read or write, resolves outside the project directory. This includes an in-project symlink to an outside directory, or a path that cannot be resolved (symlink loop, dangling symlink, permission error). Human runs are unaffected: `fs/*` and `json/*` behave exactly as before (literal `../x` is still rejected, symlinks are followed silently), and `git/info` / `svn/info` only warn.
 
-- Path checks for project-relative paths (`fs/*`, `json/*`, `git/info`, `svn/info`) now resolve symlinks: a path inside the project that is a symlink to a directory outside it is treated as outside. A missing path is judged by its nearest existing parent. For AI invocations, a path that cannot be resolved (symlink loop, dangling symlink, permission error) is rejected with `AI_FORBIDDEN`.
-- `bolt run` now waits for the run log in `.bolt/logs/` to be flushed before exiting, so the last lines are no longer lost.
+### Plugin API v2: Fixed
+
+- The run log (`.bolt/logs/bolt_<timestamp>.log`) could lose its final lines because `bolt run` exited before `Logger.close()` finished flushing the file. `bolt run` now waits for the flush.
 
 ### Plugin API v2: types
 

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Runner } from "../runner";
 import { mockRuntime, testCfg } from "./env";
 import type { Runtime } from "../runtime/types";
@@ -484,4 +484,76 @@ test("AI invocation fails closed when the path cannot be resolved (symlink loop)
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe("fs/* and json/* through an in-project symlink to outside", () => {
+  const setup = async () => {
+    const { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = await import("fs");
+    const os = await import("os");
+    const p = await import("path");
+    const base = mkdtempSync(p.join(os.tmpdir(), "bolt-fs-link-"));
+    const root = p.join(base, "project");
+    const outside = p.join(base, "outside");
+    mkdirSync(root);
+    mkdirSync(outside);
+    writeFileSync(p.join(root, "in.txt"), "inside");
+    writeFileSync(p.join(outside, "secret.txt"), "outside");
+    symlinkSync(outside, p.join(root, "link"), process.platform === "win32" ? "junction" : "dir");
+    return { base, root, outside, p };
+  };
+
+  test("human fs/copy into the symlink succeeds with no warning (main behavior)", async () => {
+    const { base, root, outside, p } = await setup();
+    const { existsSync, rmSync } = await import("fs");
+    try {
+      const lines: string[] = [];
+      const { Logger } = await import("../logger");
+      const humanCfg: BoltConfig = {
+        ...testCfg,
+        tasks: { cp: [{ uses: "fs/copy", with: { src: "in.txt", dst: "link/copied.txt" } }] },
+      };
+      const runner = new Runner(humanCfg, {
+        configDir: root,
+        logger: new Logger({ sink: (l) => lines.push(l) }),
+      });
+      await runner.runTask("cp");
+      expect(existsSync(p.join(outside, "copied.txt"))).toBe(true);
+      expect(lines.some((l) => l.includes("WARN"))).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("AI invocation is rejected for read (src) and write (dst) through the symlink", async () => {
+    const { base, root, outside, p } = await setup();
+    const { existsSync, rmSync } = await import("fs");
+    try {
+      const aiCfg: BoltConfig = {
+        ...testCfg,
+        tasks: {
+          read: [{ uses: "fs/copy", with: { src: "link/secret.txt", dst: "got.txt" } }],
+          write: [{ uses: "fs/copy", with: { src: "in.txt", dst: "link/planted.txt" } }],
+          json: [{ uses: "json/set", with: { file: "link/x.json", key: "a", value: "1" } }],
+        },
+      };
+      const ai = () => new Runner(aiCfg, { configDir: root, aiInvocation: true });
+      await expect(ai().runTask("read")).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      await expect(ai().runTask("write")).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      await expect(ai().runTask("json")).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      expect(existsSync(p.join(root, "got.txt"))).toBe(false);
+      expect(existsSync(p.join(outside, "planted.txt"))).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("literal ../ is still rejected for human runs", async () => {
+    const humanCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { cp: [{ uses: "fs/copy", with: { src: "../x", dst: "y" } }] },
+    };
+    await expect(new Runner(humanCfg, { dryRun: true }).runTask("cp")).rejects.toThrow(
+      /escapes project root/,
+    );
+  });
 });
