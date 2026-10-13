@@ -124,7 +124,7 @@ Tasks: build ship
   would run uses: ./actions/upload  bucket=nightly
     -> local action: would execute ./actions/upload/run.sh with BOLT_INPUT_BUCKET=nightly
   would run uses: deploy/push
-    -> project plugin .bolt/plugins/deploy: not loaded in dry-run, handler and params not checked
+    -> project plugin .bolt/plugins/deploy: not loaded in dry-run; its handler and params are not validated (not an error)
 
 Dry run complete.
 Nothing was executed: no commands, plugins, hooks, or handlers ran, and no files were written.
@@ -149,20 +149,20 @@ run. A pure library dry run is tracked as BOLT-DX-3.
 
 `--simulate` loads plugins and runs their hooks and handlers with `ctx.dryRun = true`.
 Handlers that honor `ctx.dryRun` log what they would do instead of doing it.
-`run:` steps and local actions are skipped. Simulate writes a log file under
+`run:` steps and local actions are skipped (a missing `action.yaml` or run script still fails the step). Simulate writes a log file under
 `.bolt/logs/`, may compile project plugins into `.bolt/.cache` or run `bun install`,
 and a plugin can still have side effects. Notifications are not sent.
 `--dry-run` and `--simulate` cannot be combined.
 
 ## Exit codes
 
-| Code | Meaning                                                                                                                                                                                                   |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success (a dry run with no problems)                                                                                                                                                                      |
-| `1`  | Task failure (a step failed while running)                                                                                                                                                                |
-| `2`  | Usage error: unknown flag, command, task, or flow; malformed param; no task given                                                                                                                         |
-| `3`  | Config error: `bolt.yaml` missing, unparseable, failing the schema, an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref), or a config problem found by `--dry-run` |
-| `4`  | Permission denied reading `bolt.yaml`                                                                                                                                                                     |
+| Code | Meaning                                                                                                                                                                                                               |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success (a dry run with no problems)                                                                                                                                                                                  |
+| `1`  | Task failure (a step failed while running)                                                                                                                                                                            |
+| `2`  | Usage error: unknown flag, command, task, or flow; malformed param; no task given                                                                                                                                     |
+| `3`  | Config error: `bolt.yaml` missing, unreadable, unparseable, failing the schema, an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref), or a config problem found by `--dry-run` |
+| `4`  | Denied: `AI_FORBIDDEN` (AI invocations only); an unreadable `bolt.yaml` exits `3`                                                                                                                                     |
 
 Config errors are reported before anything runs and before a log file is created.
 
