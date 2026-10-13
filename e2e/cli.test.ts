@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import os from "os";
 import path from "path";
 import {
@@ -572,6 +580,67 @@ export default definePlugin({
     expect(ai.output).toContain("Say ping");
     expect(ai.output).toContain("**editor**: editor · development");
     expect(ai.output).toContain("**client**: program · SampleClient · shipping");
+  } finally {
+    dispose(project.dir);
+  }
+});
+
+test("dry-run does not run local actions, write .bolt/logs, or spawn git", async () => {
+  const project = makeProject({
+    tasks: `tasks:
+  mark:
+    - uses: ./actions/touch
+      with: { name: demo }
+    - run: echo ran > shell-marker
+`,
+  });
+  try {
+    const win = process.platform === "win32";
+    const action = path.join(project.dir, "actions/touch");
+    mkdirSync(action, { recursive: true });
+    writeFileSync(path.join(action, "action.yaml"), "name: touch\n");
+    if (win) {
+      writeFileSync(path.join(action, "run.bat"), "@echo off\r\necho x> local-action-marker\r\n");
+    } else {
+      writeFileSync(path.join(action, "run.sh"), "#!/bin/sh\ntouch local-action-marker\n");
+      chmodSync(path.join(action, "run.sh"), 0o755);
+    }
+    // A recording git shim shadows the real git, so any git spawn shows up in the fake log.
+    const shimDir = path.join(project.dir, "git-shim");
+    mkdirSync(shimDir, { recursive: true });
+    if (win) {
+      writeFileSync(
+        path.join(shimDir, "git.cmd"),
+        '@echo off\r\nbun "%BOLT_FAKE_RECORD%" "%~f0" %*\r\nexit /b %ERRORLEVEL%\r\n',
+      );
+    } else {
+      writeFileSync(
+        path.join(shimDir, "git"),
+        '#!/bin/sh\nexec bun "$BOLT_FAKE_RECORD" "$0" "$@"\n',
+      );
+      chmodSync(path.join(shimDir, "git"), 0o755);
+    }
+    const shimPath = `${shimDir}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
+
+    const result = await bolt(project.dir, ["run", "mark", "--dry-run"], {
+      PATH: shimPath,
+      Path: shimPath,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("would run local action ./actions/touch");
+    expect(result.output).not.toContain("Log:");
+    expect(existsSync(path.join(project.dir, "local-action-marker"))).toBe(false);
+    expect(existsSync(path.join(project.dir, "shell-marker"))).toBe(false);
+    expect(existsSync(path.join(project.dir, ".bolt", "logs"))).toBe(false);
+    expect(callsMatching(result.log, "git")).toHaveLength(0);
+    expect(readCalls(result.log)).toHaveLength(0);
+
+    // Control: the same shim does record git, and a real run executes the action.
+    const real = await bolt(project.dir, ["run", "mark"], { PATH: shimPath, Path: shimPath });
+    expect(real.exitCode).toBe(0);
+    expect(existsSync(path.join(project.dir, "local-action-marker"))).toBe(true);
+    expect(existsSync(path.join(project.dir, ".bolt", "logs"))).toBe(true);
+    expect(callsMatching(real.log, "git").length).toBeGreaterThan(0);
   } finally {
     dispose(project.dir);
   }

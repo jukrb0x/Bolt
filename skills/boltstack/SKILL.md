@@ -125,15 +125,15 @@ bolt run daily                      # flow: run a predefined goal
 bolt run build --target=client      # params (replace old variants)
 bolt run build --config=debug       # build configuration param
 bolt run build --config=debuggame   # aliases: dbggame, DebugGame
-bolt run update build --dry-run     # preview without executing
+bolt run update build --dry-run     # skip run: steps; plugins still run
 ```
 
 ### Flags
 
-| Flag          | Effect                                                     |
-| ------------- | ---------------------------------------------------------- |
-| `--dry-run`   | Preview steps without executing                            |
-| `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`) |
+| Flag          | Effect                                                         |
+| ------------- | -------------------------------------------------------------- |
+| `--dry-run`   | Skip `run:` steps and local actions; plugin handlers still run |
+| `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`)     |
 
 ### Introspection (when ai-context.md is insufficient)
 
@@ -145,7 +145,7 @@ bolt info                    # project and VCS summary
 
 ## Safety Rules
 
-1. **Always `--dry-run` first** for build, update, or any destructive operation. Show the user the plan before executing.
+1. **Use `bolt inspect` first** to show the user the plan for build, update, or any destructive operation. In the current version `--dry-run` still calls plugin handlers, so get the user's consent before running it too.
 2. **Never run a `kill` task without confirmation** — it terminates all running UE processes.
 3. **Respect fail-fast** — flows abort on the first failing task by default; do not work around an aborted flow (e.g. by re-running downstream tasks) unless the user explicitly asks.
 4. **Do not modify bolt.yaml / bolt.local.yaml** unless the user explicitly asks. Configuration changes can break workflows.

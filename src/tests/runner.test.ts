@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Runner } from "../runner";
-import { testCfg } from "./env";
+import { mockRuntime, testCfg } from "./env";
+import type { Runtime } from "../runtime/types";
 import type { BoltConfig } from "../config";
 import { Notifier } from "../notify";
 import type { NotifyEvent } from "../notify";
@@ -373,4 +374,54 @@ test("planning errors do not start a notification lifecycle", async () => {
 
   await expect(runner.runTask("outer")).rejects.toThrow('Unknown task: "missing"');
   expect(events).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// dry-run has no side effects (BOLT-FIX-2)
+// ---------------------------------------------------------------------------
+
+function recordingRuntime(calls: string[]): Runtime {
+  return {
+    ...mockRuntime,
+    spawn: async (cmd) => {
+      calls.push(`spawn ${cmd.join(" ")}`);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+    spawnSync: (cmd) => {
+      calls.push(`spawnSync ${cmd.join(" ")}`);
+      return { exitCode: 0, stdout: "main\n", stderr: "" };
+    },
+    shell: async (cmd) => {
+      calls.push(`shell ${cmd}`);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+}
+
+const localCfg: BoltConfig = {
+  ...testCfg,
+  tasks: {
+    local: [{ uses: "./actions/does-not-exist", with: { mode: "x" } }, { run: "echo hi" }],
+  },
+};
+
+test("dry-run does not execute local actions, shell steps, or git", async () => {
+  const calls: string[] = [];
+  const ran: string[] = [];
+  const runner = new Runner(localCfg, {
+    dryRun: true,
+    runtime: recordingRuntime(calls),
+    onStep: (s) => ran.push(s),
+  });
+  await runner.runTask("local");
+  expect(ran).toEqual(["./actions/does-not-exist", "echo hi"]);
+  expect(calls).toEqual([]);
+});
+
+test("a real run still looks up the git branch and runs shell steps", async () => {
+  const calls: string[] = [];
+  const cfg: BoltConfig = { ...testCfg, tasks: { a: [{ run: "echo hi" }] } };
+  await new Runner(cfg, { runtime: recordingRuntime(calls) }).runTask("a");
+  expect(calls).toContain("spawnSync git branch --show-current");
+  expect(calls).toContain("shell echo hi");
 });

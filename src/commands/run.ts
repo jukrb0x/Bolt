@@ -93,7 +93,8 @@ export default defineCommand({
     "dry-run": {
       type: "boolean",
       default: false,
-      description: "Print steps and skip run: steps; local actions and plugin handlers still run",
+      description:
+        "Print steps. Skips run: steps and local actions, but still loads plugins and calls plugin hooks and handlers (with ctx.dryRun=true)",
     },
   },
   async run({ rawArgs }) {
@@ -119,9 +120,13 @@ export default defineCommand({
     }
 
     const configDir = path.dirname(configPath);
-    const logDir = path.join(configDir, ".bolt", "logs");
-    mkdirSync(logDir, { recursive: true });
-    const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
+    // Dry-run is a preview: it must not create .bolt/logs or write a log file.
+    let logFile: string | undefined;
+    if (!dryRun) {
+      const logDir = path.join(configDir, ".bolt", "logs");
+      mkdirSync(logDir, { recursive: true });
+      logFile = path.join(logDir, `bolt_${timestamp()}.log`);
+    }
     const logger = new Logger({ logFile });
 
     const isFlow = names.length === 1 && !!cfg.flows[names[0]];
@@ -140,12 +145,12 @@ export default defineCommand({
     try {
       await dispatchRun(runner, cfg, names, params);
       logger.info(`Done in ${((Date.now() - start) / 1000).toFixed(1)}s`);
-      logger.info(`Log: ${logFile}`);
+      if (logFile) logger.info(`Log: ${logFile}`);
       logger.close();
       process.exit(0);
     } catch (e: any) {
       logger.error(e.message);
-      logger.info(`Log: ${logFile}`);
+      if (logFile) logger.info(`Log: ${logFile}`);
       logger.close();
       process.exit(1);
     }
