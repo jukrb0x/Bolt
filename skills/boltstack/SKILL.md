@@ -130,10 +130,10 @@ bolt run update build --dry-run     # skip run: steps; plugins still run
 
 ### Flags
 
-| Flag          | Effect                                                     |
-| ------------- | ---------------------------------------------------------- |
+| Flag          | Effect                                                         |
+| ------------- | -------------------------------------------------------------- |
 | `--dry-run`   | Skip `run:` steps and local actions; plugin handlers still run |
-| `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`) |
+| `--key=value` | Pass a parameter to the whole run (e.g. `--target=client`)     |
 
 ### Introspection (when ai-context.md is insufficient)
 
