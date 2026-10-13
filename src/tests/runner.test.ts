@@ -1,7 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { Runner } from "../runner";
-import { mkdtempSync, writeFileSync } from "fs";
-import os from "os";
+import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import path from "path";
 import { mockRuntime, testCfg } from "./env";
 import type { Runtime } from "../runtime/types";
@@ -401,11 +400,14 @@ function recordingRuntime(calls: string[]): Runtime {
   };
 }
 
-const actionDir = mkdtempSync(path.join(os.tmpdir(), "bolt-runner-action-"));
+// Local action refs resolve against the project dir (cwd). Create the action
+// inside it so the ref stays relative; a tmpdir on another drive (Windows CI)
+// has no relative path from the project.
+const actionDir = mkdtempSync(path.join(process.cwd(), ".bolt-test-action-"));
+afterAll(() => rmSync(actionDir, { recursive: true, force: true }));
 writeFileSync(path.join(actionDir, "action.yaml"), "name: a\n");
 writeFileSync(path.join(actionDir, "run.sh"), "#!/bin/sh\nexit 9\n");
-const rel = path.relative(process.cwd(), actionDir).split(path.sep).join("/");
-const actionRef = rel.startsWith("../") ? rel : `./${rel}`;
+const actionRef = `./${path.basename(actionDir)}`;
 
 const localCfg: BoltConfig = {
   ...testCfg,
