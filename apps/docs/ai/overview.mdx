@@ -42,9 +42,11 @@ tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
   In the current release, `bolt run --dry-run` is not side-effect free: `--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`).
   Each handler decides what to skip. Do not auto-approve any `bolt run` command on the current release.
 
-The current release also silently ignores unknown flags such as `--json`, `--agent`, and `--execute`,
-and treats `--plan=…` as a task param. The commands in the Planned section below **run for real** on
-today's binary. Don't try them until `bolt version --json` reports the capabilities.
+Unknown flags fail with exit code `2` before anything runs. `--json`, `--agent`, `--execute`, and
+`--plan` are reserved but not implemented yet: they fail with `--<name> is reserved by bolt and not
+supported yet` (exit code `2`) and cannot be used as task params. The commands in the Planned section
+below therefore fail on today's binary instead of running. Don't use them until `bolt version --json`
+reports the capabilities.
 
 </Note>
 
