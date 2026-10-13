@@ -28,10 +28,11 @@ export function projectPath(
   if (!params.path) throw new Error(`${ref} requires with: path:`);
   try {
     return safePath(params.path, ctx.configDir);
-  } catch {
+  } catch (error) {
     const resolved = path.resolve(ctx.configDir, params.path);
+    const reason = error instanceof Error ? error.message : String(error);
     ctx.logger.warn(
-      `${ref}: path "${params.path}" (${resolved}) is outside the project directory "${ctx.configDir}". This run continues, but AI invocations of ${ref} will reject this path. Fix: use a path under the project directory, or read other repositories with a run: step.`,
+      `${ref}: path "${params.path}" (${resolved}) is outside the project directory "${ctx.configDir}" or cannot be verified (${reason}). This run continues, but AI invocations of ${ref} will reject this path. Fix: use a path under the project directory, or read other repositories with a run: step.`,
     );
     return resolved;
   }

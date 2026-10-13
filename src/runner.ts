@@ -381,10 +381,15 @@ export class Runner {
     const root = this.opts.configDir ?? process.cwd();
     try {
       safePath(params.path, root);
-    } catch {
+    } catch (error) {
+      // Fail closed: any resolution failure (symlink loop, permission, ...) rejects.
+      const reason = error instanceof Error ? error.message : String(error);
+      const what = reason.includes("cannot be resolved")
+        ? `cannot be verified to be inside the project directory "${root}" (${reason})`
+        : `is outside the project directory "${root}" (${reason})`;
       throw new BoltStepError(
         "AI_FORBIDDEN",
-        `${ref}: path "${params.path}" (${path.resolve(root, params.path)}) is outside the project directory "${root}"; AI invocations may only read repositories inside the project. Fix: use a path under the project directory, or read other repositories with a run: step.`,
+        `${ref}: path "${params.path}" ${what}; AI invocations may only read repositories inside the project. Fix: use a path under the project directory, or read other repositories with a run: step.`,
       );
     }
   }
