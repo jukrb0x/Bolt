@@ -21,7 +21,7 @@ export const LOCAL_RUNNERS = ["run.ts", "run.js", "run.py", "run.sh", "run.bat"]
 export interface DryRunReport {
   /** Lines to print, in order. */
   lines: string[];
-  /** Problems a real run would hit (also included in `lines`). Non-empty means exit 1. */
+  /** Config problems a real run would hit (also included in `lines`). Non-empty means exit 3. */
   problems: string[];
 }
 
@@ -124,7 +124,9 @@ export function renderDryRun(cfg: BoltConfig, plan: RunPlan, opts: DryRunOptions
       const source = pluginSource(cfg, namespace, opts);
       if (source) {
         unloaded = true;
-        lines.push(`${pad}  -> ${source}: not loaded in dry-run, handler and params not checked`);
+        lines.push(
+          `${pad}  -> ${source}: not loaded in dry-run; its handler and params are not validated (not an error)`,
+        );
         continue;
       }
       const builtin = builtins[namespace];
@@ -145,7 +147,12 @@ export function renderDryRun(cfg: BoltConfig, plan: RunPlan, opts: DryRunOptions
         parseStepParams(builtin, node.ref, operation, node.params);
         lines.push(`${pad}  -> built-in plugin ${namespace}: handler not called in dry-run`);
       } catch (e: any) {
-        problem(pad, String(e?.message ?? e).replace(/\n\s*/g, " "));
+        problem(
+          pad,
+          String(e?.message ?? e)
+            .replace(/:\n\s*/, ": ")
+            .replace(/\.?\n\s*/g, "; "),
+        );
       }
     }
   };
@@ -172,7 +179,7 @@ export const DRY_RUN_HEADER = "Dry run: showing what would run. Nothing is execu
 export function dryRunFooter(problems: number): string[] {
   const head =
     problems > 0
-      ? `Dry run found ${problems} problem(s) a real run would fail on (marked with !).`
+      ? `Dry run found ${problems} config problem(s) a real run would fail on (marked with !). Fix bolt.yaml and run the dry run again.`
       : "Dry run complete.";
   return [
     head,

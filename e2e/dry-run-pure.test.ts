@@ -345,6 +345,43 @@ describe.skipIf(!posix)("BOLT-P0-1 config errors exit 3", () => {
     }
   }
 
+  test("dry-run config problems (bad built-in param, unknown op, missing script) exit 3", async () => {
+    const dir = mkdtempSync(path.join(f.root, "cfg-"));
+    writeFileSync(
+      path.join(dir, "bolt.yaml"),
+      "version: 1\nproject:\n  name: x\ntasks:\n  a:\n    - uses: fs/copy\n      with:\n        src: a\n        dest: b\n  b:\n    - uses: fs/nope\n  c:\n    - uses: ./missing\n",
+    );
+    for (const t of ["a", "b", "c"]) {
+      const o = await runCase(dir, ["run", t, "--dry-run"]);
+      expect(o.exitCode).toBe(3);
+      expect(o.changed).toEqual([]);
+    }
+    const typo = await runCase(dir, ["run", "a", "--dry-run"]);
+    expect(typo.output).toContain('missing param "dst" (you passed "dest"; did you mean "dst"?)');
+  });
+
+  test("--simulate with a bad built-in param names it once, without a native error", async () => {
+    const dir = mkdtempSync(path.join(f.root, "cfg-"));
+    writeFileSync(
+      path.join(dir, "bolt.yaml"),
+      "version: 1\nproject:\n  name: x\ntasks:\n  a:\n    - uses: fs/copy\n      with:\n        src: a\n        dest: b\n",
+    );
+    const o = await runCase(dir, ["run", "a", "--simulate"]);
+    expect(o.exitCode).toBe(1);
+    expect(o.output).not.toContain("paths[1]");
+    expect(o.output.split('Invalid params for "fs/copy"').length - 1).toBe(1);
+    expect(o.output).toContain("Fix the step's with: in bolt.yaml.");
+  });
+
+  test("migrate and config exit 3 when bolt.yaml is missing", async () => {
+    const dir = mkdtempSync(path.join(f.root, "cfg-"));
+    for (const args of [["migrate"], ["config"]]) {
+      const o = await runCase(dir, args);
+      expect(o.exitCode).toBe(3);
+      expect(o.output).toContain("bolt.yaml not found in");
+    }
+  });
+
   test("bolt list / check also exit 3 on a config error", async () => {
     const dir = mkdtempSync(path.join(f.root, "cfg-"));
     writeFileSync(path.join(dir, "bolt.yaml"), "version: 1\nproject: [oops\n");

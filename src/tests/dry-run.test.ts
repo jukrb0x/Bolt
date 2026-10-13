@@ -25,10 +25,11 @@ const cfg: BoltConfig = {
     plugins: [
       { uses: "mine/go" },
       { uses: "theirs/go" },
-      { uses: "fs/copy", with: { src: "a", dest: "b" } },
+      { uses: "fs/copy", with: { src: "a", dst: "b" } },
     ],
     nested: [{ call: "shell" }, { call: "local" }],
     broken: [{ uses: "nope/go" }, { uses: "fs/nope" }, { uses: "./missing" }],
+    typo: [{ uses: "fs/copy", with: { src: "a", dest: "b" } }],
   },
 };
 
@@ -65,7 +66,19 @@ test("problems a real run would hit are marked with !", () => {
   expect(report.problems[0]).toContain('Unknown plugin namespace "nope"');
   expect(report.problems[1]).toContain('Unknown op "nope" in plugin "fs"');
   expect(report.problems[2]).toContain("No action.yaml in");
-  expect(dryRunFooter(3)[0]).toContain("found 3 problem(s)");
+  expect(dryRunFooter(3)[0]).toContain("found 3 config problem(s)");
+});
+
+test("built-in params are validated against their schema and name the typo", () => {
+  const { report } = render(["typo"]);
+  expect(report.problems).toEqual([
+    'Invalid params for "fs/copy": missing param "dst" (you passed "dest"; did you mean "dst"?); fs/copy params: src, dst; Fix the step\'s with: in bolt.yaml.',
+  ]);
+});
+
+test("run-wide params that a built-in does not use are not an error", () => {
+  const { report } = render(["plugins"], { target: "client" });
+  expect(report.problems).toEqual([]);
 });
 
 test("dry-run step lines match bolt inspect lines", () => {
