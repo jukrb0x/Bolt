@@ -94,7 +94,8 @@ function Invoke-Install([string]$Base, [string]$SessionPath) {
     Remove-Item Env:BOLT_INSTALL_BASE -ErrorAction SilentlyContinue
   }
   Write-Host $out
-  return $out
+  # Windows PowerShell 5.1 wraps captured host output at the console width.
+  return ($out -replace '\s+', ' ')
 }
 
 $SavedUserPath = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
@@ -273,7 +274,7 @@ try {
   $env:Path = "$CustomDir;" + (Get-FreshPath)
   $env:BOLT_INSTALL_BASE = "$PublicBase/newer"
   Write-Host "running install.ps1 with $customExe first on PATH"
-  $installOut = (& (Join-Path $Root "install.ps1") *>&1 | Out-String)
+  $installOut = ((& (Join-Path $Root "install.ps1") *>&1 | Out-String) -replace '\s+', ' ')
   Remove-Item Env:BOLT_INSTALL_BASE
   Write-Host $installOut
   if ((Get-Sha256 $customExe) -ne $newerHash) { throw "install.ps1 did not update $customExe in place" }
