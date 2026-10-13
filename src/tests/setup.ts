@@ -1,5 +1,6 @@
 // Global test setup — preloaded before all test files via bunfig.toml [test].
 import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 
 /**
  * Assign KEY=VALUE lines onto `env`. Existing keys are left alone.
@@ -47,3 +48,27 @@ function nativeLoadEnvFile(): ((file: string) => void) | undefined {
 }
 
 loadDotenvFile(".env.local", process.env, nativeLoadEnvFile());
+
+/** Bun version pinned by `packageManager` in package.json (single source of truth). */
+export function pinnedBunVersion(pkg: { packageManager?: string }): string | undefined {
+  const m = /^bun@(.+)$/.exec(pkg.packageManager ?? "");
+  return m?.[1];
+}
+
+/** Warn locally (or throw when CI is set) if the running Bun differs from the pinned version. */
+export function checkBunVersion(
+  actual: string,
+  pinned: string | undefined,
+  env: Record<string, string | undefined>,
+): void {
+  if (!pinned || actual === pinned) return;
+  const msg = `Bun ${actual} is running but package.json pins bun@${pinned}. Run \`bun upgrade --version ${pinned}\`.`;
+  if (env.CI) throw new Error(msg);
+  console.warn(`\n\u26a0\ufe0f  WARNING: ${msg} Tests may fail.\n`);
+}
+
+checkBunVersion(
+  Bun.version,
+  pinnedBunVersion(JSON.parse(readFileSync(join(import.meta.dir, "../../package.json"), "utf8"))),
+  process.env,
+);

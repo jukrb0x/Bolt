@@ -26,7 +26,7 @@ The workflow refuses the release when the tagged commit is not an ancestor of `o
 
 ## What CI uploads
 
-`.github/workflows/release.yml` builds on Ubuntu with Bun 1.4.3, smoke-tests every binary, then creates the GitHub Release. The asset list lives in `scripts/release-targets.ts`:
+`.github/workflows/release.yml` builds on Ubuntu with the Bun version pinned in the `packageManager` field of `package.json`, smoke-tests every binary, then creates the GitHub Release. The asset list lives in `scripts/release-targets.ts`:
 
 - `bolt-win-x64.exe`
 - `bolt-linux-x64`
