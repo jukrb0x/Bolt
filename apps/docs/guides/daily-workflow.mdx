@@ -71,7 +71,7 @@ bolt run update build --target=client
 
 ## Preview with --dry-run
 
-Always preview destructive or long runs first. `--dry-run` prints the resolved steps without executing them:
+Always preview destructive or long runs first. `--dry-run` prints what would run without running anything: no commands, plugins, hooks, or file writes. To let plugins show the exact commands they would build, use `--simulate` (see [dry run and simulate](/cli/run#dry-run-and-simulate)):
 
 ```bash
 bolt run daily --dry-run

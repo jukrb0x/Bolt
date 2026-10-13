@@ -13,6 +13,7 @@ Run tasks (in typed order) or a flow defined in bolt.yaml
 bolt run [options]
 ```
 
-| Argument    | Type    | Alias | Required | Default | Description                   |
-| ----------- | ------- | ----- | -------- | ------- | ----------------------------- |
-| `--dry-run` | boolean |       |          | `false` | Print steps without executing |
+| Argument     | Type    | Alias | Required | Default | Description                                                                                          |
+| ------------ | ------- | ----- | -------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `--dry-run`  | boolean |       |          | `false` | Show what would run without running anything: no commands, plugins, hooks, or file writes            |
+| `--simulate` | boolean |       |          | `false` | Load plugins and run hooks and handlers in dry-run mode; writes a log file and may have side effects |
