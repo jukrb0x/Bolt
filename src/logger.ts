@@ -64,8 +64,11 @@ export class Logger {
     this.file?.write(text);
   }
 
-  close() {
-    this.file?.end();
+  /** End the log file; resolves once everything written so far is flushed to disk. */
+  close(): Promise<void> {
+    const file = this.file;
+    if (!file) return Promise.resolve();
+    return new Promise((resolve) => file.end(() => resolve()));
   }
 
   private log(level: string, colour: (s: string) => string, msg: string) {
