@@ -76,6 +76,7 @@
               "cli/info",
               "cli/inspect",
               "cli/check",
+              "cli/migrate",
               "cli/config",
               "cli/plugin",
               "cli/version",

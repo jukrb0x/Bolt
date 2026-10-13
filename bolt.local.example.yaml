@@ -1,8 +1,16 @@
 # bolt.local.yaml — optional per-machine overrides (gitignored)
 #
 # Copy to bolt.local.yaml. A missing file is fine.
-# Only `vars` is read. Plugin metadata (engine paths, uproject, use_tortoise)
-# lives on that plugin's config, not here.
+# `vars` override bolt.yaml vars. `plugins.<namespace>` is deep-merged over
+# the config of the bolt.yaml plugin with that namespace, so machine paths
+# stay out of the committed bolt.yaml.
 
 # vars:
 #   region: eu
+# plugins:
+#   ue:
+#     engine: { path: D:/UE_5.4 }
+#     project: { path: D:/Work/MyGame }
+#     uproject: D:/Work/MyGame/MyGame.uproject
+#   svn:
+#     use_tortoise: true

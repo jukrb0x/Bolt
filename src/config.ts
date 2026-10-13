@@ -4,6 +4,7 @@ import path from "path";
 import { createRuntime, type Runtime } from "./runtime";
 import { svnMetadataErrors } from "./plugins/svn";
 import { tasksReferenceUe, ueMetadataErrors } from "./plugins/ue";
+import { findLegacyKeys, unknownProjectRefs } from "./legacy-config";
 
 /** bolt.yaml schema version. Unknown versions are rejected; there is no migrator. */
 export const CONFIG_VERSION = 1;
@@ -88,10 +89,15 @@ export interface Project {
   name: string;
 }
 
-/** Per-machine overrides from bolt.local.yaml (gitignored). Optional. */
+/**
+ * Per-machine overrides from bolt.local.yaml (gitignored). Optional.
+ * `plugins` maps a namespace declared in bolt.yaml to config that is deep-merged
+ * over that plugin's config before validation, e.g. `plugins: { ue: { engine: { path: D:/UE } } }`.
+ */
 const LocalConfigSchema = z
   .object({
     vars: z.record(z.string()).optional(),
+    plugins: z.record(z.record(z.unknown())).optional(),
   })
   .strict();
 export type LocalConfig = z.infer<typeof LocalConfigSchema>;
@@ -171,6 +177,90 @@ export interface BuildContext {
 
 const LOCAL_FILENAME = "bolt.local.yaml";
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Deep-merge objects. Arrays and scalars in `override` replace the base value. */
+export function deepMerge(base: unknown, override: unknown): unknown {
+  if (!isPlainObject(base) || !isPlainObject(override)) return override;
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+    out[key] = key in base ? deepMerge(base[key], value) : value;
+  }
+  return out;
+}
+
+/**
+ * Apply bolt.local.yaml `plugins.<namespace>` over the parsed bolt.yaml plugin
+ * entries with that namespace. Returns the merged copy and errors for
+ * namespaces that bolt.yaml does not declare.
+ */
+export function applyLocalPluginOverrides(
+  shared: unknown,
+  overrides: Record<string, Record<string, unknown>> | undefined,
+): { merged: unknown; errors: Array<{ path: string; message: string }> } {
+  const errors: Array<{ path: string; message: string }> = [];
+  if (!overrides || Object.keys(overrides).length === 0 || !isPlainObject(shared)) {
+    return { merged: shared, errors };
+  }
+  const plugins = Array.isArray(shared.plugins) ? shared.plugins : [];
+  const nextPlugins = plugins.map((entry) => {
+    if (!isPlainObject(entry) || typeof entry.namespace !== "string") return entry;
+    const override = overrides[entry.namespace];
+    if (!override) return entry;
+    return { ...entry, config: deepMerge(entry.config ?? {}, override) };
+  });
+  for (const namespace of Object.keys(overrides)) {
+    const declared = plugins.some((e) => isPlainObject(e) && e.namespace === namespace);
+    if (!declared) {
+      errors.push({
+        path: localLabel(["plugins", namespace]),
+        message: `bolt.yaml has no plugins entry with namespace ${namespace}. Add "- namespace: ${namespace}" under plugins in bolt.yaml.`,
+      });
+    }
+  }
+  return { merged: { ...shared, plugins: nextPlugins }, errors };
+}
+
+/** "bolt.local.yaml" for the root, else "bolt.local.yaml: a.b". */
+function localLabel(parts: Array<string | number>): string {
+  return parts.length === 0 ? LOCAL_FILENAME : `${LOCAL_FILENAME}: ${parts.join(".")}`;
+}
+
+const MIGRATE_HINT = "Run `bolt migrate` to convert a v2.0 config.";
+
+/**
+ * Relabel a merged-config error path that points into a value bolt.local.yaml supplied,
+ * e.g. `plugins.0.config.engine.path` becomes `bolt.local.yaml: plugins.ue.engine.path`.
+ */
+function labelOverridePath(
+  errorPath: string,
+  shared: unknown,
+  overrides: Record<string, Record<string, unknown>> | undefined,
+): string {
+  if (!overrides || !isPlainObject(shared) || !Array.isArray(shared.plugins)) return errorPath;
+  const parts = errorPath.split(".");
+  if (parts[0] !== "plugins" || parts[2] !== "config") return errorPath;
+  let namespace: string | undefined;
+  const index = Number(parts[1]);
+  if (Number.isInteger(index)) {
+    const entry = shared.plugins[index];
+    if (isPlainObject(entry) && typeof entry.namespace === "string") namespace = entry.namespace;
+  } else {
+    namespace = parts[1];
+  }
+  if (!namespace || !overrides[namespace]) return errorPath;
+  const rest = parts.slice(3);
+  let cur: unknown = overrides[namespace];
+  for (const key of rest) {
+    if (!isPlainObject(cur) || !(key in cur)) return errorPath;
+    cur = cur[key];
+  }
+  return localLabel(["plugins", namespace, ...rest]);
+}
+
 /** Load bolt.local.yaml when it exists. A missing file means "no local overrides". */
 function loadLocalConfig(localPath: string, rt: Runtime): LocalConfig {
   if (!existsSync(localPath)) return {};
@@ -188,10 +278,9 @@ function loadLocalConfig(localPath: string, rt: Runtime): LocalConfig {
   }
   const result = LocalConfigSchema.safeParse(parsed ?? {});
   if (!result.success) {
-    const detail = result.error.issues
-      .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
-      .join("; ");
-    throw new Error(`${LOCAL_FILENAME} missing or invalid (${detail})`);
+    const detail = result.error.issues.map((i) => `${localLabel(i.path)}: ${i.message}`).join("; ");
+    const hint = findLegacyKeys(undefined, parsed).length > 0 ? ` ${MIGRATE_HINT}` : "";
+    throw new Error(`${LOCAL_FILENAME} missing or invalid (${detail})${hint}`);
   }
   return result.data;
 }
@@ -200,16 +289,26 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
   const rt = runtime ?? createRuntime();
   const raw = readFileSync(filepath, "utf8");
   const parsed = rt.parseYaml(raw);
-  const sharedResult = BoltConfigSchema.safeParse(parsed);
-  if (!sharedResult.success) {
-    const detail = sharedResult.error.issues
-      .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
-      .join("; ");
-    throw new Error(`bolt.yaml invalid (${detail})`);
-  }
-  const shared = sharedResult.data;
   const configDir = path.dirname(path.resolve(filepath));
   const local = loadLocalConfig(path.join(configDir, LOCAL_FILENAME), rt);
+  const { merged, errors: overrideErrors } = applyLocalPluginOverrides(parsed, local.plugins);
+  if (overrideErrors.length > 0) {
+    throw new Error(
+      `${LOCAL_FILENAME} invalid (${overrideErrors.map((e) => `${e.path}: ${e.message}`).join("; ")})`,
+    );
+  }
+  const sharedResult = BoltConfigSchema.safeParse(merged);
+  if (!sharedResult.success) {
+    const detail = sharedResult.error.issues
+      .map(
+        (issue) =>
+          `${labelOverridePath(issue.path.join(".") || "<root>", parsed, local.plugins)}: ${issue.message}`,
+      )
+      .join("; ");
+    const legacy = findLegacyKeys(parsed, undefined).length > 0 ? ` ${MIGRATE_HINT}` : "";
+    throw new Error(`bolt.yaml invalid (${detail})${legacy}`);
+  }
+  const shared = sharedResult.data;
 
   return {
     version: CONFIG_VERSION,
@@ -252,7 +351,15 @@ export function pluginMetadataErrors(parsed: unknown): Array<{ path: string; mes
   return errors;
 }
 
-export async function checkConfig(filepath: string, runtime?: Runtime): Promise<ConfigCheckResult> {
+export interface ConfigCheckResultWithLegacy extends ConfigCheckResult {
+  /** v2.0 keys found in bolt.yaml or bolt.local.yaml. Empty for a version 1 config. */
+  legacy: ReturnType<typeof findLegacyKeys>;
+}
+
+export async function checkConfig(
+  filepath: string,
+  runtime?: Runtime,
+): Promise<ConfigCheckResultWithLegacy> {
   const rt = runtime ?? createRuntime();
   const errors: Array<{ path: string; message: string }> = [];
 
@@ -260,52 +367,67 @@ export async function checkConfig(filepath: string, runtime?: Runtime): Promise<
   try {
     raw = readFileSync(filepath, "utf8");
   } catch (e: any) {
-    return { ok: false, errors: [{ path: "<file>", message: e.message }] };
+    return { ok: false, errors: [{ path: "<file>", message: e.message }], legacy: [] };
   }
   let parsed: unknown;
   try {
     parsed = rt.parseYaml(raw);
   } catch (e: any) {
-    return { ok: false, errors: [{ path: "<yaml>", message: `YAML parse error: ${e.message}` }] };
+    return {
+      ok: false,
+      errors: [{ path: "<yaml>", message: `YAML parse error: ${e.message}` }],
+      legacy: [],
+    };
   }
-
-  const result = BoltConfigSchema.safeParse(parsed);
-  if (!result.success) {
-    errors.push(
-      ...result.error.issues.map((issue) => ({
-        path: issue.path.join(".") || "<root>",
-        message: issue.message,
-      })),
-    );
-  }
-  errors.push(...pluginMetadataErrors(parsed));
 
   // Optional per-machine file. Missing is fine; invalid content is an error.
   const configDir = path.dirname(path.resolve(filepath));
   const localPath = path.join(configDir, LOCAL_FILENAME);
+  let localParsed: unknown = undefined;
+  let localOverrides: Record<string, Record<string, unknown>> | undefined;
   if (existsSync(localPath)) {
-    let localRaw: string;
     try {
-      localRaw = readFileSync(localPath, "utf8");
-    } catch (e: any) {
-      errors.push({ path: LOCAL_FILENAME, message: e.message });
-      return { ok: false, errors };
-    }
-    try {
-      const localParsed = rt.parseYaml(localRaw);
-      const localResult = LocalConfigSchema.safeParse(localParsed ?? {});
+      localParsed = rt.parseYaml(readFileSync(localPath, "utf8")) ?? {};
+      const localResult = LocalConfigSchema.safeParse(localParsed);
       if (!localResult.success) {
         errors.push(
           ...localResult.error.issues.map((issue) => ({
-            path: `${LOCAL_FILENAME}.${issue.path.join(".") || "<root>"}`,
+            path: localLabel(issue.path),
             message: issue.message,
           })),
         );
+      } else {
+        localOverrides = localResult.data.plugins;
       }
     } catch (e: any) {
       errors.push({ path: LOCAL_FILENAME, message: `YAML parse error: ${e.message}` });
     }
   }
 
-  return { ok: errors.length === 0, errors };
+  const { merged, errors: overrideErrors } = applyLocalPluginOverrides(parsed, localOverrides);
+  errors.push(...overrideErrors);
+  const result = BoltConfigSchema.safeParse(merged);
+  if (!result.success) {
+    errors.push(
+      ...result.error.issues.map((issue) => ({
+        path: labelOverridePath(issue.path.join(".") || "<root>", parsed, localOverrides),
+        message: issue.message,
+      })),
+    );
+  }
+  errors.push(
+    ...pluginMetadataErrors(merged).map((e) => ({
+      ...e,
+      path: labelOverridePath(e.path, parsed, localOverrides),
+    })),
+  );
+  for (const ref of unknownProjectRefs(parsed)) {
+    errors.push({
+      path: ref.path,
+      message: `unknown reference \${{ project.${ref.ref} }}: only project.name exists. Use a var instead (bolt migrate rewrites v2.0 project references).`,
+    });
+  }
+
+  const legacy = findLegacyKeys(parsed, localParsed);
+  return { ok: errors.length === 0, errors, legacy };
 }

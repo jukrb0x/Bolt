@@ -1,0 +1,44 @@
+---
+title: "bolt migrate"
+---
+
+Rewrite a bolt v2.0 `bolt.yaml` and `bolt.local.yaml` to the current format.
+
+## Usage
+
+```bash
+bolt migrate [--dry-run] [--force]
+```
+
+## Description
+
+- Adds `version: 1`.
+- Moves `project.engine`, `project.project`, and root `targets` to the `ue` plugin config in `bolt.yaml`. Adds a `ue` plugin entry if there is none.
+- Moves other `project.<key>` strings to `vars.<key>`, and prints a note to replace `${{ project.<key> }}` with `${{ vars.<key> }}`.
+- Moves `engine_path`, `project_path`, and `uproject` to `plugins.ue` in `bolt.local.yaml`, and `use_tortoise` to `plugins.svn` (adding an `svn` plugin entry to `bolt.yaml` if needed).
+- Rewrites `${{ project.engine_repo.path }}`, `${{ project.project_repo.path }}`, and `${{ project.uproject }}` in tasks and flows to `${{ vars.engine_path }}`, `${{ vars.project_path }}`, and `${{ vars.uproject }}`, and sets those vars in `bolt.local.yaml` from the v2.0 values. `${{ project.<key> }}` for a moved key becomes `${{ vars.<key> }}`. Other `${{ project.* }}` references are listed as notes.
+- Only string, number, and boolean `project.<key>` values move to `vars`. Other values stay put and are listed as notes.
+- Values already in the target files win. Existing `plugins` overrides in `bolt.local.yaml` and existing `ue` plugin config in `bolt.yaml` are deep-merged, and every dropped value is listed as a note.
+- Runs `bolt check` on the converted files first. If they would not pass, nothing is written and the errors are printed (use `--force` to write anyway).
+- Copies each original to `<file>.v2.0.bak` (or `.v2.0.bak.N` if that exists), then replaces each file through a temp file and a rename.
+
+YAML comments are not carried over; they remain in the backups. A version 1 config is left alone.
+
+## Options
+
+| Option      | Description                                                   |
+| ----------- | ------------------------------------------------------------- |
+| `--dry-run` | Print the converted files and any check errors; write nothing |
+| `--force`   | Write even if the converted config fails `bolt check`         |
+
+## Exit Codes
+
+| Code | Description                                                                                  |
+| ---- | -------------------------------------------------------------------------------------------- |
+| 0    | Nothing to migrate, dry run printed, or files rewritten and valid                            |
+| 1    | `bolt.yaml` not found, or the converted config has errors (nothing written unless `--force`) |
+
+## See Also
+
+- [bolt check](./check.md)
+- [bolt.yaml Guide](/guides/bolt-yaml.md)

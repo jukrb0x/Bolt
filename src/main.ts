@@ -4,6 +4,7 @@ import runCmd from "./commands/run";
 import listCmd from "./commands/list";
 import infoCmd from "./commands/info";
 import checkCmd from "./commands/check";
+import migrateCmd from "./commands/migrate";
 import versionCmd from "./commands/version";
 import updateCmd, { cleanupInstalledBolt } from "./commands/update";
 import pluginCmd from "./commands/plugin";
@@ -27,6 +28,7 @@ const main = defineCommand({
     list: listCmd,
     info: infoCmd,
     check: checkCmd,
+    migrate: migrateCmd,
     config: configCmd,
     init: initCmd,
     types: typesCmd,

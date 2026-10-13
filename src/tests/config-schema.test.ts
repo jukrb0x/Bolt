@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import path from "path";
 import { parse } from "yaml";
 import { checkConfig } from "../config";
-import { boltConfigJsonSchema } from "../config-schema";
+import { boltConfigJsonSchema, boltLocalConfigJsonSchema } from "../config-schema";
 import { schemaErrors } from "./schema-match";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -211,3 +211,30 @@ for (const document of documents) {
     expect(errors.length === 0).toBe(document.ok);
   });
 }
+
+test("committed bolt.local.yaml schema matches the running bolt", () => {
+  const committed = JSON.parse(
+    readFileSync(path.join(root, "schema/v1/bolt.local.schema.json"), "utf8"),
+  );
+  expect(committed).toEqual(boltLocalConfigJsonSchema());
+});
+
+test("bolt.local.yaml schema accepts plugin overrides and rejects v2.0 keys", () => {
+  const schema = boltLocalConfigJsonSchema();
+  expect(
+    schemaErrors(
+      schema,
+      parse(
+        "vars: { region: eu }\nplugins:\n  ue: { engine: { path: D:/UE } }\n  svn: { use_tortoise: true }\n",
+      ),
+    ),
+  ).toHaveLength(0);
+  expect(schemaErrors(schema, parse("engine_path: D:/UE\n")).length).toBeGreaterThan(0);
+  // A target override may set only some fields; the merge supplies the rest.
+  expect(
+    schemaErrors(schema, parse("plugins:\n  ue: { targets: { editor: { config: debug } } }\n")),
+  ).toHaveLength(0);
+  expect(
+    schemaErrors(schema, parse("plugins: { svn: { use_tortoise: yes-please } }\n")).length,
+  ).toBeGreaterThan(0);
+});
