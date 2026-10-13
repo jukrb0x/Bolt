@@ -93,7 +93,8 @@ export default defineCommand({
     "dry-run": {
       type: "boolean",
       default: false,
-      description: "Print steps and skip run: steps; local actions and plugin handlers still run",
+      description:
+        "Print steps; skips run: steps and local actions, plugin handlers still run with ctx.dryRun",
     },
   },
   async run({ rawArgs }) {
