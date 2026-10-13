@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   self-update:
-    name: windows-latest self-update from v2.1.0
+    name: windows-latest self-update against the published release
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     timeout-minutes: 15
