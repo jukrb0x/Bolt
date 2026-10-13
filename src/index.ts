@@ -12,7 +12,17 @@ export type {
   BoltPlugin,
   BoltPluginHandler,
   BoltPluginContext,
+  BoltPluginContextV2,
   BoltLogger,
+  Artifact,
+  BoltEvent,
+  Capability,
+  Diagnostic,
+  HandlerResult,
+  HandlerStatus,
+  JsonValue,
+  KnownCapability,
+  NextStep,
   HandlerDef,
   HandlerManifest,
   PluginManifest,
@@ -21,4 +31,16 @@ export type {
 } from "./plugin";
 
 // Plugin API. definePlugin returns a plugin object; class plugins use withDescriptor.
-export { PLUGIN_API_VERSION, PluginBase, defineHandler, definePlugin, handler } from "./plugin";
+export {
+  PLUGIN_API_VERSION,
+  SUPPORTED_PLUGIN_API_VERSIONS,
+  PluginBase,
+  createTestContext,
+  defineHandler,
+  definePlugin,
+  fail,
+  handler,
+  ok,
+  skipped,
+  warn,
+} from "./plugin";

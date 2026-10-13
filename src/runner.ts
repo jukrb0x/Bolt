@@ -13,6 +13,20 @@ import path from "path";
 import { existsSync } from "fs";
 import { Notifier, type BuildContext } from "./notify";
 import { formatPlanErrors, resolveRunPlan, type PlanNode, type RunPlan } from "./run-plan";
+import { RunEvents } from "./step-events";
+import { staleAiContextWarning } from "./ai-context";
+import {
+  BoltStepError,
+  validateHandlerResult,
+  type HandlerResult,
+  type StampedEvent,
+} from "./handler-result";
+
+/** Outcome of one plugin step whose plugin declared API v2. */
+export interface StepResult extends HandlerResult {
+  ref: string;
+  step: string;
+}
 
 function parseStepParams(
   plugin: BoltPlugin,
@@ -37,11 +51,16 @@ interface RunnerOptions {
   configDir?: string;
   notifier?: Notifier;
   runtime?: Runtime;
+  /** Every event a handler or hook emits, after core stamps it. */
+  onEvent?: (event: StampedEvent) => void;
+  /** Every validated result returned by a plugin API v2 handler. */
+  onStepResult?: (result: StepResult) => void;
 }
 
 export class Runner {
   private registry?: PluginRegistry;
   private runtime: Runtime;
+  private events: RunEvents;
 
   constructor(
     private cfg: BoltConfig,
@@ -62,6 +81,7 @@ export class Runner {
     } else {
       this.runtime = base;
     }
+    this.events = new RunEvents({ logger: opts.logger, onEvent: opts.onEvent });
   }
 
   private async ensureRegistry(): Promise<PluginRegistry> {
@@ -73,19 +93,27 @@ export class Runner {
       gitPlugin,
       svnPlugin,
     ]);
+    for (const warning of this.registry.warnings) this.opts.logger?.warn(warning);
+    const stale = staleAiContextWarning(this.opts.configDir ?? process.cwd());
+    if (stale) this.opts.logger?.warn(stale);
 
     // Call onInit for any plugins that implement lifecycle hooks
     for (const ns of this.registry.listNamespaces()) {
       const plugin = this.registry.get(ns) as any;
       if (typeof plugin?.onInit === "function") {
-        await plugin.onInit(this.pluginContext());
+        const scope = this.events.scope(ns);
+        try {
+          await plugin.onInit(scope.bind(this.pluginContext()));
+        } finally {
+          scope.settle();
+        }
       }
     }
 
     return this.registry;
   }
 
-  private pluginContext(): BoltPluginContext {
+  private pluginContext(): Omit<BoltPluginContext, "emit"> {
     return {
       cfg: this.cfg,
       configDir: this.opts.configDir ?? process.cwd(),
@@ -171,7 +199,7 @@ export class Runner {
       const taskStart = Date.now();
       this.opts.logger?.step(task.name);
       try {
-        await this.executeNodes(task.nodes);
+        await this.executeNodes(task.nodes, [task.name]);
         const duration = Date.now() - taskStart;
         results.push({ op: task.name, ok: true, duration });
         this.opts.logger?.success(task.name, duration / 1000);
@@ -205,11 +233,11 @@ export class Runner {
     await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
   }
 
-  private async executeNodes(nodes: PlanNode[]): Promise<void> {
+  private async executeNodes(nodes: PlanNode[], trail: string[] = []): Promise<void> {
     for (const node of nodes) {
       if (node.kind === "call") {
         this.opts.onStep?.(`call:${node.name}`);
-        await this.executeNodes(node.nodes);
+        await this.executeNodes(node.nodes, [...trail, node.name]);
         continue;
       }
 
@@ -256,18 +284,75 @@ export class Runner {
       if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
 
       const params = parseStepParams(plugin, node.ref, operation, node.params);
-      const pluginCtx = this.pluginContext();
+      const step = [...trail, node.ref].join(" > ");
+      // One context object per step, shared by the hooks and the handler as before.
+      const scope = this.events.scope(node.ref, step);
+      const pluginCtx = scope.bind(this.pluginContext());
       const pluginInstance = plugin as any;
-      if (typeof pluginInstance.onBeforeStep === "function") {
-        await pluginInstance.onBeforeStep(operation, node.params, pluginCtx);
-      }
+      let returned: unknown;
       try {
-        await handler(params, pluginCtx);
-      } finally {
-        if (typeof pluginInstance.onAfterStep === "function") {
-          await pluginInstance.onAfterStep(operation, node.params, pluginCtx);
+        if (typeof pluginInstance.onBeforeStep === "function") {
+          await pluginInstance.onBeforeStep(operation, node.params, pluginCtx);
         }
+        try {
+          returned = await handler(params, pluginCtx);
+        } finally {
+          if (typeof pluginInstance.onAfterStep === "function") {
+            await pluginInstance.onAfterStep(operation, node.params, pluginCtx);
+          }
+        }
+      } finally {
+        scope.settle();
       }
+      this.handleReturn(plugin, node.ref, step, returned);
+    }
+  }
+
+  /**
+   * Plugin API v1 (and unversioned object plugins): the return value is ignored,
+   * exactly as before. v2: validate it, render it, and fail the step on "fail".
+   * Runs after onAfterStep, so a returned "fail" behaves like a throw.
+   */
+  private handleReturn(plugin: BoltPlugin, ref: string, step: string, returned: unknown): void {
+    const logger = this.opts.logger;
+    if (plugin.apiVersion !== 2) {
+      if (returned !== undefined) {
+        logger?.writeRaw(
+          `[DEBUG] ${ref} (plugin API v1) returned a value; ignored. Declare apiVersion: 2 to report results.\n`,
+        );
+      }
+      return;
+    }
+    const { result, warnings } = validateHandlerResult(returned, ref);
+    for (const warning of warnings) logger?.warn(warning);
+    this.opts.onStepResult?.({ ...result, ref, step });
+
+    if (result.summary) {
+      const line = `${ref}: ${result.status} — ${result.summary}`;
+      if (result.status === "warn") logger?.warn(line);
+      else if (result.status !== "fail") logger?.step_detail(line);
+    }
+    for (const d of result.diagnostics ?? []) {
+      const where = d.file ? ` (${d.file}${d.line !== undefined ? `:${d.line}` : ""})` : "";
+      const text = `${ref}: ${d.code ? `${d.code}: ` : ""}${d.message}${where}${d.fix ? ` Fix: ${d.fix}` : ""}`;
+      if (d.level === "error") logger?.error(text);
+      else if (d.level === "warn") logger?.warn(text);
+      else logger?.info(text);
+    }
+    for (const n of result.next ?? []) {
+      logger?.step_detail(`next: ${n.ref}${n.reason ? ` — ${n.reason}` : ""}`);
+    }
+
+    if (result.status === "fail") {
+      const reason =
+        result.summary ?? result.diagnostics?.find((d) => d.level === "error")?.message;
+      throw new BoltStepError(
+        "HANDLER_FAILED",
+        reason
+          ? `${ref} returned status "fail": ${reason}`
+          : `${ref} returned status "fail" without summary`,
+        result.diagnostics ?? [],
+      );
     }
   }
 
