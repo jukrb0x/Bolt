@@ -47,15 +47,15 @@ const ctx = createContext({
 
 ### `run(taskName, opts)`
 
-| Option       | Type                     | Description                                              |
-| ------------ | ------------------------ | -------------------------------------------------------- |
-| `config`     | `BoltConfig`             | Pre-loaded config (mutually exclusive with `configPath`) |
-| `configPath` | `string`                 | Path to `bolt.yaml`                                      |
-| `cwd`        | `string`                 | Working directory for config discovery                   |
-| `dryRun`     | `boolean`                | Skip actual execution                                    |
-| `params`     | `Record<string, string>` | Params applied to every step (override `with:`)          |
-| `logger`     | `Logger`                 | Custom logger                                            |
-| `runtime`    | `Runtime`                | Custom runtime                                           |
+| Option       | Type                     | Description                                                                                                                                                             |
+| ------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`     | `BoltConfig`             | Pre-loaded config (mutually exclusive with `configPath`)                                                                                                                |
+| `configPath` | `string`                 | Path to `bolt.yaml`                                                                                                                                                     |
+| `cwd`        | `string`                 | Working directory for config discovery                                                                                                                                  |
+| `dryRun`     | `boolean`                | Skip `run:` steps and local actions; plugins still load and hooks and handlers run with `ctx.dryRun = true`, like `--simulate` (a pure dry run is tracked as BOLT-DX-3) |
+| `params`     | `Record<string, string>` | Params applied to every step (override `with:`)                                                                                                                         |
+| `logger`     | `Logger`                 | Custom logger                                                                                                                                                           |
+| `runtime`    | `Runtime`                | Custom runtime                                                                                                                                                          |
 
 ## Direct Plugin Access
 
