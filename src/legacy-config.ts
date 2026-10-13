@@ -10,7 +10,20 @@
  * override plugin config by namespace under `plugins`, and only has `project.name`.
  */
 
+import path from "path";
+
 type Obj = Record<string, unknown>;
+
+/**
+ * v2.0 resolved engine_path, project_path, and uproject against the bolt.yaml
+ * directory before tasks saw them, so the vars that replace those references
+ * get the same absolute value. Windows drive paths count as absolute on any OS.
+ */
+export function resolveLegacyPath(value: unknown, configDir: string | undefined): string {
+  const text = String(value);
+  if (!configDir || path.isAbsolute(text) || path.win32.isAbsolute(text)) return text;
+  return path.resolve(configDir, text);
+}
 
 const LEGACY_LOCAL_KEYS = ["engine_path", "project_path", "uproject", "use_tortoise"] as const;
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -165,7 +178,11 @@ function findPlugin(plugins: unknown[], namespace: string): Obj | undefined {
  * under `plugins.<namespace>`. Values already present in the target win. Inputs are
  * not modified.
  */
-export function migrateLegacyConfig(sharedIn: unknown, localIn: unknown): MigrationResult {
+export function migrateLegacyConfig(
+  sharedIn: unknown,
+  localIn: unknown,
+  configDir?: string,
+): MigrationResult {
   const findings = findLegacyKeys(sharedIn, localIn);
   const shared: Obj = isObj(sharedIn) ? structuredClone(sharedIn) : {};
   const local: Obj | undefined = isObj(localIn) ? structuredClone(localIn) : undefined;
@@ -276,7 +293,7 @@ export function migrateLegacyConfig(sharedIn: unknown, localIn: unknown): Migrat
       "",
       (at, kept, dropped) =>
         notes.push(
-          `bolt.yaml plugins[ue].config.${at} already set to ${JSON.stringify(kept)}; dropped v2.0 value ${JSON.stringify(dropped)}.`,
+          `bolt.yaml plugins[ue].config.${at}: kept the existing ${JSON.stringify(kept)}; the v2.0 value ${JSON.stringify(dropped)} was not written.`,
         ),
     ) as Obj | undefined;
     if (merged && Object.keys(merged).length > 0) ue.config = merged;
@@ -291,8 +308,9 @@ export function migrateLegacyConfig(sharedIn: unknown, localIn: unknown): Migrat
   if (Object.keys(svnLocal).length > 0) localPlugins.svn = svnLocal;
   const localVarsNeeded: Obj = {};
   for (const name of neededLocalVars) {
-    if (localVars[name] !== undefined) localVarsNeeded[name] = String(localVars[name]);
-    else
+    if (localVars[name] !== undefined) {
+      localVarsNeeded[name] = resolveLegacyPath(localVars[name], configDir);
+    } else
       notes.push(
         `tasks used the v2.0 ${name} value, now \${{ vars.${name} }}; set vars.${name} in bolt.local.yaml.`,
       );
@@ -302,7 +320,7 @@ export function migrateLegacyConfig(sharedIn: unknown, localIn: unknown): Migrat
     outLocal = outLocal ?? {};
     const conflict = (at: string, kept: unknown, dropped: unknown) =>
       notes.push(
-        `bolt.local.yaml ${at} already set to ${JSON.stringify(kept)}; dropped v2.0 value ${JSON.stringify(dropped)}.`,
+        `bolt.local.yaml ${at}: kept the existing ${JSON.stringify(kept)}; the v2.0 value ${JSON.stringify(dropped)} was not written.`,
       );
     if (Object.keys(localVarsNeeded).length > 0) {
       outLocal.vars = mergeKeepExisting(outLocal.vars, localVarsNeeded, "vars", conflict);
