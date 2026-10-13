@@ -65,7 +65,7 @@
             "targets": {
               "type": "object",
               "additionalProperties": {
-                "$ref": "#/$defs/ueTarget"
+                "$ref": "#/$defs/partialUeTarget"
               }
             }
           }
@@ -86,10 +86,9 @@
     }
   },
   "$defs": {
-    "ueTarget": {
+    "partialUeTarget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind"],
       "properties": {
         "kind": {
           "type": "string",

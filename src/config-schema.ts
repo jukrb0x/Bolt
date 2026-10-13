@@ -264,7 +264,7 @@ const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
             uproject: { type: "string", minLength: 1 },
             targets: {
               type: "object",
-              additionalProperties: { $ref: "#/$defs/ueTarget" },
+              additionalProperties: { $ref: "#/$defs/partialUeTarget" },
             },
           },
         },
@@ -273,7 +273,14 @@ const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
       additionalProperties: { type: "object" },
     },
   },
-  $defs: { ueTarget },
+  $defs: {
+    // Merged over the bolt.yaml target, so every field is optional here.
+    partialUeTarget: {
+      type: "object",
+      additionalProperties: false,
+      properties: ueTarget.properties,
+    },
+  },
 };
 
 export function boltLocalConfigJsonSchema(): Record<string, unknown> {

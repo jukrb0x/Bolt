@@ -230,6 +230,10 @@ test("bolt.local.yaml schema accepts plugin overrides and rejects v2.0 keys", ()
     ),
   ).toHaveLength(0);
   expect(schemaErrors(schema, parse("engine_path: D:/UE\n")).length).toBeGreaterThan(0);
+  // A target override may set only some fields; the merge supplies the rest.
+  expect(
+    schemaErrors(schema, parse("plugins:\n  ue: { targets: { editor: { config: debug } } }\n")),
+  ).toHaveLength(0);
   expect(
     schemaErrors(schema, parse("plugins: { svn: { use_tortoise: yes-please } }\n")).length,
   ).toBeGreaterThan(0);

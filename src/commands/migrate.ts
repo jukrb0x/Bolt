@@ -1,5 +1,14 @@
 import { defineCommand } from "citty";
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
+import { tmpdir } from "os";
 import path from "path";
 import pc from "picocolors";
 import { stringify } from "yaml";
@@ -34,8 +43,33 @@ export function planMigration(configPath: string): MigrationPlan {
   };
 }
 
+/** Run bolt check on the planned text in a scratch directory. Nothing is written next to bolt.yaml. */
+export async function validatePlan(plan: MigrationPlan) {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-migrate-"));
+  try {
+    writeFileSync(path.join(dir, "bolt.yaml"), plan.sharedText);
+    if (plan.localText !== undefined)
+      writeFileSync(path.join(dir, "bolt.local.yaml"), plan.localText);
+    return await checkConfig(path.join(dir, "bolt.yaml"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Write via a temp file in the same directory, then rename over the target. */
+function writeAtomic(file: string, text: string): void {
+  const tmp = `${file}.migrate-${process.pid}.tmp`;
+  writeFileSync(tmp, text);
+  try {
+    renameSync(tmp, file);
+  } catch (e) {
+    rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
 /** A backup path next to `file` that does not exist yet. */
-function backupPath(file: string): string {
+export function backupPath(file: string): string {
   let candidate = `${file}.v2.0.bak`;
   for (let i = 1; existsSync(candidate); i++) candidate = `${file}.v2.0.bak.${i}`;
   return candidate;
@@ -51,6 +85,11 @@ export default defineCommand({
       description: "Print the rewritten files without writing them",
       default: false,
     },
+    force: {
+      type: "boolean",
+      description: "Write the files even if the converted config does not pass bolt check",
+      default: false,
+    },
   },
   async run({ args }) {
     const configPath = await findConfig(process.cwd());
@@ -64,6 +103,12 @@ export default defineCommand({
       return;
     }
 
+    const printErrors = (errors: Array<{ path: string; message: string }>) => {
+      for (const err of errors)
+        console.log(`  ${pc.cyan(err.path.padEnd(36))}${pc.red(err.message)}`);
+    };
+    const checked = await validatePlan(plan);
+
     if (args["dry-run"]) {
       console.log(pc.bold(`# ${plan.sharedPath}`));
       console.log(plan.sharedText);
@@ -72,38 +117,63 @@ export default defineCommand({
         console.log(plan.localText);
       }
       for (const note of plan.notes) console.log(pc.yellow(`note: ${note}`));
+      if (!checked.ok) {
+        console.log(
+          pc.red(`\nThe converted config would still have ${checked.errors.length} error(s):\n`),
+        );
+        printErrors(checked.errors);
+      }
       console.log(pc.dim("Dry run: no files written."));
       return;
     }
 
+    if (!checked.ok && !args.force) {
+      console.log(
+        pc.red(
+          `✗ The converted config would have ${checked.errors.length} error(s). No files were written:\n`,
+        ),
+      );
+      printErrors(checked.errors);
+      for (const note of plan.notes) console.log(pc.yellow(`note: ${note}`));
+      console.log(
+        pc.dim(
+          "\nFix bolt.yaml or bolt.local.yaml and run bolt migrate again, or pass --force to write anyway.",
+        ),
+      );
+      process.exit(1);
+    }
+
+    // Back up both files first, then replace each one with a rename.
     const sharedBackup = backupPath(plan.sharedPath);
     copyFileSync(plan.sharedPath, sharedBackup);
-    writeFileSync(plan.sharedPath, plan.sharedText);
+    let localBackup: string | undefined;
+    if (plan.localText !== undefined && existsSync(plan.localPath)) {
+      localBackup = backupPath(plan.localPath);
+      copyFileSync(plan.localPath, localBackup);
+    }
+    writeAtomic(plan.sharedPath, plan.sharedText);
     console.log(`Rewrote ${plan.sharedPath} (backup: ${sharedBackup})`);
     if (plan.localText !== undefined) {
-      if (existsSync(plan.localPath)) {
-        const localBackup = backupPath(plan.localPath);
-        copyFileSync(plan.localPath, localBackup);
-        console.log(`Rewrote ${plan.localPath} (backup: ${localBackup})`);
-      } else {
-        console.log(`Wrote ${plan.localPath}`);
-      }
-      writeFileSync(plan.localPath, plan.localText);
+      writeAtomic(plan.localPath, plan.localText);
+      console.log(
+        localBackup
+          ? `Rewrote ${plan.localPath} (backup: ${localBackup})`
+          : `Wrote ${plan.localPath}`,
+      );
     }
     for (const note of plan.notes) console.log(pc.yellow(`note: ${note}`));
     console.log(pc.dim("YAML comments are not carried over. They are still in the backup."));
 
-    const result = await checkConfig(plan.sharedPath);
-    if (result.ok) {
+    if (checked.ok) {
       console.log(pc.green("✓ bolt.yaml is valid"));
       return;
     }
     console.log(
-      pc.red(`✗ bolt.yaml still has ${result.errors.length} error(s) after migration:\n`),
+      pc.red(
+        `✗ bolt.yaml still has ${checked.errors.length} error(s) (written because of --force):\n`,
+      ),
     );
-    for (const err of result.errors) {
-      console.log(`  ${pc.cyan(err.path.padEnd(36))}${pc.red(err.message)}`);
-    }
+    printErrors(checked.errors);
     process.exit(1);
   },
 });
