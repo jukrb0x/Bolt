@@ -59,7 +59,7 @@ Core `bolt.yaml` stays `version: 1` with `project.name`. Unreal `targets` belong
 
 `with:` values are interpolated, then overridden by `--key=value` on `bolt run`. `defineHandler` params are checked before the function runs.
 
-`ctx.dryRun` is true for `--dry-run`. `ctx.cfg.project` is `{ name }`. The name string is `ctx.cfg.project.name`. Plugin metadata, including Unreal paths, is on `ctx.cfg.plugins`. `ctx.configDir` is the `bolt.yaml` directory. `ctx.logger` is `info`, `warn`, `error`, `debug`, and `cmd`. `ctx.runtime` spawns processes.
+`ctx.dryRun` is true for `--simulate`. With `--dry-run` plugins are not loaded at all. `ctx.cfg.project` is `{ name }`. The name string is `ctx.cfg.project.name`. Plugin metadata, including Unreal paths, is on `ctx.cfg.plugins`. `ctx.configDir` is the `bolt.yaml` directory. `ctx.logger` is `info`, `warn`, `error`, `debug`, and `cmd`. `ctx.runtime` spawns processes.
 
 ## Built-in plugins
 

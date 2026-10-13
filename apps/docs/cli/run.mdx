@@ -8,7 +8,7 @@ Run tasks (in the order you type) or a single flow defined in `bolt.yaml`.
 ## Usage
 
 ```bash
-bolt run <name...> [--dry-run] [--key=value ...] [-- key=value ...]
+bolt run <name...> [--dry-run | --simulate] [--key=value ...] [-- key=value ...]
 ```
 
 ## Description
@@ -58,14 +58,16 @@ any step runs:
   are allowed before it. A help flag wins (`bolt --help --version` shows help);
   otherwise `--version` must be used on its own (`bolt --version`) and takes no value.
 - Reserved names: `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`,
-  `confirmed-by-user`. Only `--dry-run` is implemented; the others fail with
+  `confirmed-by-user`. Only `--dry-run` and `--simulate` are implemented; the others fail with
   `--<name> is reserved by bolt and not supported yet`. None of them can be used
   as a param name, neither as `--name=value` nor as `name=value` after `--`;
   the error tells you to rename the param, e.g. `plan` → `my_plan` in
   `bolt.yaml`, then pass `-- my_plan=x`. Valued forms such as `--json=v1` or
   `--plan=<hash>` also report that the flag is not supported yet. Reserved names
   are case-sensitive: `--PLAN=x` is an ordinary param.
-- `--dry-run=false` and `-- dry-run=false`: to run for real, just remove `--dry-run`.
+- `--dry-run=false` and `-- dry-run=false`: to run for real, just remove `--dry-run`
+  (the same for `--simulate`).
+- `--dry-run` together with `--simulate`.
 - `help` with a value (in addition to the 7 reserved names above, handled
   separately): `--help=<value>` fails with `--help takes no value. Use: bolt run --help`,
   and `-- help=<value>` fails with `"help" cannot be used as a param name`. Both
@@ -98,13 +100,76 @@ bolt run build -- extra=--verbose
 For tool flags that never change, prefer putting them in `bolt.yaml`
 (`with:` or `vars`) instead of the command line.
 
+## Dry run and simulate
+
+`--dry-run` is a static preview. Bolt reads `bolt.yaml`, resolves the plan exactly
+like [`bolt inspect`](/cli/inspect), and prints each step as `would run …`. Nothing
+is executed:
+
+- no `run:` commands, local actions, or child processes (not even `git` for notifications);
+- no plugin is imported or compiled, `bun install` never runs, and no `onInit`,
+  `onBeforeStep`, `onAfterStep`, or handler is called;
+- no files are written: no `.bolt/` directory, no `.bolt/.cache`, no log file.
+
+```text
+$ bolt run build ship --dry-run
+Dry run: showing what would run. Nothing is executed.
+Config: /path/to/bolt.yaml
+Tasks: build ship
+
+>> build
+  would run uses: ue/build  target=editor
+    -> built-in plugin ue: handler not called in dry-run
+>> ship
+  would run uses: ./actions/upload  bucket=nightly
+    -> local action: would execute ./actions/upload/run.sh with BOLT_INPUT_BUCKET=nightly
+  would run uses: deploy/push
+    -> project plugin .bolt/plugins/deploy: not loaded in dry-run, handler and params not checked
+
+Dry run complete.
+Nothing was executed: no commands, plugins, hooks, or handlers ran, and no files were written.
+To preview with plugin dry-run logic, hooks, and a log file, use --simulate.
+```
+
+What a dry run can check statically:
+
+- every name, `call:` target, and interpolated value (`${{ params.* }}`, `vars`, `env`);
+- built-in plugin handlers (`ue`, `fs`, `json`, `git`, `svn`) and their params;
+- that a local action has an `action.yaml` and a run script;
+- where a project or user plugin would be loaded from.
+
+What it cannot show: the exact command a handler would build (for example the
+`Build.bat` line from `ue/build`), and whether a project or user plugin accepts its
+params. Use `--simulate` for that. Problems a real run would hit are marked with `!`
+and the dry run exits `1`.
+
+`--simulate` loads plugins and runs their hooks and handlers with `ctx.dryRun = true`.
+Handlers that honor `ctx.dryRun` log what they would do instead of doing it.
+`run:` steps and local actions are skipped. Simulate writes a log file under
+`.bolt/logs/`, may compile project plugins into `.bolt/.cache` or run `bun install`,
+and a plugin can still have side effects. Notifications are not sent.
+`--dry-run` and `--simulate` cannot be combined.
+
+## Exit codes
+
+| Code | Meaning                                                                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0`  | Success (a dry run with no problems)                                                                                                                               |
+| `1`  | Task failure, or a dry run found a problem a real run would hit                                                                                                    |
+| `2`  | Usage error: unknown flag, command, task, or flow; malformed param; no task given                                                                                  |
+| `3`  | Config error: `bolt.yaml` missing, unparseable, failing the schema, or an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref) |
+| `4`  | Permission denied reading `bolt.yaml`                                                                                                                              |
+
+Config errors are reported before anything runs and before a log file is created.
+
 ## Options
 
-| Flag               | Default | Description                                                                                                                                 |
-| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--dry-run`        | `false` | Print the steps. Skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`) |
-| `--<key>=<value>`  | -       | Pass a param to the whole run (overrides `with:`)                                                                                           |
-| `-- <key>=<value>` | -       | Params after `--`; values may start with `--`                                                                                               |
+| Flag               | Default | Description                                        |
+| ------------------ | ------- | -------------------------------------------------- |
+| `--dry-run`        | `false` | Show what would run; runs nothing, writes nothing  |
+| `--simulate`       | `false` | Run plugins in dry-run mode; may have side effects |
+| `--<key>=<value>`  | -       | Pass a param to the whole run (overrides `with:`)  |
+| `-- <key>=<value>` | -       | Params after `--`; values may start with `--`      |
 
 ## Arguments
 
@@ -127,8 +192,11 @@ bolt run build --target=client
 # Build a specific configuration (shorthand)
 bolt run build --config=dbg
 
-# Print the steps (plugin handlers and local actions still run; see bolt inspect for a pure preview)
+# Preview the resolved steps without executing anything
 bolt run update build --dry-run
+
+# Let plugins show what they would do (hooks run, a log file is written)
+bolt run update build --simulate
 ```
 
 ## Defining Tasks and Flows
