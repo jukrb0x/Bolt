@@ -355,9 +355,31 @@ try {
   Copy-Item -LiteralPath $currentExe -Destination $linkTarget -Force
   New-Item -ItemType SymbolicLink -Path (Join-Path $linkDir "bolt.exe") -Target $linkTarget | Out-Null
   $out = Invoke-Install "$PublicBase/newer" ("$linkDir;" + (Get-FreshPath))
-  if ($out -notmatch "reparse point") { throw "install.ps1 did not skip the symlinked bolt.exe" }
+  if ($out -notmatch "symlink or junction") { throw "install.ps1 did not skip the symlinked bolt.exe" }
   if ((Get-Sha256 $linkTarget) -ne $currentHash) { throw "install.ps1 wrote through the symlink" }
   Write-Host "symlinked bolt.exe skipped"
+
+  # A real bolt.exe reached through a junctioned ancestor directory is not replaced in place.
+  $junctionTarget = Join-Path $ScratchRoot "junction-target"
+  New-Item -ItemType Directory -Force -Path (Join-Path $junctionTarget "bin") | Out-Null
+  $junctionExe = Join-Path $junctionTarget "bin\bolt.exe"
+  Copy-Item -LiteralPath $currentExe -Destination $junctionExe -Force
+  $junction = Join-Path $ScratchRoot "junction"
+  New-Item -ItemType Junction -Path $junction -Target $junctionTarget | Out-Null
+  $out = Invoke-Install "$PublicBase/newer" ((Join-Path $junction "bin") + ";" + (Get-FreshPath))
+  if ($out -notmatch "symlink or junction") { throw "install.ps1 did not skip the bolt.exe under a junction" }
+  if ((Get-Sha256 $junctionExe) -ne $currentHash) { throw "install.ps1 wrote through the junction" }
+  Write-Host "bolt.exe under a junction skipped"
+
+  # Constrained Language Mode: stop early with a clear message.
+  $clmScript = Join-Path $ScratchRoot "clm.ps1"
+  $installText = Join-Path $Root "install.ps1"
+  [System.IO.File]::WriteAllText($clmScript, "`$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'`nInvoke-Expression (Get-Content -Raw -LiteralPath '$installText')`n")
+  $clmOut = (& $HostExe -NoProfile -ExecutionPolicy Bypass -File $clmScript 2>&1 | Out-String) -replace '\s+', ' '
+  Write-Host $clmOut
+  if ($LASTEXITCODE -eq 0) { throw "install.ps1 succeeded in Constrained Language Mode" }
+  if ($clmOut -notmatch "needs PowerShell FullLanguage mode") { throw "install.ps1 did not explain Constrained Language Mode" }
+  Write-Host "Constrained Language Mode reported"
 
   $raw = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
   if ($raw.Value -cne $wantRaw -or $raw.Kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) {

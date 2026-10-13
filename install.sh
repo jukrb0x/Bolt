@@ -58,12 +58,29 @@ norm_dir() {
   (cd "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1" | sed 's:/*$::'
 }
 
-# Run "<bolt> version" with a timeout when timeout(1) exists. stderr is discarded.
+# Run "<bolt> version" with a timeout. stderr is discarded. Uses timeout(1) or
+# gtimeout (Homebrew coreutils on macOS), else a background job that is killed.
+PROBE_TIMEOUT="${BOLT_INSTALL_PROBE_TIMEOUT:-15}"
 probe_version() {
   if command -v timeout >/dev/null 2>&1; then
-    timeout 15 "$1" version 2>/dev/null
+    timeout "$PROBE_TIMEOUT" "$1" version 2>/dev/null
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$PROBE_TIMEOUT" "$1" version 2>/dev/null
   else
-    "$1" version 2>/dev/null
+    probe_out=$(mktemp)
+    "$1" version >"$probe_out" 2>/dev/null &
+    probe_pid=$!
+    (
+      sleep "$PROBE_TIMEOUT"
+      kill -9 "$probe_pid" 2>/dev/null
+    ) >/dev/null 2>&1 &
+    probe_watch=$!
+    probe_status=0
+    wait "$probe_pid" || probe_status=$?
+    kill "$probe_watch" 2>/dev/null || true
+    if [ "$probe_status" -eq 0 ]; then cat "$probe_out"; fi
+    rm -f "$probe_out"
+    return "$probe_status"
   fi
 }
 
@@ -187,7 +204,9 @@ if [ "$(norm_dir "$DEST")" = "$(norm_dir "$DEFAULT_DEST")" ]; then
       ;;
   esac
   if [ -n "$SHELL_RC" ]; then
-    if ! grep -Fx "$PATH_LINE" "$SHELL_RC" >/dev/null 2>&1; then
+    # Accept our exact line or any uncommented line that already mentions .bolt/bin.
+    if ! grep -Fx "$PATH_LINE" "$SHELL_RC" >/dev/null 2>&1 &&
+      ! grep -E '^[[:space:]]*[^#[:space:]][^#]*\.bolt/bin' "$SHELL_RC" >/dev/null 2>&1; then
       printf '\n%s\n' "$PATH_LINE" >>"$SHELL_RC"
       echo "Added ~/.bolt/bin to PATH in $SHELL_RC"
     fi
@@ -198,7 +217,12 @@ if [ "$(norm_dir "$DEST")" = "$(norm_dir "$DEFAULT_DEST")" ]; then
 fi
 
 # Another bolt earlier on PATH would still win. Say so instead of failing silently.
-resolved=$(command -v bolt 2>/dev/null || true)
+# When the rc file has our PATH line, new shells put ~/.bolt/bin first, so check that PATH.
+check_path="$PATH"
+if [ -n "$SHELL_RC" ]; then
+  check_path="${DEST}:${PATH}"
+fi
+resolved=$(PATH="$check_path" command -v bolt 2>/dev/null || true)
 case "$resolved" in
   /*)
     if [ "$(norm_dir "$(dirname "$resolved")")/$(basename "$resolved")" != "$(norm_dir "$DEST")/bolt" ]; then

@@ -14,6 +14,8 @@ Windows x64 only. A native Windows ARM64 build is not published; the script stop
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
+The script needs PowerShell FullLanguage mode. In Constrained Language Mode it stops with a message; download `bolt-win-x64.exe` from the release page instead.
+
 Open a new terminal. The script adds `%USERPROFILE%\.bolt\bin` to the front of your user Path, and the terminal you already have open does not see that change. It edits the raw registry value, so entries such as `%USERPROFILE%\tools` keep their `%VAR%` text and the value stays `REG_EXPAND_SZ`. Other entries are left as written. If the directory is already first, the Path is not rewritten.
 
 |               |                                    |
@@ -24,7 +26,7 @@ Open a new terminal. The script adds `%USERPROFILE%\.bolt\bin` to the front of y
 
 Re-running the script renames a running `bolt.exe` to `bolt.exe.old` before writing the new file.
 
-To detect an existing install, the script runs the `bolt.exe` it finds on your PATH as `bolt version` (with a 15 second timeout). If that prints a bolt version, the script updates that file in place and does not touch your user Path. Copies that are symlinks, junctions, or other reparse points, copies in a directory you cannot write, and copies under npm, winget, scoop, or chocolatey are skipped, and the script installs to `%USERPROFILE%\.bolt\bin`. Update package-manager copies with their manager.
+To detect an existing install, the script runs the `bolt.exe` it finds on your PATH as `bolt version` (with a 15 second timeout). If that prints a bolt version, the script updates that file in place and does not touch your user Path. Copies that are symlinks or junctions, or sit under a symlinked or junctioned directory, copies in a directory you cannot write, and copies under npm, winget, scoop, or chocolatey are skipped, and the script installs to `%USERPROFILE%\.bolt\bin`. Update package-manager copies with their manager.
 
 Windows puts the system Path before the user Path. If a `bolt` in a system Path directory (or earlier in your user Path) would still run in a new terminal, the script prints a warning naming it. Remove that copy or move `%USERPROFILE%\.bolt\bin` ahead of it.
 
@@ -36,11 +38,11 @@ Bolt v2.1.0 to v2.1.2 installed to `%LOCALAPPDATA%\bolt\bin`. If that directory 
 curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
 
-Open a new shell, then run `bolt version`. The script appends `export PATH="$HOME/.bolt/bin:$PATH"` to `~/.zshrc` (zsh), `~/.bashrc` (bash on Linux), or the first of `~/.bash_profile`, `~/.bash_login`, `~/.profile` (bash on macOS, where Terminal starts login shells; `~/.bash_profile` is created if none exist). Other shells get `~/.zshrc`, `~/.bashrc`, or `~/.profile`, whichever exists first. The line is added only if that exact line is not already in the file.
+Open a new shell, then run `bolt version`. The script appends `export PATH="$HOME/.bolt/bin:$PATH"` to `~/.zshrc` (zsh), `~/.bashrc` (bash on Linux), or the first of `~/.bash_profile`, `~/.bash_login`, `~/.profile` (bash on macOS, where Terminal starts login shells; `~/.bash_profile` is created if none exist). Other shells get `~/.zshrc`, `~/.bashrc`, or `~/.profile`, whichever exists first. The line is added only if the file has neither that exact line nor another uncommented line that mentions `.bolt/bin`.
 
-To detect an existing install, the script runs the `bolt` it finds on your PATH as `bolt version` (with a 15 second timeout when `timeout` is available). If that prints a bolt version, the script updates that file in place and leaves your shell profile alone. Symlinks, unwritable directories, and npm, Homebrew, or chocolatey copies are skipped, and the script installs to `~/.bolt/bin` instead.
+To detect an existing install, the script runs the `bolt` it finds on your PATH as `bolt version` (with a 15 second timeout, using `timeout`, `gtimeout`, or a background job). If that prints a bolt version, the script updates that file in place and leaves your shell profile alone. Symlinks, unwritable directories, and npm, Homebrew, or chocolatey copies are skipped, and the script installs to `~/.bolt/bin` instead.
 
-If another `bolt` comes earlier on your current PATH than the installed one, the script prints a warning naming it. Remove it or put the install directory ahead of it.
+If another `bolt` would still run first (in a new shell when the script wrote or found the PATH line, otherwise on your current PATH), the script prints a warning naming it. Remove it or put the install directory ahead of it.
 
 | Machine                 | Release asset    | Installed path     |
 | ----------------------- | ---------------- | ------------------ |

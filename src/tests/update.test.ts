@@ -438,7 +438,8 @@ runInstallSh("install.sh ignores a bolt on PATH that is not a bolt binary", () =
     expect(res.status).toBe(0);
     expect(readFileSync(path.join(custom, "bolt"), "utf8")).toContain("some other tool");
     expect(readFileSync(path.join(home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
-    expect(res.out).toContain("Warning: bolt on your PATH is");
+    // The rc line puts ~/.bolt/bin first in new shells, so the fake bolt is not reported.
+    expect(res.out).not.toContain("Warning:");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -559,7 +560,8 @@ runInstallSh("install.sh appends its PATH line unless that exact line is present
 
 test("install.sh probes an existing bolt with a timeout and skips chocolatey copies", () => {
   const text = readFileSync("install.sh", "utf8");
-  expect(text).toContain('timeout 15 "$1" version');
+  expect(text).toContain('timeout "$PROBE_TIMEOUT" "$1" version');
+  expect(text).toContain("gtimeout");
   expect(text).toContain("*/chocolatey/*");
 });
 
@@ -570,6 +572,94 @@ test("install.ps1 keeps raw user Path text and broadcasts the change", () => {
   expect(text).toContain("SendMessageTimeout");
   expect(text).not.toContain("SetEnvironmentVariable('Path'");
   expect(text).toContain("/chocolatey/");
-  expect(text).toContain("ReparsePoint");
+  expect(text).toContain("LinkType -eq 'Junction'");
+  expect(text).toContain("FullLanguage");
+  expect(text).toContain("Kill($true)");
   expect(text).toContain("WaitForExit($TimeoutMs)");
 });
+
+runInstallSh("install.sh warns about an earlier bolt when it cannot edit a shell profile", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+  try {
+    const home = path.join(root, "home");
+    mkdirSync(home);
+    const other = fakeBolt(path.join(root, "other"), "echo 'some other tool'");
+    const res = runInstall(home, fakeRelease(root, "9.9.9"), [path.dirname(other)], "/bin/fish");
+    expect(res.status).toBe(0);
+    expect(res.out).toContain("Add this to your shell profile");
+    expect(res.out).toContain(`Warning: bolt on your PATH is ${other}`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+runInstallSh("install.sh accepts a hand-edited .bolt/bin PATH line", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+  try {
+    const home = path.join(root, "home");
+    mkdirSync(home);
+    const rc = path.join(home, ".bashrc");
+    const custom = 'export PATH="$PATH:$HOME/.bolt/bin" # mine\n';
+    writeFileSync(rc, custom);
+    expect(runInstall(home, fakeRelease(root, "9.9.9"), []).status).toBe(0);
+    expect(readFileSync(rc, "utf8")).toBe(custom);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+runInstallSh(
+  "install.sh kills a hanging bolt without timeout(1)",
+  () => {
+    const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+    try {
+      const home = path.join(root, "home");
+      mkdirSync(home);
+      // A PATH with the tools install.sh needs but no timeout or gtimeout.
+      const tools = path.join(root, "tools");
+      mkdirSync(tools);
+      for (const t of [
+        "sh",
+        "uname",
+        "dirname",
+        "basename",
+        "mkdir",
+        "mktemp",
+        "rm",
+        "curl",
+        "awk",
+        "tr",
+        "sha256sum",
+        "cp",
+        "chmod",
+        "mv",
+        "sed",
+        "cat",
+        "grep",
+        "sleep",
+      ]) {
+        const found = Bun.which(t, { PATH: "/usr/bin:/bin" });
+        if (found) symlinkSync(found, path.join(tools, t));
+      }
+      const hang = fakeBolt(path.join(root, "hang"), "sleep 30\necho 2.0.0");
+      const started = Date.now();
+      const result = Bun.spawnSync(["sh", path.resolve("install.sh")], {
+        env: {
+          HOME: home,
+          SHELL: "/bin/bash",
+          PATH: [path.dirname(hang), tools].join(":"),
+          BOLT_INSTALL_BASE: fakeRelease(root, "9.9.9"),
+          BOLT_INSTALL_PROBE_TIMEOUT: "1",
+        },
+      });
+      const out = result.stdout.toString() + result.stderr.toString();
+      expect(result.exitCode).toBe(0);
+      expect(Date.now() - started).toBeLessThan(20000);
+      expect(out).toContain("did not print a bolt version");
+      expect(readFileSync(path.join(home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+  30000,
+);

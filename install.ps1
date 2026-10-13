@@ -5,6 +5,14 @@
 # Re-running this script renames a running bolt.exe aside before replacing it.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# Registry, .NET, and Win32 calls below need FullLanguage. Constrained Language Mode
+# (AppLocker/WDAC) blocks them, so stop with a clear message instead of failing halfway.
+if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
+  throw ("install.ps1 needs PowerShell FullLanguage mode, but this session is in " +
+    "$($ExecutionContext.SessionState.LanguageMode). Download bolt-win-x64.exe and SHA256SUMS from " +
+    "https://github.com/jukrb0x/Bolt/releases/latest, check the hash, save it as " +
+    "%USERPROFILE%\.bolt\bin\bolt.exe, and add that directory to your user Path.")
+}
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $Repo = 'jukrb0x/Bolt'
@@ -72,7 +80,13 @@ function Invoke-VersionProbe([string]$Exe, [int]$TimeoutMs = 15000) {
     $stdout = $proc.StandardOutput.ReadToEndAsync()
     $null = $proc.StandardError.ReadToEndAsync()
     if (-not $proc.WaitForExit($TimeoutMs)) {
-      try { $proc.Kill() } catch { }
+      # Kill the whole tree so a child of the probed exe cannot keep running.
+      try {
+        if ($PSVersionTable.PSVersion.Major -ge 7) { $proc.Kill($true) }
+        else { & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null }
+      } catch {
+        try { $proc.Kill() } catch { }
+      }
       return $null
     }
     $proc.WaitForExit()
@@ -84,13 +98,20 @@ function Invoke-VersionProbe([string]$Exe, [int]$TimeoutMs = 15000) {
   }
 }
 
-function Test-ReparsePoint([string]$Path) {
-  try {
-    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-    return [bool]($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)
-  } catch {
-    return $false
+# True for a symlink or junction at $Path or any ancestor directory. Other reparse
+# points (OneDrive placeholders, dedup) are normal files and do not count.
+function Test-LinkedPath([string]$Path) {
+  $cur = $Path
+  while ($cur) {
+    try {
+      $item = Get-Item -LiteralPath $cur -Force -ErrorAction Stop
+      if ($item.LinkType -eq 'SymbolicLink' -or $item.LinkType -eq 'Junction') { return $true }
+    } catch { }
+    $parent = [System.IO.Path]::GetDirectoryName($cur)
+    if (-not $parent -or $parent -eq $cur) { break }
+    $cur = $parent
   }
+  return $false
 }
 
 # Update a bolt.exe that is already on PATH instead of installing a second copy.
@@ -111,8 +132,8 @@ if ($Existing -and $Existing.Source) {
     Write-Host "Found the v2.1.x install at $ExistingPath. Installing to $DefaultDir instead."
   } elseif (Test-ManagedPath $ExistingPath) {
     Write-Host "Ignoring $ExistingPath on PATH: it belongs to a package manager. Update it with that manager."
-  } elseif ((Test-ReparsePoint $ExistingPath) -or (Test-ReparsePoint $ExistingDir)) {
-    Write-Host "Ignoring $ExistingPath on PATH: it is a symlink, junction, or other reparse point. Installing to $DefaultDir."
+  } elseif (Test-LinkedPath $ExistingPath) {
+    Write-Host "Ignoring $ExistingPath on PATH: it is a symlink or junction, or sits under one. Installing to $DefaultDir."
   } else {
     $ExistingVersion = Invoke-VersionProbe $ExistingPath
     if ($ExistingVersion -and $ExistingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$') {
