@@ -28,11 +28,24 @@ For a raw (unlisted) target name: `Build.bat <target> <platform> <config> -proje
 
 `target: engine` is reserved and builds the engine from source (see `ue/build_engine`).
 
+### Engine version
+
+`ue/build_engine`, `ue/start`, `ue/fillddc`, and `ue/info` name the editor by engine major version: `UE4Editor` for UE4, `UnrealEditor` for UE5. Bolt decides the version in this order:
+
+1. `editor_target` in the `ue` config, used verbatim as the editor target and executable base name.
+2. `engine.version` (`4` or `5`) in the `ue` config.
+3. `MajorVersion` in `<engine>/Engine/Build/Build.version`.
+4. Which editor binary exists: `Engine/Binaries/{Win64,Linux,Mac}/UnrealEditor*` or `UE4Editor*`.
+5. Which target file exists: `Engine/Source/UnrealEditor.Target.cs` or `UE4Editor.Target.cs`.
+6. Otherwise UE4.
+
+`ue/info` prints the result, e.g. `Engine: UE5, editor UnrealEditor (from Build.version)`. `Build.bat`, `Setup.bat`, `GenerateProjectFiles.bat`, and the `Binaries` layout have the same names in UE4 and UE5. Bolt calls UnrealBuildTool only through `Build.bat`, so the UE5 move to `Engine/Binaries/DotNET/UnrealBuildTool/` needs no setting.
+
 ### ue/build_engine
 
 Build the UE engine from source (equivalent to `ue/build` with `target: engine`).
 
-Runs in sequence: `Setup.bat --force` (if present), `GenerateProjectFiles.bat` (if present), then `Build.bat -Target="UE4Editor <platform> <config>" -Target="ShaderCompileWorker <platform> Development -Quiet" -WaitMutex -FromMsBuild`.
+Runs in sequence: `Setup.bat --force` (if present), `GenerateProjectFiles.bat` (if present), then `Build.bat -Target="<editor> <platform> <config>" -Target="ShaderCompileWorker <platform> Development -Quiet" -WaitMutex -FromMsBuild`.
 
 | Param      | Required | Description                                  |
 | ---------- | -------- | -------------------------------------------- |
@@ -66,13 +79,15 @@ Binary search order for a named target:
 
 Config → suffix map: `debug` → `-Win64-Debug`, `shipping` → `-Win64-Shipping`, `test` → `-Win64-Test`, `development` → `""`.
 
+Without `target`, the editor is `<ue>/Engine/Binaries/Win64/<editor><suffix>.exe`, then `<editor>.exe`, where `<editor>` is `UE4Editor` or `UnrealEditor` (see [Engine version](#engine-version)). The other engine's editor is not tried.
+
 Launched detached via `cmd /c start "" <exe> <uproject>`.
 
 ### ue/kill
 
 Kill all running UE processes. Never throws.
 
-Targets: `UE4Editor.exe`, `UE4Editor-Win64-Debug.exe`, `UE4Editor-Cmd.exe`, `UnrealEditor.exe`, `UnrealEditor-Cmd.exe`, `CrashReportClient.exe`.
+Targets: `UE4Editor.exe`, `UE4Editor-Win64-Debug.exe`, `UE4Editor-Cmd.exe`, `UnrealEditor.exe`, `UnrealEditor-Win64-Debug.exe`, `UnrealEditor-Cmd.exe`, `CrashReportClient.exe`. Both engines' names are killed whatever the engine version.
 
 No params.
 
@@ -129,7 +144,7 @@ No params.
 
 Fill the Derived Data Cache.
 
-Runs `UE4Editor-Cmd.exe -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`.
+Runs `<ue>/Engine/Binaries/Win64/<editor>-Cmd.exe -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`, with `<editor>` `UE4Editor` or `UnrealEditor`.
 
 No params.
 
@@ -188,7 +203,7 @@ Log every section and key of a UE INI file.
 
 ### ue/info
 
-Print VCS status for both repos. For each of the `ue` plugin `engine.path` and `project.path` it runs git info (`git log -1`, branch) or `svn info` depending on that repo's `vcs`. Logs URL, Revision, and Last Changed Rev.
+Print VCS status for both repos. For each of the `ue` plugin `engine.path` and `project.path` it runs git info (`git log -1`, branch) or `svn info` depending on that repo's `vcs`. Logs URL, Revision, and Last Changed Rev. It first prints the detected engine version and editor name.
 
 No params.
 

@@ -61,12 +61,15 @@ plugins:
           config: shipping
 ```
 
-| Field      | Type   | Required | Description                                                               |
-| ---------- | ------ | -------- | ------------------------------------------------------------------------- |
-| `engine`   | object | yes      | `path` (required), `vcs` (`git` or `svn`, default `git`), `url`, `branch` |
-| `project`  | object | yes      | Same shape as `engine`                                                    |
-| `uproject` | string | yes      | Path to the `.uproject` file                                              |
-| `targets`  | map    | no       | Build targets used by `ue/build` via `--target=`                          |
+| Field           | Type   | Required | Description                                                                                                            |
+| --------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `engine`        | object | yes      | `path` (required), `vcs` (`git` or `svn`, default `git`), `url`, `branch`, `version` (`4` or `5`, detected if omitted) |
+| `project`       | object | yes      | `path` (required), `vcs`, `url`, `branch`                                                                              |
+| `editor_target` | string | no       | Editor target and executable base name, e.g. `UnrealEditor`. Overrides `engine.version`                                |
+| `uproject`      | string | yes      | Path to the `.uproject` file                                                                                           |
+| `targets`       | map    | no       | Build targets used by `ue/build` via `--target=`                                                                       |
+
+`engine.version` and `editor_target` are only needed when detection is wrong. See [Engine version](./built-in-handlers.md#engine-version).
 
 Each target:
 

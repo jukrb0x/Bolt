@@ -57,6 +57,7 @@ export function withUeConfig(patch: {
   project?: Partial<UeConfig["project"]>;
   uproject?: string;
   targets?: UeConfig["targets"];
+  editor_target?: string;
 }): BoltConfig {
   return {
     ...testCfg,

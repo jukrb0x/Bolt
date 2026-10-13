@@ -33,7 +33,7 @@ test("bolt.yaml schema is version 1 and has no root targets", () => {
 
   const defs = schema.$defs as Record<string, { properties: Record<string, unknown> }>;
   expect(Object.keys(defs.ueConfig.properties).sort()).toEqual(
-    ["engine", "project", "targets", "uproject"].sort(),
+    ["editor_target", "engine", "project", "targets", "uproject"].sort(),
   );
   expect(defs.ueConfig.properties.targets).toBeDefined();
   const target = defs.ueTarget as { properties: { kind: { enum: string[] } } };

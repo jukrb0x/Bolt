@@ -26,11 +26,13 @@ POSIX shims are `#!/bin/sh` scripts and must stay mode `0755`. Windows shims are
 
 ## Engine scripts
 
-`e2e/fakes/engine` is a tiny Unreal tree. The handler always names the Windows files (`Build.bat`, `Setup.bat`, `UE4Editor-Cmd.exe`). It does not switch extensions.
+`e2e/fakes/engine` is a tiny Unreal tree. The handler always names the Windows files (`Build.bat`, `Setup.bat`, `UE4Editor-Cmd.exe` or `UnrealEditor-Cmd.exe`). It does not switch extensions.
+
+The template holds both engines' files. `installEngine(dest, { major })` keeps one layout: UE4 (`UE4Editor*`, `Engine/Binaries/DotNET/UnrealBuildTool.sh`) or UE5 (`UnrealEditor*`, `Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.sh`), and writes `Engine/Build/Build.version`. `buildVersion: false` skips that file, so detection falls back to the editor binaries. `makeProject({ engine, engineConfig, ueConfig })` passes the layout through and adds YAML under the `ue` config, e.g. `engine.version` or `editor_target`. The default is UE4 with `Build.version`.
 
 `installEngine` copies those names into the fixture. On Linux it writes the `.sh` body onto the Windows filename and chmods the tree to `0755`. On Windows, `.bat` files stay the committed CRLF scripts, and the `.exe` names are copies of `e2e/fakes/win/record.exe` (built from `record.c`). cmd.exe will not run a script that is named `.exe`.
 
-`Build.sh` records itself and then execs `UnrealBuildTool.sh`. If that file is missing the executable bit, `Build.sh` exits 1. A dropped mode bit must not look like a successful build that never called UBT.
+`Build.sh` records itself and then execs the UE5 `UnrealBuildTool/UnrealBuildTool.sh` if it exists, else the UE4 `UnrealBuildTool.sh` (`Build.bat` does the same with the `.cmd` files). If that file is missing the executable bit, `Build.sh` exits 1. A dropped mode bit must not look like a successful build that never called UBT.
 
 ## `cmd` and `taskkill`
 

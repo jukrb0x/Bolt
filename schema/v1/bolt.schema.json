@@ -79,6 +79,31 @@
         }
       }
     },
+    "engineRepo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vcs": {
+          "enum": ["git", "svn"],
+          "default": "git"
+        },
+        "url": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "version": {
+          "enum": [4, 5, "4", "5"],
+          "description": "Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist."
+        }
+      }
+    },
     "ueTarget": {
       "type": "object",
       "additionalProperties": false,
@@ -105,10 +130,15 @@
       "required": ["engine", "project", "uproject"],
       "properties": {
         "engine": {
-          "$ref": "#/$defs/repo"
+          "$ref": "#/$defs/engineRepo"
         },
         "project": {
           "$ref": "#/$defs/repo"
+        },
+        "editor_target": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$",
+          "description": "Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version."
         },
         "uproject": {
           "type": "string",

@@ -15,6 +15,7 @@ import {
   slash,
   writeBolt,
 } from "./harness";
+import type { EngineLayout } from "./harness";
 
 function tool(log: string, fragment: string, cwd: string) {
   const call = findCall(log, fragment);
@@ -103,6 +104,87 @@ test("engine build runs Setup, GenerateProjectFiles, and Build", async () => {
   }
 });
 
+const ue5Layouts: Array<{ name: string; layout: EngineLayout }> = [
+  { name: "Build.version 5", layout: { major: 5 } },
+  { name: "UnrealEditor binaries only", layout: { major: 5, buildVersion: false } },
+];
+
+for (const { name, layout } of ue5Layouts) {
+  test(`UE5 engine (${name}) builds, fills DDC, and starts UnrealEditor`, async () => {
+    const project = makeProject({ engine: layout });
+    try {
+      expect(existsSync(path.join(project.engine, "Engine/Binaries/Win64/UE4Editor.exe"))).toBe(
+        false,
+      );
+      const built = await bolt(project.dir, ["run", "build-engine"]);
+      expect(built.exitCode).toBe(0);
+      const build = tool(built.log, "Engine/Build/BatchFiles/Build.", project.dir);
+      expect(build.argv).toContain("-Target=UnrealEditor Win64 Development");
+      expect(build.argv.some((arg) => arg.includes("UE4Editor"))).toBe(false);
+      const ubt = tool(built.log, "UnrealBuildTool/UnrealBuildTool", project.dir);
+      expect(ubt.exit).toBe(0);
+
+      const filled = await bolt(project.dir, ["run", "fill"]);
+      expect(filled.exitCode).toBe(0);
+      const editor = tool(filled.log, "UnrealEditor-Cmd.exe", project.dir);
+      expect(editor.argv.some((arg) => arg.includes("FillDDCForPIETest"))).toBe(true);
+      expect(callsMatching(filled.log, "UE4Editor")).toHaveLength(0);
+
+      const started = await bolt(project.dir, ["run", "start"]);
+      expect(started.exitCode).toBe(0);
+      const cmd = tool(started.log, "/cmd", project.dir);
+      expect(cmd.argv.some((arg) => slash(arg).endsWith("UnrealEditor.exe"))).toBe(true);
+
+      const info = await bolt(project.dir, ["run", "info"]);
+      expect(info.output).toContain("Engine: UE5, editor UnrealEditor");
+    } finally {
+      dispose(project.dir);
+    }
+  });
+}
+
+test("engine.version and editor_target override the detected engine", async () => {
+  const pinned = makeProject({ engine: { major: 5 }, engineConfig: "        version: 4\n" });
+  try {
+    const built = await bolt(pinned.dir, ["run", "build-engine"]);
+    expect(built.exitCode).toBe(0);
+    const build = tool(built.log, "Engine/Build/BatchFiles/Build.", pinned.dir);
+    expect(build.argv).toContain("-Target=UE4Editor Win64 Development");
+    // The UE5 tree has no UE4Editor-Cmd.exe, so the pinned version is really used.
+    const filled = await bolt(pinned.dir, ["run", "fill"]);
+    expect(filled.exitCode).not.toBe(0);
+    expect(callsMatching(filled.log, "UnrealEditor")).toHaveLength(0);
+  } finally {
+    dispose(pinned.dir);
+  }
+
+  const named = makeProject({
+    engine: { major: 4 },
+    ueConfig: "      editor_target: UnrealEditor\n",
+  });
+  try {
+    const built = await bolt(named.dir, ["run", "build-engine"]);
+    expect(built.exitCode).toBe(0);
+    const build = tool(built.log, "Engine/Build/BatchFiles/Build.", named.dir);
+    expect(build.argv).toContain("-Target=UnrealEditor Win64 Development");
+  } finally {
+    dispose(named.dir);
+  }
+});
+
+test("a UE4 tree without Build.version is detected from UE4Editor binaries", async () => {
+  const project = makeProject({ engine: { major: 4, buildVersion: false } });
+  try {
+    const filled = await bolt(project.dir, ["run", "fill"]);
+    expect(filled.exitCode).toBe(0);
+    expect(tool(filled.log, "UE4Editor-Cmd.exe", project.dir).exit).toBe(0);
+    const info = await bolt(project.dir, ["run", "info"]);
+    expect(info.output).toContain("Engine: UE4, editor UE4Editor (from binaries)");
+  } finally {
+    dispose(project.dir);
+  }
+});
+
 test("generate_project, fillddc, start, and kill hit the fake tools", async () => {
   const project = makeProject();
   try {
@@ -142,7 +224,7 @@ test("generate_project, fillddc, start, and kill hit the fake tools", async () =
     const killed = await bolt(project.dir, ["run", "kill"]);
     expect(killed.exitCode).toBe(0);
     const kills = callsMatching(killed.log, "taskkill");
-    expect(kills).toHaveLength(6);
+    expect(kills).toHaveLength(7);
     for (const call of kills) {
       expect(slash(call.cwd)).toBe(slash(project.dir));
       expect(call.exit).toBe(0);
@@ -150,6 +232,7 @@ test("generate_project, fillddc, start, and kill hit the fake tools", async () =
       expect(call.argv[1]).toBe("/im");
     }
     expect(kills.some((call) => call.argv[2] === "UnrealEditor-Cmd.exe")).toBe(true);
+    expect(kills.some((call) => call.argv[2] === "UnrealEditor-Win64-Debug.exe")).toBe(true);
   } finally {
     dispose(project.dir);
   }
