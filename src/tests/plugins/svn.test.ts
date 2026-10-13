@@ -57,20 +57,29 @@ test("cleanup with use_tortoise=false uses plain svn", async () => {
   expect(ctx.logged.every((l) => !l.includes("TortoiseProc"))).toBe(true);
 });
 
-test("cleanup with use_tortoise=true throws when TortoiseProc absent", async () => {
-  if (tortoiseProcOnPath()) return; // TortoiseProc present — skip
-  const ctx = makeCtx(true, { use_tortoise: true });
-  await expect(svnPlugin.handlers["cleanup"](atProject, ctx)).rejects.toThrow(
-    "TortoiseProc.exe not found",
-  );
-});
+// TortoiseProc lookup overruns Bun's 5s default on a busy Windows runner.
+test(
+  "cleanup with use_tortoise=true throws when TortoiseProc absent",
+  async () => {
+    if (tortoiseProcOnPath()) return; // TortoiseProc present — skip
+    const ctx = makeCtx(true, { use_tortoise: true });
+    await expect(svnPlugin.handlers["cleanup"](atProject, ctx)).rejects.toThrow(
+      "TortoiseProc.exe not found",
+    );
+  },
+  process.platform === "win32" ? 60_000 : undefined,
+);
 
-test("cleanup without use_tortoise uses svn when TortoiseProc absent", async () => {
-  if (tortoiseProcOnPath()) return; // TortoiseProc present — skip
-  const ctx = makeCtx();
-  await svnPlugin.handlers["cleanup"](atProject, ctx);
-  expect(ctx.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
-});
+test(
+  "cleanup without use_tortoise uses svn when TortoiseProc absent",
+  async () => {
+    if (tortoiseProcOnPath()) return; // TortoiseProc present — skip
+    const ctx = makeCtx();
+    await svnPlugin.handlers["cleanup"](atProject, ctx);
+    expect(ctx.logged.some((l) => l.includes("svn cleanup"))).toBe(true);
+  },
+  process.platform === "win32" ? 60_000 : undefined,
+);
 
 test("revert with use_tortoise=false uses plain svn", async () => {
   const ctx = makeCtx(true, { use_tortoise: false });
