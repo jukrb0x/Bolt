@@ -68,15 +68,55 @@ function reservedError(name: string, command: string, known: string[]): UsageErr
   );
 }
 
-/** A reserved name used as a param key (`--plan=x` or `-- plan=x`): tell the user to rename it. */
-export function reservedParamError(name: string, value: string): UsageError {
-  const rename = `build_${name.replace(/-/g, "_")}`;
-  const hint = IMPLEMENTED_FLAGS.has(name)
-    ? ` To preview the run instead, pass --${name} without a value before "--".`
-    : "";
+export interface ReservedParamContext {
+  /** Command name used in messages (`run`, `inspect`). */
+  command: string;
+  /** Boolean flags the current command accepts. */
+  flags: string[];
+  /** True for `-- name=value`, false for `--name=value`. */
+  afterSeparator: boolean;
+}
+
+/**
+ * A reserved name given with a value: `--plan=x`, `--help=1`, or `-- plan=x` / `-- help=x`.
+ * The message says what is wrong and how to fix it, including a rename example in case
+ * the user meant a task param.
+ */
+export function reservedParamError(
+  name: string,
+  value: string,
+  ctx: ReservedParamContext,
+): UsageError {
+  const rename = name === "help" ? "my_help" : `build_${name.replace(/-/g, "_")}`;
+  const renameHint = `rename it, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.`;
+
+  if (name === "help") {
+    return new UsageError(
+      `--help takes no value. Use: bolt ${ctx.command} --help. ` +
+        `If this is a task param, ${renameHint}`,
+    );
+  }
+
+  let flagHint = "";
+  if (IMPLEMENTED_FLAGS.has(name)) {
+    if (ctx.flags.includes(name)) {
+      flagHint = ` To preview the run instead, pass --${name} without a value before "--".`;
+    } else if (ctx.command === "inspect") {
+      flagHint = ` No --${name} is needed: bolt inspect never executes, it is already a side-effect-free preview.`;
+    }
+  }
+
+  if (!ctx.afterSeparator && !IMPLEMENTED_FLAGS.has(name)) {
+    return new UsageError(
+      `--${name} is reserved by bolt and not supported yet. If this is a task param, ${renameHint}`,
+    );
+  }
+  const reservation = IMPLEMENTED_FLAGS.has(name)
+    ? `it is a bolt flag`
+    : `--${name} is reserved by bolt and not supported yet`;
   return new UsageError(
-    `"${name}" is reserved by bolt and cannot be used as a param name. ` +
-      `Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.${hint}`,
+    `"${name}" cannot be used as a param name (${reservation}). ` +
+      `Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.${flagHint}`,
   );
 }
 
@@ -146,7 +186,9 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
     if (arg === "--") {
       for (const rest of rawArgs.slice(i + 1)) {
         const [k, v] = parseParam(rest, rest);
-        if (isReserved(k)) throw reservedParamError(k, v);
+        if (isReserved(k) || k === "help") {
+          throw reservedParamError(k, v, { command, flags, afterSeparator: true });
+        }
         params[k] = v;
       }
       break;
@@ -162,9 +204,20 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
         if (name === "dry-run") dryRun = true;
         continue;
       }
+      if (name === "help" && eq !== -1) {
+        throw reservedParamError(name, inner.slice(eq + 1), {
+          command,
+          flags,
+          afterSeparator: false,
+        });
+      }
       if (isReserved(name)) {
         if (eq !== -1 && !IMPLEMENTED_FLAGS.has(name)) {
-          throw reservedParamError(name, inner.slice(eq + 1));
+          throw reservedParamError(name, inner.slice(eq + 1), {
+            command,
+            flags,
+            afterSeparator: false,
+          });
         }
         throw reservedError(name, command, known);
       }

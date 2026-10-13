@@ -210,7 +210,7 @@ bolt run update build --dry-run
 bolt run build -- extra=--verbose # 以 -- 开头的值放在单独的 -- 之后
 ```
 
-参数解析是严格的：未知 flag、`--dry-run=<值>`、以 `--` 开头的参数值、写在子命令前面的 flag（`bolt --dry-run run …`），以及把保留名 `dry-run`、`simulate`、`json`、`agent`、`execute`、`plan`、`confirmed-by-user` 用作参数，都会在执行前以退出码 2 报错。
+参数解析是严格的：未知 flag、`--dry-run=<值>`、以 `--` 开头的参数值、写在子命令前面的 flag（`bolt --dry-run run …`），以及把保留名 `dry-run`、`simulate`、`json`、`agent`、`execute`、`plan`、`confirmed-by-user`（以及 `help`）用作参数，都会在执行前以退出码 2 报错。
 
 ### 流程 (Flows)
 
