@@ -593,6 +593,13 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       [["run", "mark", "--extra=--dry-run"], "-- extra=--dry-run"],
       [["run", "mark", "--", "--execute"], "Malformed param"],
       [["inspect", "mark", "--bogus"], 'Unknown flag "--bogus" for "bolt inspect"'],
+      [["--dry-run", "run", "mark"], 'Unknown global flag "--dry-run"'],
+      [["-x", "run", "mark"], 'Unknown global flag "-x"'],
+      [["run", "mark", "--plan=x"], "--plan is reserved and not supported yet"],
+      [["run", "mark", "--execute"], "--execute is reserved and not supported yet"],
+      [["run", "mark", "--", "plan=x"], "--plan is reserved and not supported yet"],
+      [["run", "mark", "--", "dry-run=false"], "reserved flag name"],
+      [["inspect", "mark", "--json"], "--json is reserved and not supported yet"],
     ];
     for (const [args, message] of cases) {
       const result = await bolt(project.dir, args);

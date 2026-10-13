@@ -3,6 +3,8 @@ import { defineCommand, runMain } from "citty";
 import { cleanupInstalledBolt } from "./commands/update";
 import { commands } from "./commands";
 import { VERSION } from "./version";
+import { checkGlobalArgs } from "./global-args";
+import { USAGE_EXIT_CODE } from "./commands/run";
 
 if (process.platform === "win32") cleanupInstalledBolt(process.execPath);
 
@@ -14,5 +16,11 @@ const main = defineCommand({
   },
   subCommands: commands,
 });
+
+const globalError = checkGlobalArgs(process.argv.slice(2));
+if (globalError) {
+  console.error(`[ERROR] ${globalError}`);
+  process.exit(USAGE_EXIT_CODE);
+}
 
 runMain(main);

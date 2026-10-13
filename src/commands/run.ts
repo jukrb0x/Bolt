@@ -39,6 +39,33 @@ export interface ParseRunOptions {
   command?: string;
 }
 
+/**
+ * Flag names reserved by Bolt (design §3, 0.4). They are never accepted as user params,
+ * neither as `--name[=v]` nor as `name=v` after `--`. Only `dry-run` is implemented today.
+ */
+export const RESERVED_FLAGS = [
+  "dry-run",
+  "simulate",
+  "json",
+  "agent",
+  "execute",
+  "plan",
+  "confirmed-by-user",
+] as const;
+
+const IMPLEMENTED_FLAGS = new Set<string>(["dry-run"]);
+
+function isReserved(name: string): boolean {
+  return (RESERVED_FLAGS as readonly string[]).includes(name);
+}
+
+function reservedError(name: string, command: string, known: string[]): UsageError {
+  if (IMPLEMENTED_FLAGS.has(name)) {
+    return new UsageError(`Unknown flag "--${name}" for "bolt ${command}".${suggest(name, known)}`);
+  }
+  return new UsageError(`--${name} is reserved and not supported yet.`);
+}
+
 /** Flags citty handles itself before `run()` is called. */
 const HELP_FLAGS = new Set(["--help", "-h"]);
 
@@ -105,6 +132,16 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
     if (arg === "--") {
       for (const rest of rawArgs.slice(i + 1)) {
         const [k, v] = parseParam(rest, rest);
+        if (isReserved(k)) {
+          if (IMPLEMENTED_FLAGS.has(k)) {
+            throw new UsageError(
+              `"${k}" is a reserved flag name and cannot be passed as a param. Use --${k} before "--".`,
+            );
+          }
+          throw new UsageError(
+            `--${k} is reserved and not supported yet (got "${rest}" after "--").`,
+          );
+        }
         params[k] = v;
       }
       break;
@@ -120,6 +157,7 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
         if (name === "dry-run") dryRun = true;
         continue;
       }
+      if (isReserved(name)) throw reservedError(name, command, known);
       if (eq === -1) {
         throw new UsageError(
           `Unknown flag "${arg}" for "bolt ${command}".${suggest(name, known)} ` +
