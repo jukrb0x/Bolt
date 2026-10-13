@@ -90,6 +90,12 @@ export function reservedParamError(
   const rename = name === "help" ? "my_help" : `build_${name.replace(/-/g, "_")}`;
   const renameHint = `rename it, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.`;
 
+  if (name === "help" && ctx.afterSeparator) {
+    return new UsageError(
+      `"help" cannot be used as a param name (it is a bolt flag). ` +
+        `Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.`,
+    );
+  }
   if (name === "help") {
     return new UsageError(
       `--help takes no value. Use: bolt ${ctx.command} --help. ` +

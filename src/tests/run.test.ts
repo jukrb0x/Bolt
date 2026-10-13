@@ -266,7 +266,10 @@ describe("reserved flag names (design 0.4)", () => {
     const expected =
       "--help takes no value. Use: bolt run --help. If this is a task param, rename it, e.g. in bolt.yaml use my_help and pass -- my_help=1.";
     expect(usage(["build", "--help=1"])).toBe(expected);
-    expect(usage(["build", "--", "help=1"])).toBe(expected);
+    expect(usage(["build", "--", "help=1"])).toBe(
+      '"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=1.',
+    );
+    expect(usage(["build", "--", "help=1"])).not.toContain("--help takes no value");
     expect(usage(["build", "--help="], { flags: [], command: "inspect" })).toContain(
       "Use: bolt inspect --help",
     );

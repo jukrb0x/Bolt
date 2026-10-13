@@ -64,9 +64,11 @@ any step runs:
   the error tells you to rename the param, e.g. `plan` → `build_plan` in
   `bolt.yaml`, then pass `-- build_plan=x`. Valued forms such as `--json=v1` or
   `--plan=<hash>` also report that the flag is not supported yet.
-- `help` with a value: `--help=<value>` and `-- help=<value>` fail with
-  `--help takes no value. Use: bolt run --help` (rename a `help` param, e.g. to
-  `my_help`). Bare `--help` / `-h` still show help.
+- `help` with a value (in addition to the 7 reserved names above, handled
+  separately): `--help=<value>` fails with `--help takes no value. Use: bolt run --help`,
+  and `-- help=<value>` fails with `"help" cannot be used as a param name`. Both
+  tell you to rename a `help` param, e.g. to `my_help`. Bare `--help` / `-h`
+  still show help.
 
 To pass a value that starts with `--` (for example a flag forwarded to an
 external tool), put it after a bare `--` separator. Everything after `--` is

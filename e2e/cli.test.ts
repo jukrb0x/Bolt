@@ -601,7 +601,10 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       ],
       [["run", "mark", "--json=v1"], "--json is reserved by bolt and not supported yet"],
       [["run", "mark", "--help=1"], "--help takes no value. Use: bolt run --help"],
-      [["run", "mark", "--", "help=x"], "pass -- my_help=x"],
+      [
+        ["run", "mark", "--", "help=x"],
+        '"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=x.',
+      ],
       [["inspect", "mark", "--", "dry-run=1"], "already a side-effect-free preview"],
       [["run", "mark", "--execute"], "--execute is reserved by bolt and not supported yet"],
       [["run", "mark", "--", "plan=x"], "in bolt.yaml use build_plan and pass -- build_plan=x"],
