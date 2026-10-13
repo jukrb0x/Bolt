@@ -62,9 +62,8 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 
   - `bolt run x || exit`, `bolt run x || …`, and `if ! bolt run x` are **unchanged** (any non-zero still fails).
   - Scripts that used `if [ $? -eq 1 ]` or PowerShell `if ($LASTEXITCODE -eq 1)` to
-    mean "any failure" should use `-ne 0` / `-ne 0` instead.
+    mean "any failure" should use `-ne 0` instead (same operator in bash and PowerShell).
   - To distinguish usage errors from task failures: `2` = usage, `1` = task failure.
-  - Config errors (`bolt.yaml` missing/invalid) still exit `1` today; they will become
-    `3` in a later release (**BOLT-P0-1**, planned for the same release train). Do not
-    treat exit `1` as "config error" — only `0` (success) and `1` (task failure) are
-    stable meanings for now.
+  - Config errors (`bolt.yaml` missing/invalid) will exit `3` in this same release,
+    shipping together with **BOLT-P0-1**. Until BOLT-P0-1 lands on main they still
+    exit `1`; do not treat exit `1` as "config error".
