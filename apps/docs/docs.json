@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Bolt",
-  "description": "AI-native, general-purpose pipeline and workflow tool. One bolt binary, extended with TypeScript plugins.",
+  "description": "A general-purpose CLI that automates game-dev workflows. One bolt binary, extended with TypeScript plugins.",
   "colors": {
     "primary": "#525252",
     "light": "#d4d4d4",

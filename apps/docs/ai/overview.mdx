@@ -11,9 +11,10 @@ Bolt does not run an MCP server or any other service for agents. There is one in
 the same permissions and allowlists you already use for shell commands apply to it.
 
 <Warning>
-  **Status.** Most of this page describes the approved design for agent support, which is not in the
-  current release. Today's binary has the `ai` handler flag, `bolt ai`, and a first skill. It
-  does not have `--json`, agent mode, `bolt status`, or `--execute`. Sections below say which is which.
+  **Status.** Most of this page describes a reviewed design for agent support, pending maintainer
+  sign-off,, which is not in the current release. Today's binary has the `ai` handler flag, `bolt
+  ai`, and a first skill. It does not have `--json`, agent mode, `bolt status`, or `--execute`.
+  Sections below say which is which.
 </Warning>
 
 ## Available today
@@ -41,6 +42,11 @@ tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
   In the current release, `bolt run --dry-run` is not side-effect free. It calls plugin handlers with
   `ctx.dryRun=true` (each handler decides what to skip) and runs local actions (`uses: ./x`). Only `run:`
   shell steps are skipped. Do not auto-approve any `bolt run` command on the current release.
+
+The current release also silently ignores unknown flags such as `--json`, `--agent`, and `--execute`,
+and treats `--plan=…` as a task param. The commands in the Planned section below **run for real** on
+today's binary. Don't try them until `bolt version --json` reports the capabilities.
+
 </Note>
 
 ## Planned: skills that call the CLI with `--json`
@@ -112,12 +118,12 @@ built-in handler defaults are still being finalized.
 ### Safety model
 
 Bolt's checks guard against a cooperative agent that makes mistakes: a wrong task name, a plan that
-changed between preview and execution, or a forgotten confirmation. Previews and the read-only commands
-(`version`, `status`, `list`, `info`, `check`, `inspect`, `run --dry-run`) do not write files, start
-processes, or use the network.
+changed between preview and execution, or a forgotten confirmation. Once shipped, previews and the read-only
+commands (`version`, `status`, `list`, `info`, `check`, `inspect`, `run --dry-run`) will not write files,
+start processes, or use the network.
 
-Bolt cannot stop an agent that ignores the skill. It cannot verify that `--confirmed-by-user` reflects a
-real yes, and it does not sandbox plugin code. The real boundary is your agent client's command
+Even then, Bolt will not be able to stop an agent that ignores the skill. It will not be able to verify that `--confirmed-by-user` reflects a
+real yes, and it will not sandbox plugin code. The real boundary is your agent client's command
 allowlist:
 
 - Auto-allow `bolt version`, `bolt status`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, and

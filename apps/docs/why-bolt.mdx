@@ -36,7 +36,7 @@ Bolt is a general-purpose CLI that turns that routine into named commands your t
 single flow name runs that flow. Bolt never reorders steps.
 
 **Fail-fast by default.** In a flow, the first failing task stops the run unless that task is listed in
-`continue_on_fail`. A single step can opt out with `continue-on-error: true`.
+`continue_on_fail`. A `run:` step can opt out with `continue-on-error: true`.
 
 **Three kinds of step.** `uses` calls a plugin handler (`ue/build`) or a project-local action, `call`
 reuses another task, and `run` executes a shell command. Each step uses exactly one of these keys.
@@ -51,22 +51,22 @@ handlers (with `ctx.dryRun=true`) and runs local actions; only `run:` shell step
 
 **Layered plugins.** Bolt looks for plugins in four places: built-in, user (`~/.bolt/plugins`), project
 (`.bolt/plugins`), and explicit `path` entries in `bolt.yaml`. A later layer replaces a plugin with the
-same namespace, so you can override a built-in handler without forking Bolt.
+same namespace, so you can replace a built-in plugin (all of its handlers) without forking Bolt.
 
-**Usable as a library.** The `boltstack` npm package exposes `run`, `loadConfig`, the built-in plugins,
-and the runner to Node.js and Bun scripts. See [Library usage](/api/library-usage).
+**Usable as a library.** The `boltstack` npm package exposes `run` and `loadConfig` from its main entry, the built-in
+plugins from `boltstack/plugins`, and the runner from `boltstack/core`. See [Library usage](/api/library-usage).
 
 ## How Bolt fits with other tools
 
 Bolt sits above the engine's own tools and below (or beside) your CI system. It does not replace
 either.
 
-| Tool | What it does | How Bolt relates |
-| --- | --- | --- |
-| Engine build tools (UnrealBuildTool, `Build.bat`, RunUAT) | Compile and package the engine and game | Bolt calls them. `ue/build` runs `Build.bat` with the target and configuration from `bolt.yaml`. |
-| Batch and shell scripts | Ad-hoc automation | `run:` steps can still call them, but tasks, flows, and params replace most of the glue. |
-| CI servers (Jenkins, TeamCity, GitHub Actions) | Schedule and distribute builds across agents | Bolt runs on a developer machine or inside a CI job. It has no scheduler, agents, or build farm. |
-| Source control clients (git, SVN, TortoiseSVN) | Version control | The `git` and `svn` plugins and `ue/update_engine` / `ue/update_project` wrap the daily update. |
+| Tool                                                      | What it does                                 | How Bolt relates                                                                                 |
+| --------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Engine build tools (UnrealBuildTool, `Build.bat`, RunUAT) | Compile and package the engine and game      | Bolt calls them. `ue/build` runs `Build.bat` with the target and configuration from `bolt.yaml`. |
+| Batch and shell scripts                                   | Ad-hoc automation                            | `run:` steps can still call them, but tasks, flows, and params replace most of the glue.         |
+| CI servers (Jenkins, TeamCity, GitHub Actions)            | Schedule and distribute builds across agents | Bolt runs on a developer machine or inside a CI job. It has no scheduler, agents, or build farm. |
+| Source control clients (git, SVN, TortoiseSVN)            | Version control                              | The `git` and `svn` plugins and `ue/update_engine` / `ue/update_project` wrap the daily update.  |
 
 ## When not to use Bolt
 

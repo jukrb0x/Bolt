@@ -32,13 +32,14 @@ own plugins in TypeScript.
     Everything runs through `bolt run`. Tasks run in the order you type them, with no hidden reordering.
     `--key=value` params apply to the whole run.
   </Card>
-  <Card title="Preview before you run" icon="eye">
-    `bolt run <names> --dry-run` and `bolt inspect <names>` show the resolved steps from the same plan that
-    `bolt run` executes.
+  <Card title="See the plan first" icon="eye">
+    `bolt inspect <names>` shows the resolved steps without loading plugins or running anything.
+    `bolt run <names> --dry-run` also lists the steps, but in the current release it still calls plugin
+    handlers and runs local actions.
   </Card>
   <Card title="Plugins" icon="plug">
     Steps call plugin handlers as `namespace/handler`. Add plugins per user (`~/.bolt/plugins`) or per
-    project (`.bolt/plugins`), and override built-ins with your own.
+    project (`.bolt/plugins`), and replace a built-in plugin (all of its handlers) with your own.
   </Card>
   <Card title="Shared and local config" icon="file-code">
     Commit `bolt.yaml`. Keep machine-specific paths in an optional, gitignored `bolt.local.yaml`, which
@@ -63,14 +64,10 @@ Install Bolt:
 
 <Tabs>
   <Tab title="Windows (PowerShell)">
-    ```powershell
-    irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
-    ```
+    ```powershell irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex ```
   </Tab>
   <Tab title="macOS / Linux">
-    ```bash
-    curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
-    ```
+    ```bash curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh ```
   </Tab>
 </Tabs>
 
@@ -83,12 +80,12 @@ Scaffold a config in your project and try it:
 ```bash
 cd /path/to/your/project
 bolt init              # writes bolt.yaml with a `hello` task and a `demo` flow
-bolt run demo --dry-run
+bolt inspect demo
 bolt run demo
 ```
 
-`bolt init` also writes a JSON Schema for editor completion, plugin type definitions, and a
-`tsconfig.json`. It does not write `bolt.local.yaml`.
+`bolt init` also writes editor and type files (see [`bolt init`](/reference/cli/init)). It does not
+write `bolt.local.yaml`.
 
 ## Example: a daily Unreal Engine workflow
 
@@ -126,7 +123,7 @@ flows:
 bolt run update build start     # tasks, in the order typed
 bolt run build --config=debug   # a param overrides the step's `with:` value
 bolt run daily                  # the predefined flow
-bolt run daily --dry-run        # preview the steps without executing
+bolt inspect daily              # show the resolved steps without running anything
 ```
 
 Each developer can point the engine at their own checkout in `bolt.local.yaml`:
