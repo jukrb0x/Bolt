@@ -63,7 +63,21 @@ function reservedError(name: string, command: string, known: string[]): UsageErr
   if (IMPLEMENTED_FLAGS.has(name)) {
     return new UsageError(`Unknown flag "--${name}" for "bolt ${command}".${suggest(name, known)}`);
   }
-  return new UsageError(`--${name} is reserved and not supported yet.`);
+  return new UsageError(
+    `--${name} is reserved by bolt and not supported yet. Remove it from the command.`,
+  );
+}
+
+/** A reserved name used as a param key (`--plan=x` or `-- plan=x`): tell the user to rename it. */
+export function reservedParamError(name: string, value: string): UsageError {
+  const rename = `build_${name.replace(/-/g, "_")}`;
+  const hint = IMPLEMENTED_FLAGS.has(name)
+    ? ` To preview the run instead, pass --${name} without a value before "--".`
+    : "";
+  return new UsageError(
+    `"${name}" is reserved by bolt and cannot be used as a param name. ` +
+      `Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.${hint}`,
+  );
 }
 
 /** Flags citty handles itself before `run()` is called. */
@@ -132,16 +146,7 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
     if (arg === "--") {
       for (const rest of rawArgs.slice(i + 1)) {
         const [k, v] = parseParam(rest, rest);
-        if (isReserved(k)) {
-          if (IMPLEMENTED_FLAGS.has(k)) {
-            throw new UsageError(
-              `"${k}" is a reserved flag name and cannot be passed as a param. Use --${k} before "--".`,
-            );
-          }
-          throw new UsageError(
-            `--${k} is reserved and not supported yet (got "${rest}" after "--").`,
-          );
-        }
+        if (isReserved(k)) throw reservedParamError(k, v);
         params[k] = v;
       }
       break;
@@ -157,7 +162,12 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
         if (name === "dry-run") dryRun = true;
         continue;
       }
-      if (isReserved(name)) throw reservedError(name, command, known);
+      if (isReserved(name)) {
+        if (eq !== -1 && !IMPLEMENTED_FLAGS.has(name)) {
+          throw reservedParamError(name, inner.slice(eq + 1));
+        }
+        throw reservedError(name, command, known);
+      }
       if (eq === -1) {
         throw new UsageError(
           `Unknown flag "${arg}" for "bolt ${command}".${suggest(name, known)} ` +

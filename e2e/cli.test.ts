@@ -664,11 +664,13 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       [["inspect", "mark", "--bogus"], 'Unknown flag "--bogus" for "bolt inspect"'],
       [["--dry-run", "run", "mark"], 'Unknown global flag "--dry-run"'],
       [["-x", "run", "mark"], 'Unknown global flag "-x"'],
-      [["run", "mark", "--plan=x"], "--plan is reserved and not supported yet"],
-      [["run", "mark", "--execute"], "--execute is reserved and not supported yet"],
-      [["run", "mark", "--", "plan=x"], "--plan is reserved and not supported yet"],
-      [["run", "mark", "--", "dry-run=false"], "reserved flag name"],
-      [["inspect", "mark", "--json"], "--json is reserved and not supported yet"],
+      [["run", "mark", "--plan=x"], "in bolt.yaml use build_plan and pass -- build_plan=x"],
+      [["run", "mark", "--execute"], "--execute is reserved by bolt and not supported yet"],
+      [["run", "mark", "--", "plan=x"], "in bolt.yaml use build_plan and pass -- build_plan=x"],
+      [["run", "mark", "--", "dry-run=false"], "pass -- build_dry_run=false"],
+      [["inspect", "mark", "--json"], "--json is reserved by bolt and not supported yet"],
+      [["--version=1"], "--version takes no value. Use: bolt --version"],
+      [["--version", "run", "mark"], "--version must be used on its own. Use: bolt --version"],
     ];
     for (const [args, message] of cases) {
       const result = await bolt(project.dir, args);
@@ -676,6 +678,17 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       expect(result.output).toContain(message);
       expect(existsSync(marker)).toBe(false);
       expect(existsSync(path.join(project.dir, ".bolt"))).toBe(false);
+    }
+
+    for (const args of [
+      ["--help", "--version"],
+      ["--version", "--help"],
+      ["-h", "--version", "run", "mark"],
+    ]) {
+      const help = await bolt(project.dir, args);
+      expect(help.exitCode).toBe(0);
+      expect(help.output).toContain("USAGE");
+      expect(existsSync(marker)).toBe(false);
     }
 
     const passthrough = await bolt(project.dir, ["run", "mark", "--", "extra=--verbose"]);

@@ -223,16 +223,22 @@ describe("reserved flag names (design 0.4)", () => {
 
   for (const name of unsupported) {
     test(`--${name} is rejected in every form`, () => {
-      const msg = `--${name} is reserved and not supported yet`;
-      expect(usage(["build", `--${name}`])).toContain(msg);
-      expect(usage(["build", `--${name}=x`])).toContain(msg);
-      expect(usage(["build", "--", `${name}=x`])).toContain(msg);
-      expect(usage(["build", `--${name}=x`], { flags: [], command: "inspect" })).toContain(msg);
+      const rename = `build_${name.replace(/-/g, "_")}`;
+      const param = `"${name}" is reserved by bolt and cannot be used as a param name. Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=x.`;
+      expect(usage(["build", `--${name}`])).toBe(
+        `--${name} is reserved by bolt and not supported yet. Remove it from the command.`,
+      );
+      expect(usage(["build", `--${name}=x`])).toBe(param);
+      expect(usage(["build", "--", `${name}=x`])).toBe(param);
+      expect(usage(["build", `--${name}=x`], { flags: [], command: "inspect" })).toBe(param);
     });
   }
 
   test("dry-run cannot be passed as a param after --", () => {
-    expect(usage(["build", "--", "dry-run=false"])).toContain("reserved flag name");
+    const msg = usage(["build", "--", "dry-run=false"]);
+    expect(msg).toContain('"dry-run" is reserved by bolt');
+    expect(msg).toContain("use build_dry_run and pass -- build_dry_run=false");
+    expect(msg).toContain("pass --dry-run without a value");
   });
 
   test("non-reserved look-alikes still pass", () => {
@@ -249,13 +255,31 @@ describe("checkGlobalArgs", () => {
     expect(checkGlobalArgs(["--version"])).toBeUndefined();
     expect(checkGlobalArgs(["-h"])).toBeUndefined();
     expect(checkGlobalArgs(["--help", "run"])).toBeUndefined();
+  });
+
+  test("help wins over --version in any combination", () => {
+    for (const argv of [
+      ["--help", "--version"],
+      ["--version", "--help"],
+      ["-h", "--version"],
+      ["--version", "-h", "--help"],
+      ["--version", "--help", "run", "build"],
+    ]) {
+      expect(checkGlobalArgs(argv)).toBeUndefined();
+    }
     expect(checkGlobalArgs(["run", "build", "--dry-run"])).toBeUndefined();
   });
 
   test("rejects any other flag before the subcommand", () => {
     expect(checkGlobalArgs(["--dry-run", "run", "deploy"])).toContain('"--dry-run"');
     expect(checkGlobalArgs(["-x", "run", "build"])).toContain('"-x"');
-    expect(checkGlobalArgs(["--version", "run", "build"])).toContain('"--version"');
+    expect(checkGlobalArgs(["--version", "run", "build"])).toBe(
+      "--version must be used on its own. Use: bolt --version",
+    );
+    expect(checkGlobalArgs(["--version=1"])).toBe("--version takes no value. Use: bolt --version");
+    expect(checkGlobalArgs(["--version=1", "run", "x"])).toContain("--version takes no value");
+    expect(checkGlobalArgs(["--help=1"])).toContain("--help takes no value");
+    expect(checkGlobalArgs(["--help", "--bogus"])).toContain('Unknown global flag "--bogus"');
     expect(checkGlobalArgs(["--bogus"])).toContain('"--bogus"');
   });
 });
