@@ -26,7 +26,7 @@ The workflow refuses the release when the tagged commit is not an ancestor of `o
 
 ## What CI uploads
 
-`.github/workflows/release.yml` builds on Ubuntu with Bun 1.4.3, smoke-tests every binary, then publishes the GitHub Release. A second run for the same tag waits. Publish creates a draft, uploads the assets, and publishes the draft only after that upload. A later run succeeds when the release records this commit and the asset names are present and uploaded. If `SHA256SUMS` differs, the run warns and keeps the first build's assets. The job fails and leaves the release untouched when the recorded commit is not this SHA, the pre-release flag is wrong, or a published release's assets do not match. A draft for this commit is completed and then published. Releases created before this change store `target_commitish=main`. That value is not a commit, so the job fails. The asset list lives in `scripts/release-targets.ts`:
+`.github/workflows/release.yml` builds on Ubuntu with Bun 1.4.3, smoke-tests every binary, then publishes the GitHub Release. A second run for the same tag waits. Publish creates a draft, uploads the assets to that release id, and publishes the draft only after that upload. GitHub's tag endpoint returns a published release only, so a draft is a 404 there. The job then lists releases. With `contents: write`, that list includes drafts. One draft for this commit is completed by its id. More than one draft for the tag fails. A later run succeeds when the release records this commit and the asset names are present and uploaded. If `SHA256SUMS` differs, the run warns and keeps the first build's assets. The job fails and leaves the release untouched when the recorded commit is not this SHA, the pre-release flag is wrong, or a published release's assets do not match. Releases created before this change store `target_commitish=main`. That value is not a commit, so the job fails. The asset list lives in `scripts/release-targets.ts`:
 
 - `bolt-win-x64.exe`
 - `bolt-linux-x64`
@@ -43,18 +43,20 @@ Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. 
 
 ## When a re-run fails
 
-The publish job leaves a release untouched when it refuses it. `gh release delete` without `--cleanup-tag` removes the release and keeps the tag. Re-run the failed workflow with `gh run rerun <run-id>`.
+The publish job leaves a release untouched when it refuses it. Deleting a release by id keeps the tag. Re-run the failed workflow with `gh run rerun <run-id>`.
 
 **Tag moved during this run.** The log names both commits and says this run can be ignored. Confirm the workflow run for the new tag event.
 
-**`target_commitish` is not a commit SHA.** Releases from the previous publisher store `main`. The job cannot tell which commit those assets belong to. If the release is known to be the right one, ignore the failure. If the tag was moved, delete the release and re-run:
+**`target_commitish` is not a commit SHA.** Releases from the previous publisher store `main`. The job cannot tell which commit those assets belong to. If the release is known to be the right one, ignore the failure. If the tag was moved, delete that release id and re-run:
 
 ```bash
-gh release delete vX.Y.Z --yes
+gh api -X DELETE repos/OWNER/REPO/releases/RELEASE_ID
 gh run rerun <run-id>
 ```
 
-**Published release is short an asset, or an asset is not `uploaded`.** `releases/latest` may already point at it. The log includes the `gh release upload` and `gh release delete-asset` commands. A draft for this same commit is completed by the job: unfinished assets are deleted and uploaded, then the draft is published. A draft that targets a different commit stays a draft.
+**Published release is short an asset, or an asset is not `uploaded`.** `releases/latest` may already point at it. The log names the release id and includes the upload URL plus `gh api -X DELETE repos/OWNER/REPO/releases/assets/ASSET_ID`. A single draft for this commit is completed by that id: unfinished assets are deleted, missing files are uploaded, then the draft is published with `gh api -X PATCH repos/OWNER/REPO/releases/RELEASE_ID -F draft=false`. Two drafts for the same tag fail, and the log lists each id with a delete command. A draft that targets a different commit stays a draft.
+
+**HTTP 403 while reading releases.** The publish job needs `contents: write`. Without it, draft releases are omitted from the list and uploads fail.
 
 ## bolt.d.ts
 
