@@ -1,6 +1,5 @@
 import { defineCommand } from "citty";
-import { findConfig } from "../discover";
-import { loadConfig } from "../config";
+import { loadProjectConfigOrExit } from "../project-config";
 import { buildRegistry } from "../plugin-registry";
 import { builtinPlugins } from "../plugins";
 import path from "path";
@@ -9,12 +8,7 @@ import pc from "picocolors";
 export default defineCommand({
   meta: { name: "list", description: "List active plugins and their handlers" },
   async run() {
-    const configPath = await findConfig(process.cwd());
-    if (!configPath) {
-      console.error(pc.red("bolt.yaml not found"));
-      process.exit(1);
-    }
-    const cfg = await loadConfig(configPath);
+    const { configPath, cfg } = await loadProjectConfigOrExit();
     const configDir = path.dirname(configPath);
     const registry = await buildRegistry(cfg, configDir, Object.values(builtinPlugins));
 

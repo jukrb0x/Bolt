@@ -166,7 +166,7 @@ function bolt(cwd: string, ...args: string[]) {
 test("bolt check prints a migration snippet for a v2.0 config", () => {
   const dir = dirWith(V20_SHARED, V20_LOCAL);
   const r = bolt(dir, "check");
-  expect(r.status).toBe(1);
+  expect(r.status).toBe(3);
   expect(r.out).toContain("bolt v2.0 config");
   expect(r.out).toContain("bolt migrate");
   expect(r.out).toContain("# bolt.local.yaml");

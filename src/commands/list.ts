@@ -1,17 +1,11 @@
 import { defineCommand } from "citty";
-import { findConfig } from "../discover";
-import { loadConfig } from "../config";
+import { loadProjectConfigOrExit } from "../project-config";
 import pc from "picocolors";
 
 export default defineCommand({
   meta: { name: "list", description: "List tasks and flows defined in bolt.yaml" },
   async run() {
-    const configPath = await findConfig(process.cwd());
-    if (!configPath) {
-      console.error("bolt.yaml not found");
-      process.exit(1);
-    }
-    const cfg = await loadConfig(configPath);
+    const { configPath, cfg } = await loadProjectConfigOrExit();
 
     const tasks = Object.keys(cfg.tasks);
     const flows = Object.entries(cfg.flows);
