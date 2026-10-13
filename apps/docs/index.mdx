@@ -62,14 +62,17 @@ own plugins in TypeScript.
 
 Install Bolt:
 
-<Tabs>
-  <Tab title="Windows (PowerShell)">
-    ```powershell irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex ```
-  </Tab>
-  <Tab title="macOS / Linux">
-    ```bash curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh ```
-  </Tab>
-</Tabs>
+<CodeGroup>
+
+```powershell Windows (PowerShell)
+irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
+```
+
+```bash macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
+```
+
+</CodeGroup>
 
 Open a new terminal so `bolt` is on your `PATH`. Windows installs `%USERPROFILE%\.bolt\bin\bolt.exe`.
 macOS and Linux install `~/.bolt/bin/bolt`. Run `bolt self-update` to update later. See
