@@ -57,6 +57,14 @@ interface RunnerOptions {
   onStepResult?: (result: StepResult) => void;
 }
 
+/** Errors the runner already printed (step failure), so callers do not print them twice. */
+const reportedErrors = new WeakSet<object>();
+
+/** Whether `error` was already printed by the runner as a task failure. */
+export function wasReported(error: unknown): boolean {
+  return typeof error === "object" && error !== null && reportedErrors.has(error);
+}
+
 export class Runner {
   private registry?: PluginRegistry;
   private runtime: Runtime;
@@ -212,6 +220,7 @@ export class Runner {
         results.push({ op: task.name, ok: false, duration });
         this.opts.logger?.fail(task.name, duration / 1000);
         this.opts.logger?.error(message);
+        if (typeof error === "object" && error !== null) reportedErrors.add(error);
         await notifier.fire({
           kind: "op_failure",
           ctx,
@@ -321,9 +330,10 @@ export class Runner {
     this.opts.onStepResult?.({ ...result, ref, step });
 
     if (result.summary) {
-      const line = `${ref}: ${result.status} — ${result.summary}`;
-      if (result.status === "warn") logger?.warn(line);
-      else if (result.status !== "fail") logger?.step_detail(line);
+      // The [WARN] prefix already says "warn"; other statuses keep the status word.
+      if (result.status === "warn") logger?.warn(`${ref}: ${result.summary}`);
+      else if (result.status !== "fail")
+        logger?.step_detail(`${ref}: ${result.status} — ${result.summary}`);
     }
     for (const d of result.diagnostics ?? []) {
       const where = d.file ? ` (${d.file}${d.line !== undefined ? `:${d.line}` : ""})` : "";
