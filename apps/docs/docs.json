@@ -82,6 +82,7 @@
           "guides/plugin-system",
           "guides/plugin-development",
           "api/plugin-api",
+          "guides/migrating-to-plugin-api-2",
           "guides/e2e"
         ]
       },

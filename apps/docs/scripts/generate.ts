@@ -229,6 +229,9 @@ function pluginPages(): string[] {
       const lines = [`### ${ns}/${name}`];
       if (h.description) lines.push(cell(h.description));
       lines.push(`Step: ${code(`uses: ${ns}/${name}`)}. AI: ${aiLabel(h.ai)}.`);
+      if (h.capabilities?.length) {
+        lines.push(`Capabilities: ${h.capabilities.map((tag) => code(tag)).join(", ")}.`);
+      }
       lines.push(paramsTable(h.paramsSchema as Json | undefined));
       parts.push(lines.join("\n\n"));
     }

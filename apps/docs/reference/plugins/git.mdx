@@ -1,17 +1,21 @@
 ---
 title: "git plugin"
-description: ""
+description: "Built-in git handlers."
 ---
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
+Built-in git handlers.
+
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `git`     |         | 5        |
+| `git`     | `1.0.0` | 5        |
 
 ## Handlers
 
 ### git/checkout
+
+git checkout $&#123;branch&#125; in $&#123;path&#125;
 
 Step: `uses: git/checkout`. AI: `false` (not exposed to AI).
 
@@ -19,24 +23,40 @@ _No declared parameter schema._
 
 ### git/clone
 
+git clone $&#123;url&#125; into $&#123;path&#125;
+
 Step: `uses: git/clone`. AI: `false` (not exposed to AI).
 
 _No declared parameter schema._
 
 ### git/info
 
-Step: `uses: git/info`. AI: `false` (not exposed to AI).
+git info $&#123;path&#125;
 
-_No declared parameter schema._
+Step: `uses: git/info`. AI: `true` (AI may call this handler).
+
+Capabilities: `vcs.info`.
+
+| Param  | Type     | Required | Default | Notes                                |
+| ------ | -------- | -------- | ------- | ------------------------------------ |
+| `path` | `string` | yes      |         | Working copy path inside the project |
 
 ### git/pull
 
+git pull $&#123;path&#125;
+
 Step: `uses: git/pull`. AI: `false` (not exposed to AI).
+
+Capabilities: `vcs.sync`.
 
 _No declared parameter schema._
 
 ### git/status
 
-Step: `uses: git/status`. AI: `false` (not exposed to AI).
+git status $&#123;path&#125;
 
-_No declared parameter schema._
+Step: `uses: git/status`. AI: `"confirm"` (AI may call it after user confirmation).
+
+| Param  | Type     | Required | Default | Notes             |
+| ------ | -------- | -------- | ------- | ----------------- |
+| `path` | `string` | yes      |         | Working copy path |

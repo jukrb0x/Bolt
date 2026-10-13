@@ -289,6 +289,19 @@ Shallow-merge a patch JSON file over a target JSON file.
 
 Top-level keys from `patch` overwrite keys in `file`. Writes result back to `file`.
 
+## git/ and svn/ — Version control
+
+Both are plugin API v2 plugins. Generated pages list every handler: [git](/reference/plugins/git), [svn](/reference/plugins/svn).
+
+| Handler                                                                           | `ai`        | Capability | Notes                                                                                      |
+| --------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `git/info`, `svn/info`                                                            | `true`      | `vcs.info` | Read-only. `path` must be inside the project directory (relative paths resolve against it) |
+| `git/status`, `svn/status`                                                        | `"confirm"` |            | `git status` runs the repository's `core.fsmonitor` command, so it is not AI-callable      |
+| `git/pull`, `svn/update`                                                          | `false`     | `vcs.sync` | Change the working copy                                                                    |
+| `git/checkout`, `git/clone`, `svn/cleanup`, `svn/revert`, `svn/commit`, `svn/add` | `false`     |            | Change the working copy or the remote                                                      |
+
+`git/info` and `svn/info` return their fields as result data (`commit`, `branch`; `url`, `revision`, `last_changed_rev`). `ue/info` still prints engine and project info for paths outside the project.
+
 ## See Also
 
 - [Plugin API](/api/plugin-api) - Creating custom handlers

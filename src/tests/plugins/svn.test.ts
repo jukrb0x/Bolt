@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import path from "path";
 import svnPlugin from "../../plugins/svn";
 import { testCfg, mockRuntime, PROJECT_ROOT, tortoiseProcOnPath } from "../env";
 import type { BoltPluginContext } from "../../plugin";
@@ -85,9 +86,18 @@ test("revert uses with:path when provided", async () => {
   expect(ctx.logged.some((l) => l.includes("C:/CustomPath"))).toBe(true);
 });
 
-test("info runs without throwing and logs svn output", async () => {
+test("info (ai: true) rejects a path outside the project directory", async () => {
   const ctx = makeCtx();
-  await svnPlugin.handlers["info"](atProject, ctx);
+  const outside = path.resolve(ctx.configDir, "..", "other-wc");
+  await expect(svnPlugin.handlers["info"]({ path: outside }, ctx)).rejects.toThrow(
+    /svn\/info: path .* is outside the project directory/,
+  );
+});
+
+test("info runs without throwing and logs svn output", async () => {
+  const root = path.resolve(PROJECT_ROOT);
+  const ctx = { ...makeCtx(), configDir: root };
+  await svnPlugin.handlers["info"]({ path: root }, ctx);
   expect(ctx.logged.length).toBeGreaterThan(0);
 });
 

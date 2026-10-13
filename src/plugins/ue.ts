@@ -4,8 +4,8 @@ import path from "path";
 import { existsSync, readdirSync, readFileSync, statSync, renameSync, mkdirSync } from "fs";
 import { z } from "zod";
 import { declaredPluginConfig, run, execRaw as exec } from "./helpers";
-import gitPlugin from "./git";
-import svnPlugin from "./svn";
+import gitPlugin, { gitInfo } from "./git";
+import svnPlugin, { svnInfo } from "./svn";
 import * as ueIni from "./ue-ini";
 import { BuildConfigSchema, normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
 import type { BuildConfig } from "../build-config";
@@ -617,14 +617,14 @@ class UEPlugin extends PluginBase.withDescriptor({
     const projectPath = ueConfig(ctx).project.path;
 
     if (engineVcs === "git") {
-      await gitPlugin.handlers["info"]({ path: enginePath }, ctx);
+      await gitInfo(enginePath, ctx);
     } else {
-      await svnPlugin.handlers["info"]({ path: enginePath }, ctx);
+      await svnInfo(enginePath, ctx);
     }
     if (projectVcs === "svn") {
-      await svnPlugin.handlers["info"]({ path: projectPath }, ctx);
+      await svnInfo(projectPath, ctx);
     } else {
-      await gitPlugin.handlers["info"]({ path: projectPath }, ctx);
+      await gitInfo(projectPath, ctx);
     }
   }
 
