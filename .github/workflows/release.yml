@@ -5,6 +5,14 @@ on:
     tags:
       - "v*"
 
+# Serializes Release runs for this tag. A second push event waits until the first
+# run finishes, including uploads. This does not cover another workflow, or a job
+# restarted by hand, publishing the same tag. The publish script re-reads the
+# release if create fails.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 # Build and smoke are called with contents: read. Only publish can write.
 
 permissions:
@@ -44,6 +52,9 @@ jobs:
         with:
           name: bolt-binaries
           path: build
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.3"
 
       - name: Publish GitHub Release
         env:
@@ -71,18 +82,9 @@ jobs:
             fi
             echo
           } >"$NOTES"
-          mapfile -t names < build/assets.txt
-          files=()
-          for name in "${names[@]}"; do
-            [ -n "$name" ] || continue
-            files+=("build/$name")
-          done
-          PRE=()
-          case "$TAG" in
-            *-* ) PRE+=(--prerelease) ;;
-          esac
-          gh release create "$TAG" \
-            "${files[@]}" \
-            --title "$TAG" \
-            --notes-file "$NOTES" \
-            "${PRE[@]}"
+          bun run scripts/publish-release.ts \
+            --tag "$TAG" \
+            --commit "$COMMIT" \
+            --asset-dir build \
+            --assets-file build/assets.txt \
+            --notes-file "$NOTES"
