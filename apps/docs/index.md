@@ -48,7 +48,7 @@ Install Bolt:
   </Tab>
 </Tabs>
 
-Open a new terminal so `PATH` includes `bolt`. Windows installs `%LOCALAPPDATA%\bolt\bin\bolt.exe`. macOS and Linux install `~/.bolt/bin/bolt` (`bolt-mac-x64` on Intel macOS, `bolt-mac-arm64` on Apple Silicon, `bolt-linux-x64` on Linux). Add a `bolt.yaml` with `version: 1`. Unreal targets go under the `ue` plugin, not at the root of the file. See [Installation](/guides/installation).
+Open a new terminal so `PATH` includes `bolt`. Windows installs `%USERPROFILE%\.bolt\bin\bolt.exe`. macOS and Linux install `~/.bolt/bin/bolt` (`bolt-mac-x64` on Intel macOS, `bolt-mac-arm64` on Apple Silicon, `bolt-linux-x64` on Linux). Add a `bolt.yaml` with `version: 1`. Unreal targets go under the `ue` plugin, not at the root of the file. See [Installation](/guides/installation).
 
 Run your workflow. Pass tasks to run them in the order you type, or a flow name to hit a predefined goal:
 

@@ -61,7 +61,9 @@ curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
 :::
 
-Windows installs `%LOCALAPPDATA%\bolt\bin\bolt.exe`. macOS and Linux install `~/.bolt/bin/bolt`. Both write the receipt under `~/.bolt/install.json`. Open a new terminal after the first install so `PATH` includes the binary.
+Windows installs `%USERPROFILE%\.bolt\bin\bolt.exe`. macOS and Linux install `~/.bolt/bin/bolt`. If a bolt is already on your PATH, the script updates that copy in place. Both write the receipt under `~/.bolt/install.json`.
+
+`bolt self-update` only replaces the running executable, at the path recorded in the receipt. It writes the download next to that file and never installs to another directory. Open a new terminal after the first install so `PATH` includes the binary.
 
 ## See Also
 

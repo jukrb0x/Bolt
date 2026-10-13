@@ -1,5 +1,6 @@
 # Windows install proof. Builds two real bolt binaries, serves them on localhost,
-# runs install.ps1, then bolt self-update.
+# runs install.ps1, then bolt self-update, then install.ps1 again over a bolt.exe
+# that is already on PATH outside %USERPROFILE%\.bolt\bin.
 # The public `irm https://.../install.ps1 | iex` run is a later job, after a GitHub Release exists.
 param(
   [ValidateSet("main", "probe")]
@@ -47,7 +48,10 @@ $PublicBase = "http://127.0.0.1:$Port"
 $ServeRoot = Join-Path $Root "build\e2e\serve"
 $LogOut = Join-Path $env:TEMP "bolt-release-server.out"
 $LogErr = Join-Path $env:TEMP "bolt-release-server.err"
-$DestDir = Join-Path $env:LOCALAPPDATA "bolt\bin"
+$DestDir = Join-Path $env:USERPROFILE ".bolt\bin"
+$LegacyDir = Join-Path $env:LOCALAPPDATA "bolt\bin"
+# USERPROFILE, not TEMP: TEMP can be an 8.3 short path that install.ps1 expands.
+$CustomDir = Join-Path $env:USERPROFILE "bolt-e2e-custom\bin"
 $Dest = Join-Path $DestDir "bolt.exe"
 $Old = "$Dest.old"
 $ReceiptPath = Join-Path $env:USERPROFILE ".bolt\install.json"
@@ -116,6 +120,8 @@ function Get-FreshPath {
 try {
   if (Test-Path -LiteralPath $DestDir) { Remove-Item -LiteralPath $DestDir -Recurse -Force }
   if (Test-Path -LiteralPath $ReceiptPath) { Remove-Item -LiteralPath $ReceiptPath -Force }
+  if (Test-Path -LiteralPath $LegacyDir) { Remove-Item -LiteralPath $LegacyDir -Recurse -Force }
+  if (Test-Path -LiteralPath $CustomDir) { Remove-Item -LiteralPath $CustomDir -Recurse -Force }
   New-Item -ItemType Directory -Force -Path (Join-Path $ServeRoot "current") | Out-Null
   New-Item -ItemType Directory -Force -Path (Join-Path $ServeRoot "newer") | Out-Null
 
@@ -198,9 +204,38 @@ try {
   Write-Host "later launch removed bolt.exe.old"
   if ((Get-Sha256 $Dest) -ne $newerHash) { throw "cleanup replaced or removed the newer bolt.exe" }
 
+  # A bolt.exe already on PATH elsewhere is updated in place, and a v2.1.x
+  # %LOCALAPPDATA%\bolt\bin directory is reported but left alone.
+  New-Item -ItemType Directory -Force -Path $CustomDir | Out-Null
+  New-Item -ItemType Directory -Force -Path $LegacyDir | Out-Null
+  $customExe = Join-Path $CustomDir "bolt.exe"
+  Copy-Item -LiteralPath $currentExe -Destination $customExe -Force
+  $defaultStamp = (Get-Item -LiteralPath $Dest).LastWriteTimeUtc
+  $userPathBefore = [Environment]::GetEnvironmentVariable("Path", "User")
+  $env:Path = "$CustomDir;" + (Get-FreshPath)
+  $env:BOLT_INSTALL_BASE = "$PublicBase/newer"
+  Write-Host "running install.ps1 with $customExe first on PATH"
+  $installOut = (& (Join-Path $Root "install.ps1") *>&1 | Out-String)
+  Remove-Item Env:BOLT_INSTALL_BASE
+  Write-Host $installOut
+  if ((Get-Sha256 $customExe) -ne $newerHash) { throw "install.ps1 did not update $customExe in place" }
+  if ((Get-Item -LiteralPath $Dest).LastWriteTimeUtc -ne $defaultStamp) { throw "install.ps1 also wrote $Dest" }
+  if ($installOut -notmatch "Updating it in place") { throw "install.ps1 did not report the in-place update" }
+  if ($installOut -notmatch "no longer used") { throw "install.ps1 did not mention $LegacyDir" }
+  if (-not (Test-Path -LiteralPath $LegacyDir)) { throw "install.ps1 deleted $LegacyDir" }
+  if ([Environment]::GetEnvironmentVariable("Path", "User") -ne $userPathBefore) { throw "in-place update changed the user Path" }
+  $receipt = Get-Content -Raw -LiteralPath $ReceiptPath | ConvertFrom-Json
+  if ($receipt.path.TrimEnd("\").ToLower() -ne $customExe.ToLower() -or $receipt.version -ne "2.0.1") {
+    throw "receipt after in-place update: $(Get-Content -Raw -LiteralPath $ReceiptPath)"
+  }
+  Write-Host "install.ps1 updated the bolt.exe on PATH in place"
+
   Write-Host "windows install and self-update ok"
   $Failed = $false
 } finally {
+  foreach ($dir in @($LegacyDir, (Split-Path -Parent $CustomDir))) {
+    if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
+  }
   if ($Server -and -not $Server.HasExited) {
     Stop-Process -Id $Server.Id -Force -ErrorAction SilentlyContinue
   }

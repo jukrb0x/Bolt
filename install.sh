@@ -2,10 +2,15 @@
 # Install bolt for macOS or Linux.
 #   curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 # Intel macOS installs bolt-mac-x64. Apple Silicon installs bolt-mac-arm64.
+# Installs to ~/.bolt/bin/bolt. If a bolt is already on PATH, that copy is updated in place.
 set -eu
 
 REPO="jukrb0x/Bolt"
 BASE="https://github.com/${REPO}/releases/latest/download"
+# Tests point BOLT_INSTALL_BASE at a local release directory.
+if [ -n "${BOLT_INSTALL_BASE:-}" ]; then
+  BASE="${BOLT_INSTALL_BASE%/}"
+fi
 
 # Print the release asset for an OS and machine, or return 1.
 resolve_asset() {
@@ -43,7 +48,45 @@ if [ "${BOLT_INSTALL_PRINT_ASSET:-}" = "1" ]; then
 fi
 
 ASSET=$(resolve_asset "$(uname -s)" "$(uname -m)")
-DEST="${HOME}/.bolt/bin"
+DEFAULT_DEST="${HOME}/.bolt/bin"
+DEST="$DEFAULT_DEST"
+
+# Package-manager copies (npm, Homebrew) are left to their manager.
+is_managed_path() {
+  case "$1" in
+    */node_modules/* | */Cellar/* | */cellar/* | */homebrew/* | */Homebrew/* | */linuxbrew/*) return 0 ;;
+  esac
+  return 1
+}
+
+# Update a bolt that is already on PATH instead of installing a second copy.
+existing=$(command -v bolt 2>/dev/null || true)
+case "$existing" in
+  /*)
+    existing_dir=$(dirname "$existing")
+    if [ -L "$existing" ]; then
+      echo "Ignoring ${existing} on PATH: it is a symlink. Installing to ${DEFAULT_DEST}."
+    elif is_managed_path "$existing"; then
+      echo "Ignoring ${existing} on PATH: it belongs to a package manager. Update it with that manager."
+    elif [ ! -f "$existing" ] || [ ! -w "$existing_dir" ]; then
+      echo "Ignoring ${existing} on PATH: ${existing_dir} is not writable. Installing to ${DEFAULT_DEST}."
+    else
+      existing_version=$("$existing" version 2>/dev/null | tr -d '[:space:]' || true)
+      case "$existing_version" in
+        [0-9]*.[0-9]*.[0-9]*)
+          case "$existing_version" in
+            *[!0-9A-Za-z.+-]*) echo "Ignoring ${existing} on PATH: it did not print a bolt version." ;;
+            *)
+              DEST="$existing_dir"
+              echo "Found bolt ${existing_version} at ${existing}. Updating it in place."
+              ;;
+          esac
+          ;;
+        *) echo "Ignoring ${existing} on PATH: it did not print a bolt version." ;;
+      esac
+    fi
+    ;;
+esac
 RECEIPT="${HOME}/.bolt/install.json"
 
 mkdir -p "$DEST" "${HOME}/.bolt"
@@ -100,27 +143,29 @@ EOF
 
 PATH_LINE='export PATH="$HOME/.bolt/bin:$PATH"'
 SHELL_RC=""
-case "${SHELL:-}" in
-  */zsh) SHELL_RC="$HOME/.zshrc" ;;
-  */bash) SHELL_RC="$HOME/.bashrc" ;;
-  *)
-    if [ -f "$HOME/.zshrc" ]; then
-      SHELL_RC="$HOME/.zshrc"
-    elif [ -f "$HOME/.bashrc" ]; then
-      SHELL_RC="$HOME/.bashrc"
-    elif [ -f "$HOME/.profile" ]; then
-      SHELL_RC="$HOME/.profile"
+if [ "$DEST" = "$DEFAULT_DEST" ]; then
+  case "${SHELL:-}" in
+    */zsh) SHELL_RC="$HOME/.zshrc" ;;
+    */bash) SHELL_RC="$HOME/.bashrc" ;;
+    *)
+      if [ -f "$HOME/.zshrc" ]; then
+        SHELL_RC="$HOME/.zshrc"
+      elif [ -f "$HOME/.bashrc" ]; then
+        SHELL_RC="$HOME/.bashrc"
+      elif [ -f "$HOME/.profile" ]; then
+        SHELL_RC="$HOME/.profile"
+      fi
+      ;;
+  esac
+  if [ -n "$SHELL_RC" ]; then
+    if ! grep -F '.bolt/bin' "$SHELL_RC" >/dev/null 2>&1; then
+      printf '\n%s\n' "$PATH_LINE" >>"$SHELL_RC"
+      echo "Added ~/.bolt/bin to PATH in $SHELL_RC"
     fi
-    ;;
-esac
-if [ -n "$SHELL_RC" ]; then
-  if ! grep -F '.bolt/bin' "$SHELL_RC" >/dev/null 2>&1; then
-    printf '\n%s\n' "$PATH_LINE" >>"$SHELL_RC"
-    echo "Added ~/.bolt/bin to PATH in $SHELL_RC"
+  else
+    echo "Add this to your shell profile:"
+    echo "  $PATH_LINE"
   fi
-else
-  echo "Add this to your shell profile:"
-  echo "  $PATH_LINE"
 fi
 
 echo "Installed ${ASSET} to ${DEST}/bolt (${version})"

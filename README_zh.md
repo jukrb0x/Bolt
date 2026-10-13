@@ -22,7 +22,7 @@ bolt run update build start
 irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 ```
 
-`bolt.exe` 安装到 `%LOCALAPPDATA%\bolt\bin`，并把该目录加入用户 Path。
+`bolt.exe` 安装到 `%USERPROFILE%\.bolt\bin`，并把该目录加入用户 Path。如果 PATH 上已有 `bolt.exe`，脚本会原地更新那一份。
 
 **macOS 与 Linux**
 
@@ -30,7 +30,7 @@ irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
 
-Intel macOS 安装 `bolt-mac-x64`。Apple Silicon 安装 `bolt-mac-arm64`。Linux x64 安装 `bolt-linux-x64`。二进制位于 `~/.bolt/bin/bolt`。脚本安装的更新方式：
+Intel macOS 安装 `bolt-mac-x64`。Apple Silicon 安装 `bolt-mac-arm64`。Linux x64 安装 `bolt-linux-x64`。二进制位于 `~/.bolt/bin/bolt`。如果 PATH 上已有 `bolt`，脚本会原地更新那一份。脚本安装的更新方式：
 
 ```
 bolt self-update

@@ -18,11 +18,15 @@ Open a new terminal. The script adds the install directory to your user Path, an
 
 |               |                                    |
 | ------------- | ---------------------------------- |
-| Binary        | `%LOCALAPPDATA%\bolt\bin\bolt.exe` |
+| Binary        | `%USERPROFILE%\.bolt\bin\bolt.exe` |
 | Receipt       | `%USERPROFILE%\.bolt\install.json` |
 | Release asset | `bolt-win-x64.exe`                 |
 
 Re-running the script renames a running `bolt.exe` to `bolt.exe.old` before writing the new file.
+
+If `bolt.exe` is already on your PATH and prints a bolt version, the script updates that file in place and does not touch your user Path. Copies in a directory you cannot write, or under npm, winget, or scoop, are skipped and the script installs to `%USERPROFILE%\.bolt\bin`. Update package-manager copies with their manager.
+
+Bolt v2.1.0 to v2.1.2 installed to `%LOCALAPPDATA%\bolt\bin`. If that directory exists, the script installs to `%USERPROFILE%\.bolt\bin`, moves that entry to the front of your user Path, and prints a note. It does not delete the old directory. You can remove it and its user Path entry yourself.
 
 ## macOS and Linux
 
@@ -31,6 +35,8 @@ curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
 ```
 
 Open a new shell, then run `bolt version`. The script appends `~/.bolt/bin` to `~/.zshrc`, `~/.bashrc`, or `~/.profile`.
+
+If `bolt` is already on your PATH and prints a bolt version, the script updates that file in place and leaves your shell profile alone. Symlinks, unwritable directories, and npm or Homebrew copies are skipped, and the script installs to `~/.bolt/bin` instead.
 
 | Machine                 | Release asset    | Installed path     |
 | ----------------------- | ---------------- | ------------------ |
@@ -146,7 +152,7 @@ Download the asset for your machine from [GitHub Releases](https://github.com/ju
 **Windows**
 
 ```powershell
-$installPath = Join-Path $env:LOCALAPPDATA "bolt\bin"
+$installPath = Join-Path $env:USERPROFILE ".bolt\bin"
 New-Item -ItemType Directory -Force -Path $installPath | Out-Null
 Copy-Item .\bolt-win-x64.exe "$installPath\bolt.exe"
 # Add $installPath to your user Path, open a new terminal, then:
@@ -189,8 +195,9 @@ Deleting the binary does not delete `~/.bolt/plugins`. Remove the Path entry in 
 **Windows**
 
 ```powershell
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\bolt"
-# Remove "%LOCALAPPDATA%\bolt\bin" from your user Path.
+Remove-Item -Recurse -Force "$env:USERPROFILE\.bolt\bin"
+# Remove "%USERPROFILE%\.bolt\bin" from your user Path.
+# If you used v2.1.0 to v2.1.2, also remove "$env:LOCALAPPDATA\bolt" and its Path entry.
 # The receipt, if you want it gone too:
 Remove-Item -Force "$env:USERPROFILE\.bolt\install.json"
 ```
@@ -207,7 +214,7 @@ rm -f ~/.bolt/install.json
 
 ### `bolt` is not recognized
 
-On Windows, open a new terminal after the installer edits your user Path. Confirm the file exists at `%LOCALAPPDATA%\bolt\bin\bolt.exe`.
+On Windows, open a new terminal after the installer edits your user Path. Confirm the file exists at `%USERPROFILE%\.bolt\bin\bolt.exe`.
 
 On macOS and Linux, open a new shell so the `PATH` line is loaded.
 
