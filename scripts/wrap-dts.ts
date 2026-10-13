@@ -29,8 +29,15 @@ ${stripped
 `;
 
 writeFileSync(file, wrapped, "utf8");
+// Format with the repo formatter so regenerating gives the committed bytes (no tab/space noise).
+const fmt = Bun.spawnSync(["oxfmt", "--write", file], { stdout: "ignore", stderr: "inherit" });
+if (fmt.exitCode !== 0) {
+  console.error(`oxfmt failed on ${file} (exit ${fmt.exitCode})`);
+  process.exit(1);
+}
+const formatted = readFileSync(file, "utf8");
 // Same bytes the CLI embeds. `bolt types` writes this text, so it cannot drift from the declaration just generated.
 const embedded = join(dirname(fileURLToPath(import.meta.url)), "../src/plugin-types.txt");
-writeFileSync(embedded, wrapped, "utf8");
+writeFileSync(embedded, formatted, "utf8");
 console.log(`Wrapped ${file} in declare module "boltstack"`);
 console.log(`Embedded declaration text in ${embedded}`);
