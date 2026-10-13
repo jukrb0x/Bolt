@@ -4,7 +4,8 @@
  *
  * A new release is created as a draft and published only after its assets upload,
  * so releases/latest never points at a partial upload. The tag endpoint returns
- * only a published release, so a 404 is followed by a paginated release list.
+ * only a published release, so a 404 is followed by `gh api --paginate --slurp`
+ * (gh 2.48 or newer), which wraps each page in an outer array.
  * That list includes drafts for a token that can push. One matching draft is
  * completed by release id. More than one fails. A later run accepts a finished
  * release for the same commit, and fails without editing when the recorded
@@ -147,11 +148,16 @@ export function parseApiRelease(body: string): ReleaseView {
   return releaseFromApi(JSON.parse(body) as ApiRelease);
 }
 
-/** `gh api --paginate` concatenates release pages into one JSON array. */
+/**
+ * `gh api --paginate --slurp` (gh 2.48+) returns `[[page],[page]]`.
+ * A single page without `--slurp` is one array of releases. Pages written
+ * back to back (`[...][...]`) are not JSON.
+ */
 export function parseApiReleaseList(body: string): ReleaseView[] {
   const raw = JSON.parse(body) as unknown;
   if (!Array.isArray(raw)) throw new Error("release list is not an array");
-  return raw.map((item) => releaseFromApi(item as ApiRelease));
+  const items = raw.every((item) => Array.isArray(item)) ? raw.flat() : raw;
+  return items.map((item) => releaseFromApi(item as ApiRelease));
 }
 
 /** Upload URL for this release id. The tag endpoint is not used. */
@@ -413,7 +419,7 @@ function lookupRelease(repo: string, tag: string, exec: RunOptions["exec"]): Rel
     }
   }
 
-  const listed = exec("gh", ["api", "--paginate", `repos/${repo}/releases`]);
+  const listed = exec("gh", ["api", "--paginate", "--slurp", `repos/${repo}/releases`]);
   if (listed.exitCode !== 0) {
     const status = httpStatusOf(listed);
     const detail = listed.stderr || listed.stdout;
@@ -637,6 +643,7 @@ export function runPublish(options: RunOptions): number {
     if (absent) return report(`Refusing to publish ${tag}: missing file ${absent}.`);
     const created = options.exec("gh", [
       "api",
+      "-i",
       "-X",
       "POST",
       "-H",
@@ -652,7 +659,7 @@ export function runPublish(options: RunOptions): number {
       "draft=true",
       "-F",
       `prerelease=${tag.includes("-") ? "true" : "false"}`,
-      "-f",
+      "-F",
       `body=@${notesFile}`,
     ]);
     const parsed = splitHttpMessage(created.stdout);

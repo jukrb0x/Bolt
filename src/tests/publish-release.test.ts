@@ -4,6 +4,7 @@ import path from "path";
 import {
   commitFromLsRemote,
   parseApiRelease,
+  parseApiReleaseList,
   parseAssetNames,
   planPublish,
   runPublish,
@@ -273,11 +274,26 @@ test("the release workflow serializes one tag and publishes through the script",
   expect(yaml).toContain("another workflow");
 });
 
-function http(status: number, body: unknown): ExecResult {
+/** `gh api` prints a status line only when `-i` is passed. Otherwise stdout is the body. */
+function http(args: string[], status: number, body: unknown): ExecResult {
   const json = JSON.stringify(body);
+  const includeHeaders = args.includes("-i");
   return {
     exitCode: status >= 200 && status < 300 ? 0 : 1,
-    stdout: `HTTP/2.0 ${status} X\r\n\r\n${json}`,
+    stdout: includeHeaders ? `HTTP/2.0 ${status} X\r\n\r\n${json}` : json,
+    stderr: status >= 200 && status < 300 ? "" : `gh: HTTP ${status}\n`,
+  };
+}
+
+/**
+ * Without `--slurp`, `gh api --paginate` writes each page back to back.
+ * Two pages are `[...][...]`, which is not JSON. `--slurp` wraps the pages.
+ */
+function releasePages(args: string[], pages: unknown[][]): ExecResult {
+  const slurp = args.includes("--paginate") && args.includes("--slurp");
+  return {
+    exitCode: 0,
+    stdout: slurp ? JSON.stringify(pages) : pages.map((page) => JSON.stringify(page)).join(""),
     stderr: "",
   };
 }
@@ -323,13 +339,13 @@ test("create failure is retried from the release that exists, without English 42
       calls.push(args);
       if (args[0] === "ls-remote")
         return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
-      if (args.includes("--paginate")) return { exitCode: 0, stdout: "[]", stderr: "" };
+      if (args.includes("--paginate")) return releasePages(args, [[]]);
       if (args.some((arg) => arg.includes("/releases/tags/"))) {
         tagGets++;
-        if (tagGets === 1) return http(404, { message: "Introuvable" });
-        return http(200, apiBody(release()));
+        if (tagGets === 1) return http(args, 404, { message: "Introuvable" });
+        return http(args, 200, apiBody(release()));
       }
-      if (isCreatePost(args)) return http(422, { message: "Validation Failed" });
+      if (isCreatePost(args)) return http(args, 422, { message: "Validation Failed" });
       return { exitCode: 0, stdout: "", stderr: "" };
     },
   });
@@ -362,13 +378,11 @@ test("a re-run with an incomplete draft completes that draft and does not create
       if (args[0] === "ls-remote")
         return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
       if (args.some((arg) => arg.includes("/releases/tags/")))
-        return http(404, { message: "Not Found" });
+        return http(args, 404, { message: "Not Found" });
       if (args.includes("--paginate")) {
-        return {
-          exitCode: 0,
-          stdout: JSON.stringify([apiBody(draft), apiBody(release({ id: 99, tagName: "v9.9.9" }))]),
-          stderr: "",
-        };
+        return releasePages(args, [
+          [apiBody(draft), apiBody(release({ id: 99, tagName: "v9.9.9" }))],
+        ]);
       }
       return { exitCode: 0, stdout: "", stderr: "" };
     },
@@ -413,17 +427,11 @@ test("two drafts for the same tag fail closed", () => {
       if (args[0] === "ls-remote")
         return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
       if (args.some((arg) => arg.includes("/releases/tags/")))
-        return http(404, { message: "Not Found" });
+        return http(args, 404, { message: "Not Found" });
       if (args.includes("--paginate")) {
-        return {
-          exitCode: 0,
-          stdout: JSON.stringify([
-            one(11),
-            one(22),
-            apiBody(release({ id: 33, tagName: "v0.0.1" })),
-          ]),
-          stderr: "",
-        };
+        return releasePages(args, [
+          [one(11), one(22), apiBody(release({ id: 33, tagName: "v0.0.1" }))],
+        ]);
       }
       return { exitCode: 0, stdout: "", stderr: "" };
     },
@@ -462,7 +470,12 @@ test("a query that is not HTTP 404 fails with the response, and missing args nam
     exec: (_command, args) => {
       if (args[0] === "ls-remote")
         return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
-      return { exitCode: 1, stdout: "HTTP/2.0 500 X\r\n\r\n{}", stderr: "backend exploded\n" };
+      const headed = args.includes("-i");
+      return {
+        exitCode: 1,
+        stdout: headed ? "HTTP/2.0 500 X\r\n\r\n{}" : "{}",
+        stderr: "backend exploded\n",
+      };
     },
   });
   expect(query).toBe(1);
@@ -523,7 +536,7 @@ test("a 403 while reading the release mentions contents: write", () => {
       calls.push(args);
       if (args[0] === "ls-remote")
         return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
-      return http(403, { message: "Forbidden" });
+      return http(args, 403, { message: "Forbidden" });
     },
   });
   expect(code).toBe(1);
@@ -552,7 +565,8 @@ test("checksum drift is emitted as a workflow warning", () => {
     exec: (_command, args) => {
       if (args[0] === "ls-remote")
         return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
-      if (args.some((arg) => arg.includes("/releases/tags/"))) return http(200, apiBody(drifted));
+      if (args.some((arg) => arg.includes("/releases/tags/")))
+        return http(args, 200, apiBody(drifted));
       return { exitCode: 0, stdout: "", stderr: "" };
     },
   });
@@ -560,4 +574,114 @@ test("checksum drift is emitted as a workflow warning", () => {
   expect(logs.some((line) => line.startsWith("::warning::") && line.includes("first build"))).toBe(
     true,
   );
+});
+
+test("parseApiReleaseList flattens slurped pages and rejects concatenated pages", () => {
+  const page = (id: number, tag: string) => ({
+    id,
+    tag_name: tag,
+    target_commitish: COMMIT,
+    draft: true,
+    prerelease: false,
+    assets: [],
+  });
+  const list = parseApiReleaseList(JSON.stringify([[page(1, "v1.0.0")], [page(2, "v2.1.3")]]));
+  expect(list.map((item) => item.id)).toEqual([1, 2]);
+  expect(() =>
+    parseApiReleaseList(`${JSON.stringify([page(1, "v1")])}${JSON.stringify([page(2, "v2")])}`),
+  ).toThrow();
+});
+
+test("a successful create posts once and uploads to the id in the response", () => {
+  const calls: string[][] = [];
+  let tagGets = 0;
+  let lists = 0;
+  const created = release({
+    id: 77,
+    isDraft: true,
+    uploadUrl: "https://uploads.github.com/repos/jukrb0x/Bolt/releases/77/assets{?name,label}",
+    assets: [],
+  });
+  const code = runPublish({
+    argv: publishArgv,
+    env: { GITHUB_REPOSITORY: REPO },
+    exists: () => true,
+    readFile: (file) => (file.endsWith("assets.txt") ? `${ASSETS.join("\n")}\n` : "notes\n"),
+    exec: (_command, args) => {
+      calls.push(args);
+      if (args[0] === "ls-remote")
+        return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
+      if (args.some((arg) => arg.includes("/releases/tags/"))) {
+        tagGets++;
+        return http(args, 404, { message: "Not Found" });
+      }
+      if (args.includes("--paginate")) {
+        lists++;
+        return releasePages(args, [[]]);
+      }
+      if (isCreatePost(args)) return http(args, 201, apiBody(created));
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  });
+  const post = calls.find(isCreatePost);
+  expect(code).toBe(0);
+  expect(calls.filter(isCreatePost)).toHaveLength(1);
+  expect(post).toContain("-i");
+  expect(post?.[post.indexOf("body=@notes.md") - 1]).toBe("-F");
+  expect(tagGets).toBe(1);
+  expect(lists).toBe(1);
+  for (const name of ASSETS) {
+    expect(
+      calls.some((args) =>
+        args.some((arg) => arg.includes(`releases/77/assets?name=${encodeURIComponent(name)}`)),
+      ),
+    ).toBe(true);
+  }
+  expect(
+    calls.some(
+      (args) => args.includes(`repos/${REPO}/releases/77`) && args.includes("draft=false"),
+    ),
+  ).toBe(true);
+});
+
+test("a draft on the second page is completed from the slurped list", () => {
+  const calls: string[][] = [];
+  const draft = release({
+    id: 42,
+    isDraft: true,
+    assets: ASSETS.map((name) => ({
+      id: name === "SHA256SUMS" ? 900 : 1,
+      name,
+      state: name === "SHA256SUMS" ? "starter" : "uploaded",
+      size: 1,
+    })),
+  });
+  const page1 = Array.from({ length: 30 }, (_, index) =>
+    apiBody(release({ id: 1000 + index, tagName: `v0.0.${index}` })),
+  );
+  const code = runPublish({
+    argv: publishArgv,
+    env: { GITHUB_REPOSITORY: REPO },
+    exists: () => true,
+    readFile: (file) => (file.endsWith("assets.txt") ? `${ASSETS.join("\n")}\n` : "sums\n"),
+    exec: (_command, args) => {
+      calls.push(args);
+      if (args[0] === "ls-remote")
+        return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
+      if (args.some((arg) => arg.includes("/releases/tags/")))
+        return http(args, 404, { message: "Not Found" });
+      if (args.includes("--paginate")) return releasePages(args, [page1, [apiBody(draft)]]);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  });
+  const list = calls.find((args) => args.includes("--paginate"));
+  expect(code).toBe(0);
+  expect(list).toContain("--slurp");
+  expect(calls.filter(isCreatePost)).toHaveLength(0);
+  expect(calls.some((args) => args.includes(`repos/${REPO}/releases/assets/900`))).toBe(true);
+  expect(
+    calls.some(
+      (args) => args.includes(`repos/${REPO}/releases/42`) && args.includes("draft=false"),
+    ),
+  ).toBe(true);
 });
