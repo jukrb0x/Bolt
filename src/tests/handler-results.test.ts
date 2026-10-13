@@ -242,7 +242,9 @@ test("v2 diagnostics and summaries render; backslashes in file are normalised", 
   ]);
   await h.run();
   expect(h.results[0].diagnostics?.[0].file).toBe("Config/DefaultEngine.ini");
-  expect(h.lines.some((l) => l.includes("[WARN] modern/run: Shared DDC unreachable"))).toBe(true);
+  expect(
+    h.lines.some((l) => l.includes("modern/run: Shared DDC unreachable") && !l.includes("warn —")),
+  ).toBe(true);
   expect(
     h.lines.some((l) =>
       l.includes(

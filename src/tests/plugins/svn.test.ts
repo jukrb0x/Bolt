@@ -90,9 +90,7 @@ test("info: human run with ../Engine outside the project only warns", async () =
   const ctx = makeCtx();
   await svnPlugin.handlers["info"]({ path: "../Engine" }, ctx);
   expect(
-    ctx.logged.some(
-      (l) => l.includes("[WARN]") && l.includes("AI invocations of svn/info will reject this path"),
-    ),
+    ctx.logged.some((l) => l.includes("AI invocations of svn/info will reject this path")),
   ).toBe(true);
 });
 

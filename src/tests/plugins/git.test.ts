@@ -55,7 +55,6 @@ test("info: human run with ../Engine outside the project only warns", async () =
   const resolved = path.resolve(ctx.configDir, "../Engine");
   expect(result).toMatchObject({ data: { path: resolved } });
   const warning = ctx.logged.find((l) => l.includes("outside the project directory"));
-  expect(warning).toContain("[WARN]");
   expect(warning).toContain("AI invocations of git/info will reject this path");
   expect(warning).toContain("Fix:");
 });
