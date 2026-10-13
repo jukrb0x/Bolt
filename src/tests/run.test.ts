@@ -98,7 +98,12 @@ describe("parseRunArgs strictness (BOLT-FIX-3)", () => {
   });
 
   test("a bare -- with nothing after it is allowed", () => {
-    expect(parseRunArgs(["build", "--"])).toEqual({ names: ["build"], params: {}, dryRun: false });
+    expect(parseRunArgs(["build", "--"])).toEqual({
+      names: ["build"],
+      params: {},
+      dryRun: false,
+      simulate: false,
+    });
   });
 
   test("inspect accepts no boolean flags", () => {
@@ -216,10 +221,12 @@ describe("reserved flag names (design 0.4)", () => {
     }
     throw new Error(`expected UsageError for ${args.join(" ")}`);
   };
-  const unsupported = ["simulate", "json", "agent", "execute", "plan", "confirmed-by-user"];
+  const unsupported = ["json", "agent", "execute", "plan", "confirmed-by-user"];
 
   test("all seven names are reserved", () => {
-    expect([...RESERVED_FLAGS].sort() as string[]).toEqual([...unsupported, "dry-run"].sort());
+    expect([...RESERVED_FLAGS].sort() as string[]).toEqual(
+      [...unsupported, "dry-run", "simulate"].sort(),
+    );
   });
 
   for (const name of unsupported) {
@@ -236,6 +243,25 @@ describe("reserved flag names (design 0.4)", () => {
       expect(usage(["build", `--${name}=x`], { flags: [], command: "inspect" })).toBe(flagForm);
     });
   }
+
+  test("--simulate is a flag; it cannot be combined with --dry-run or take a value", () => {
+    expect(parseRunArgs(["build", "--simulate"])).toEqual({
+      names: ["build"],
+      params: {},
+      dryRun: false,
+      simulate: true,
+    });
+    expect(usage(["build", "--simulate", "--dry-run"])).toContain(
+      "--dry-run and --simulate cannot be combined",
+    );
+    expect(usage(["build", "--simulate=false"])).toBe(
+      'Flag "--simulate" does not take a value. To run for real, just remove --simulate.',
+    );
+    expect(usage(["build", "--", "simulate=1"])).toContain("use my_simulate");
+    expect(usage(["build", "--simulate"], { flags: [], command: "inspect" })).toContain(
+      "bolt inspect never executes, it is already a side-effect-free preview. Remove --simulate.",
+    );
+  });
 
   test("dry-run cannot be passed as a param after --", () => {
     const msg = usage(["build", "--", "dry-run=1"]);

@@ -29,7 +29,7 @@ export interface StepResult extends HandlerResult {
   step: string;
 }
 
-function parseStepParams(
+export function parseStepParams(
   plugin: BoltPlugin,
   ref: string,
   operation: string,

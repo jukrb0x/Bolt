@@ -246,10 +246,10 @@ test("generate_project, fillddc, start, and kill hit the fake tools", async () =
   }
 });
 
-test("dry-run logs the build command and does not execute fakes or copy files", async () => {
+test("--simulate logs the build command and does not execute fakes or copy files", async () => {
   const project = makeProject();
   try {
-    const result = await bolt(project.dir, ["run", "build-editor", "copy", "--dry-run"]);
+    const result = await bolt(project.dir, ["run", "build-editor", "copy", "--simulate"]);
     expect(result.exitCode).toBe(0);
     expect(readCalls(result.log)).toHaveLength(0);
     expect(result.output).toContain("SampleEditor");
@@ -257,6 +257,25 @@ test("dry-run logs the build command and does not execute fakes or copy files", 
     expect(result.output).toContain("[dry-run]");
     expect(result.output).not.toContain("Result: Succeeded");
     expect(existsSync(path.join(project.dir, "out/hello.txt"))).toBe(false);
+    expect(existsSync(path.join(project.dir, ".bolt/logs"))).toBe(true);
+  } finally {
+    dispose(project.dir);
+  }
+});
+
+test("--dry-run prints the static plan and writes nothing", async () => {
+  const project = makeProject();
+  try {
+    rmSync(path.join(project.dir, ".bolt"), { recursive: true, force: true });
+    const result = await bolt(project.dir, ["run", "build-editor", "copy", "--dry-run"]);
+    expect(result.exitCode).toBe(0);
+    expect(readCalls(result.log)).toHaveLength(0);
+    expect(result.output).toContain("would run uses: ue/build");
+    expect(result.output).toContain("Nothing was executed");
+    expect(result.output).toContain("--simulate");
+    expect(result.output).not.toContain("[dry-run]");
+    expect(existsSync(path.join(project.dir, "out/hello.txt"))).toBe(false);
+    expect(existsSync(path.join(project.dir, ".bolt"))).toBe(false);
   } finally {
     dispose(project.dir);
   }
