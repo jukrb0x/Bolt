@@ -42,12 +42,64 @@ test("live Windows checks query the triggering tag", () => {
 
   // v2.1.0 self-update sends no token. BOLT_RELEASES_API is the override it honors.
   const update = readFileSync(workflows[1], "utf8");
-  expect(update).toContain(
-    '$env:BOLT_RELEASES_API = "http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases"',
-  );
+  expect(update).toContain('$env:BOLT_RELEASES_API = "$origin/repos/jukrb0x/Bolt/releases"');
   expect(update).toContain("HttpListener");
   expect(update).toContain("releases/latest");
-  expect(update).toContain("bolt self-update --force");
+});
+
+// v2.1.0 releaseApiUrl. --force does not select a path; only --version does.
+function v210ReleasePath(base: string, version: string | undefined): string {
+  const trimmed = base.replace(/\/+$/, "");
+  if (!version) return `${trimmed}/latest`;
+  const tag = version.startsWith("v") ? version : `v${version}`;
+  return `${trimmed}/tags/${encodeURIComponent(tag)}`;
+}
+
+function replayStatus(requestPath: string, allowed: readonly string[]): 200 | 404 {
+  return allowed.includes(requestPath) ? 200 : 404;
+}
+
+test("self-update passes --force only for a prerelease tag", () => {
+  const update = readFileSync(workflows[1], "utf8");
+  const at = update.indexOf('if ($tag.Contains("-"))');
+  expect(at).toBeGreaterThan(-1);
+  const branch = update.slice(at);
+  const pre = branch.slice(0, branch.indexOf("} else {"));
+  const stable = branch.slice(branch.indexOf("} else {"), branch.indexOf("if ($LASTEXITCODE"));
+  expect(pre).toContain('Write-Host "self-update mode: prerelease"');
+  expect(pre).toContain("& bolt self-update --force");
+  expect(stable).toContain('Write-Host "self-update mode: stable"');
+  expect(stable).toMatch(/& bolt self-update\n/);
+  expect(stable).not.toContain("--force");
+  expect("v2.2.0-rc.1".includes("-")).toBe(true);
+  expect("v2.1.6".includes("-")).toBe(false);
+});
+
+test("the replay returns 200 only for the path v2.1.0 requests on this run", () => {
+  const base = "/repos/jukrb0x/Bolt/releases";
+  // `bolt self-update` and `bolt self-update --force` both omit --version.
+  const thisRun = v210ReleasePath(base, undefined);
+  expect(thisRun).toBe("/repos/jukrb0x/Bolt/releases/latest");
+  const prereleaseVersion = v210ReleasePath(base, "2.2.0-rc.1");
+  const stableVersion = v210ReleasePath(base, "v2.1.6");
+  expect(prereleaseVersion).toBe("/repos/jukrb0x/Bolt/releases/tags/v2.2.0-rc.1");
+  expect(stableVersion).toBe("/repos/jukrb0x/Bolt/releases/tags/v2.1.6");
+
+  const allowed = [thisRun];
+  expect(replayStatus(thisRun, allowed)).toBe(200);
+  expect(replayStatus(prereleaseVersion, allowed)).toBe(404);
+  expect(replayStatus(stableVersion, allowed)).toBe(404);
+  expect(replayStatus(`${base}/latest/`, allowed)).toBe(404);
+  expect(replayStatus("/latest", allowed)).toBe(404);
+  expect(replayStatus("/", allowed)).toBe(404);
+
+  const update = readFileSync(workflows[1], "utf8");
+  expect(update).toContain(`$allowedPath = "${thisRun}"`);
+  expect(update).toContain("if ($path -cne $AllowedPath)");
+  expect(update).toContain("$ctx.Response.StatusCode = 404");
+  expect(update).toContain("$ctx.Response.StatusCode = 200");
+  expect(update).toContain("$preferred = 8765");
+  expect(update).toContain("port $preferred is already in use");
 });
 
 // The pwsh leg of windows install already runs scripts/windows-install-e2e.ps1.

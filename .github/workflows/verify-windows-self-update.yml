@@ -5,11 +5,13 @@ name: Verify Windows self-update
 # does not start workflows that listen for the release event.
 #
 # The published v2.1.0 binary's self-update calls api.github.com with no Authorization
-# header. It reads no GH_TOKEN or GITHUB_TOKEN. The only override is BOLT_RELEASES_API
-# (the base it appends /latest to). A shared runner IP gets 403 once the anonymous
-# hourly cap is spent, and retrying inside this 15-minute job does not wait that out.
-# This job fetches the triggering tag with the workflow token and serves that JSON on
-# localhost. The binary still downloads assets from their public GitHub URLs.
+# header. It reads no GH_TOKEN or GITHUB_TOKEN. The only override is BOLT_RELEASES_API.
+# With no --version it requests {base}/latest. --force does not change that path.
+# --version <v> would request {base}/tags/<tag> instead; this job does not pass it.
+# A shared runner IP gets 403 once the anonymous hourly cap is spent, and retrying
+# inside this 15-minute job does not wait that out. This job fetches the triggering
+# tag with the workflow token and serves that JSON on localhost, and only for the
+# path this run requests. The binary still downloads assets from their public GitHub URLs.
 #
 # /releases/latest is the newest non-prerelease, so a prerelease tag would be verified
 # as the previous stable release. Release runs on a tag push; head_branch is that tag.
@@ -123,24 +125,79 @@ jobs:
           Write-Host "Release URL used for the update: $updateUrl"
           Write-Host "Update asset URL: $expectedAsset"
 
+          # v2.1.0 releaseApiUrl: no --version → {BOLT_RELEASES_API}/latest.
+          # --force still uses that path. --version would use /tags/<tag>.
+          $allowedPath = "/repos/jukrb0x/Bolt/releases/latest"
           $listener = $null
           $server = $null
           $async = $null
           $runspace = $null
+          $preferred = 8765
+          $port = $preferred
           try {
-            $listener = [System.Net.HttpListener]::new()
-            $listener.Prefixes.Add("http://127.0.0.1:8765/")
-            $listener.Start()
+            function Test-PortInUse($ErrorRecord) {
+              $text = $ErrorRecord.Exception.ToString()
+              if ($text -match 'conflicts with an existing registration|address already in use|Only one usage of each socket address') {
+                return $true
+              }
+              $inner = $ErrorRecord.Exception
+              while ($inner) {
+                if ($inner -is [System.Net.Sockets.SocketException] -and
+                    $inner.SocketErrorCode -eq [System.Net.Sockets.SocketError]::AddressAlreadyInUse) {
+                  return $true
+                }
+                $inner = $inner.InnerException
+              }
+              return $false
+            }
+            function Start-ReplayListener([int]$ListenPort) {
+              $created = [System.Net.HttpListener]::new()
+              $created.Prefixes.Add("http://127.0.0.1:${ListenPort}/")
+              try {
+                $created.Start()
+              } catch {
+                try { $created.Close() } catch {}
+                throw
+              }
+              return $created
+            }
+            try {
+              $listener = Start-ReplayListener $preferred
+            } catch {
+              if (-not (Test-PortInUse $_)) { throw }
+              Write-Host "port $preferred is already in use: $($_.Exception.Message)"
+              $listener = $null
+              for ($n = 0; $n -lt 5 -and -not $listener; $n++) {
+                $tcp = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+                $tcp.Start()
+                $port = ([System.Net.IPEndPoint]$tcp.LocalEndpoint).Port
+                $tcp.Stop()
+                try {
+                  $listener = Start-ReplayListener $port
+                } catch {
+                  if (-not (Test-PortInUse $_)) { throw }
+                  Write-Host "port $port is already in use: $($_.Exception.Message)"
+                }
+              }
+              if (-not $listener) { throw "port $port is already in use" }
+            }
+            Write-Host "release replay listening on 127.0.0.1:$port"
             $runspace = [runspacefactory]::CreateRunspace()
             $runspace.Open()
             $server = [powershell]::Create()
             $server.Runspace = $runspace
             [void]$server.AddScript({
-              param($Listener, $Body)
+              param($Listener, $Body, $AllowedPath)
               $bytes = [System.Text.Encoding]::UTF8.GetBytes($Body)
               while ($Listener.IsListening) {
                 try { $ctx = $Listener.GetContext() } catch { break }
                 try {
+                  $path = $ctx.Request.Url.AbsolutePath
+                  if ($path -cne $AllowedPath) {
+                    $ctx.Response.StatusCode = 404
+                    $ctx.Response.ContentLength64 = 0
+                    continue
+                  }
                   $ctx.Response.StatusCode = 200
                   $ctx.Response.ContentType = "application/json"
                   $ctx.Response.ContentLength64 = $bytes.LongLength
@@ -149,10 +206,11 @@ jobs:
                   try { $ctx.Response.OutputStream.Close() } catch {}
                 }
               }
-            }).AddArgument($listener).AddArgument($raw)
+            }).AddArgument($listener).AddArgument($raw).AddArgument($allowedPath)
             $async = $server.BeginInvoke()
 
-            $fixture = "http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases/latest"
+            $origin = "http://127.0.0.1:$port"
+            $fixture = "$origin$allowedPath"
             $probe = $null
             for ($i = 0; $i -lt 20; $i++) {
               try {
@@ -166,12 +224,24 @@ jobs:
             if ([string]$probe.tag_name -cne $tag) {
               throw "local fixture tag '$($probe.tag_name)' did not match $tag"
             }
+            # --version <tag> is the only v2.1.0 mode that requests /tags/<tag>.
+            $tagsPath = "/repos/jukrb0x/Bolt/releases/tags/$tag"
+            $denied = Invoke-WebRequest -Uri "$origin$tagsPath" -SkipHttpErrorCheck -TimeoutSec 2
+            if ([int]$denied.StatusCode -ne 404) {
+              throw "replay returned $($denied.StatusCode) for $tagsPath"
+            }
 
-            $env:BOLT_RELEASES_API = "http://127.0.0.1:8765/repos/jukrb0x/Bolt/releases"
-            # v2.1.0 drops the prerelease suffix before comparing versions, so a tag
-            # such as v2.1.0-rc.2 would otherwise exit 0 without replacing the binary.
-            Write-Host "running: bolt self-update --force"
-            & bolt self-update --force
+            $env:BOLT_RELEASES_API = "$origin/repos/jukrb0x/Bolt/releases"
+            # A hyphen is a prerelease. v2.1.0 strips that suffix before comparing,
+            # so --force is what makes it install the tag. A stable tag must take
+            # the real compare-and-upgrade path, with no --force.
+            if ($tag.Contains("-")) {
+              Write-Host "self-update mode: prerelease"
+              & bolt self-update --force
+            } else {
+              Write-Host "self-update mode: stable"
+              & bolt self-update
+            }
             if ($LASTEXITCODE -ne 0) { throw "bolt self-update exited $LASTEXITCODE" }
           } finally {
             Remove-Item Env:BOLT_RELEASES_API -ErrorAction SilentlyContinue
