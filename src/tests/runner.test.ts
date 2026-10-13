@@ -460,3 +460,28 @@ for (const ref of ["git/info", "svn/info"]) {
     ).resolves.toBeUndefined();
   });
 }
+
+test("AI invocation fails closed when the path cannot be resolved (symlink loop); humans only warn", async () => {
+  if (process.platform === "win32") return;
+  const { mkdtempSync, rmSync, symlinkSync } = await import("fs");
+  const os = await import("os");
+  const pathMod = await import("path");
+  const dir = mkdtempSync(pathMod.join(os.tmpdir(), "bolt-ai-loop-"));
+  try {
+    symlinkSync(pathMod.join(dir, "b"), pathMod.join(dir, "a"));
+    symlinkSync(pathMod.join(dir, "a"), pathMod.join(dir, "b"));
+    const loopCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { peek: [{ uses: "git/info", with: { path: "a" } }] },
+    };
+    const ai = new Runner(loopCfg, { dryRun: true, aiInvocation: true, configDir: dir });
+    await expect(ai.runTask("peek")).rejects.toMatchObject({
+      code: "AI_FORBIDDEN",
+      message: expect.stringMatching(/cannot be verified.*symlink loop.*Fix:/),
+    });
+    const human = new Runner(loopCfg, { dryRun: true, configDir: dir, runtime: mockRuntime });
+    await expect(human.runTask("peek")).resolves.toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
