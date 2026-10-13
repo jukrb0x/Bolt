@@ -16,6 +16,26 @@ const repo = {
   },
 };
 
+const engineVersion = {
+  enum: [4, 5, "4", "5"],
+  description:
+    "Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist.",
+};
+
+const engineRepo = {
+  type: "object",
+  additionalProperties: false,
+  required: ["path"],
+  properties: { ...repo.properties, version: engineVersion },
+};
+
+const editorTarget = {
+  type: "string",
+  pattern: "^[A-Za-z0-9_]+$",
+  description:
+    "Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version.",
+};
+
 const ueTarget = {
   type: "object",
   additionalProperties: false,
@@ -39,8 +59,9 @@ const ueConfig = {
   additionalProperties: false,
   required: ["engine", "project", "uproject"],
   properties: {
-    engine: { $ref: "#/$defs/repo" },
+    engine: { $ref: "#/$defs/engineRepo" },
     project: { $ref: "#/$defs/repo" },
+    editor_target: editorTarget,
     uproject: { type: "string", minLength: 1 },
     targets: {
       type: "object",
@@ -140,6 +161,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
   },
   $defs: {
     repo,
+    engineRepo,
     ueTarget,
     ueConfig,
     svnConfig,
@@ -240,6 +262,12 @@ const partialRepo = {
   properties: repo.properties,
 };
 
+const partialEngineRepo = {
+  type: "object",
+  additionalProperties: false,
+  properties: engineRepo.properties,
+};
+
 const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
   $schema: "http://json-schema.org/draft-07/schema#",
   title: "bolt.local.yaml",
@@ -259,8 +287,9 @@ const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
           type: "object",
           additionalProperties: false,
           properties: {
-            engine: partialRepo,
+            engine: partialEngineRepo,
             project: partialRepo,
+            editor_target: editorTarget,
             uproject: { type: "string", minLength: 1 },
             targets: {
               type: "object",

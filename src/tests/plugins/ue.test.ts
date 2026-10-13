@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import uePlugin from "../../plugins/ue";
+import uePlugin, { detectEngine, ueConfigSchema } from "../../plugins/ue";
 import { loadConfig } from "../../config";
 import { run } from "../../api";
 import { testCfg, PROJECT_NAME, mockRuntime, tortoiseProcOnPath, withUeConfig } from "../env";
@@ -601,5 +601,137 @@ test("BOLT_E2E_BIN does not change which engine file is executed", async () => {
     if (prev === undefined) delete process.env.BOLT_E2E_BIN;
     else process.env.BOLT_E2E_BIN = prev;
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function fakeEngine(files: Record<string, string>): string {
+  const root = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-flavor-"));
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    writeFileSync(path.join(root, rel), body);
+  }
+  return root;
+}
+
+const buildVersion = (major: number) =>
+  JSON.stringify({ MajorVersion: major, MinorVersion: 0, PatchVersion: 0 });
+
+test("detectEngine reads MajorVersion from Engine/Build/Build.version", () => {
+  const ue5 = fakeEngine({ "Engine/Build/Build.version": buildVersion(5) });
+  const ue4 = fakeEngine({ "Engine/Build/Build.version": buildVersion(4) });
+  try {
+    expect(detectEngine(ue5)).toEqual({
+      major: 5,
+      editor: "UnrealEditor",
+      source: "Build.version",
+    });
+    expect(detectEngine(ue4)).toEqual({ major: 4, editor: "UE4Editor", source: "Build.version" });
+  } finally {
+    rmSync(ue5, { recursive: true, force: true });
+    rmSync(ue4, { recursive: true, force: true });
+  }
+});
+
+test("detectEngine falls back to editor binaries, then target files, then UE4", () => {
+  const bin5 = fakeEngine({ "Engine/Binaries/Win64/UnrealEditor.exe": "" });
+  const bin4 = fakeEngine({ "Engine/Binaries/Linux/UE4Editor": "" });
+  const target5 = fakeEngine({ "Engine/Source/UnrealEditor.Target.cs": "" });
+  const broken = fakeEngine({
+    "Engine/Build/Build.version": "{ not json",
+    "Engine/Source/UE4Editor.Target.cs": "",
+  });
+  const empty = fakeEngine({});
+  try {
+    expect(detectEngine(bin5)).toMatchObject({ major: 5, source: "binaries" });
+    expect(detectEngine(bin4)).toMatchObject({ major: 4, source: "binaries" });
+    expect(detectEngine(target5)).toMatchObject({ major: 5, source: "targets" });
+    expect(detectEngine(broken)).toMatchObject({ major: 4, source: "targets" });
+    expect(detectEngine(empty)).toEqual({ major: 4, editor: "UE4Editor", source: "default" });
+  } finally {
+    for (const dir of [bin5, bin4, target5, broken, empty]) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("engine.version and editor_target override detection", () => {
+  const ue5 = fakeEngine({ "Engine/Build/Build.version": buildVersion(5) });
+  try {
+    expect(detectEngine(ue5, { version: 4 })).toEqual({
+      major: 4,
+      editor: "UE4Editor",
+      source: "config",
+    });
+    expect(detectEngine(ue5, { editorTarget: "UE4Editor" })).toMatchObject({
+      major: 4,
+      editor: "UE4Editor",
+    });
+    expect(detectEngine(ue5, { version: 5, editorTarget: "MyEditor" })).toEqual({
+      major: 5,
+      editor: "MyEditor",
+      source: "editor_target",
+    });
+  } finally {
+    rmSync(ue5, { recursive: true, force: true });
+  }
+});
+
+test("ue config accepts engine.version 4 or 5 and rejects others", () => {
+  const base = { project: { path: "p" }, uproject: "x.uproject" };
+  const parse = (engine: object, extra: object = {}) =>
+    ueConfigSchema.safeParse({ ...base, ...extra, engine: { path: "e", ...engine } });
+  expect(parse({ version: 5 }).data?.engine.version).toBe(5);
+  expect(parse({ version: "4" }).data?.engine.version).toBe(4);
+  expect(parse({ version: 6 }).success).toBe(false);
+  expect(parse({}, { editor_target: "UnrealEditor" }).success).toBe(true);
+  expect(parse({}, { editor_target: "Unreal Editor.exe" }).success).toBe(false);
+});
+
+test("UE5 engine: build engine, fillddc, and start use UnrealEditor", async () => {
+  const engine = fakeEngine({
+    "Engine/Build/Build.version": buildVersion(5),
+    "Engine/Binaries/Win64/UnrealEditor.exe": "",
+    "Engine/Binaries/Win64/UnrealEditor-Win64-Debug.exe": "",
+  });
+  const spawned: string[][] = [];
+  const logged: string[] = [];
+  const ctx = {
+    cfg: withUeConfig({ engine: { path: engine } }),
+    configDir: engine,
+    dryRun: true,
+    logger: new Logger({ sink: (l: string) => logged.push(l) }),
+    runtime: {
+      ...mockRuntime,
+      spawnSync: (cmd: string[]) => (spawned.push(cmd), { exitCode: 0, stdout: "", stderr: "" }),
+    },
+  };
+  try {
+    await uePlugin.handlers["build"]({ target: "engine" }, ctx);
+    const build = logged.find((l) => l.includes("-Target=")) ?? "";
+    expect(build).toContain('-Target="UnrealEditor Win64 Development"');
+    expect(build).not.toContain("UE4Editor");
+
+    await uePlugin.handlers["fillddc"]({}, ctx);
+    expect(logged.at(-1)).toContain("Engine/Binaries/Win64/UnrealEditor-Cmd.exe");
+
+    await uePlugin.handlers["start"]({}, { ...ctx, dryRun: false });
+    expect(spawned.at(-1)?.at(-2)).toBe(
+      path.join(engine, "Engine/Binaries/Win64/UnrealEditor.exe"),
+    );
+    await uePlugin.handlers["start"]({ config: "debug" }, { ...ctx, dryRun: false });
+    expect(spawned.at(-1)?.at(-2)).toBe(
+      path.join(engine, "Engine/Binaries/Win64/UnrealEditor-Win64-Debug.exe"),
+    );
+
+    const ue4 = { ...ctx, cfg: withUeConfig({ engine: { path: engine, version: 4 } }) };
+    await expect(uePlugin.handlers["start"]({}, { ...ue4, dryRun: false })).rejects.toThrow(
+      "No UE4 editor executable",
+    );
+    await uePlugin.handlers["build"]({ target: "engine" }, ue4);
+    expect(logged.findLast((l) => l.includes("-Target=")) ?? "").toContain(
+      '-Target="UE4Editor Win64 Development"',
+    );
+  } finally {
+    rmSync(engine, { recursive: true, force: true });
   }
 });

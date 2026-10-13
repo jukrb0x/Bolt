@@ -1,7 +1,7 @@
 import { PluginBase, handler } from "../plugin";
 import type { BoltPluginContext } from "../plugin";
 import path from "path";
-import { existsSync, readdirSync, statSync, renameSync, mkdirSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync, renameSync, mkdirSync } from "fs";
 import { z } from "zod";
 import { declaredPluginConfig, run, execRaw as exec } from "./helpers";
 import gitPlugin from "./git";
@@ -23,9 +23,23 @@ const TargetSchema = z.object({
   config: BuildConfigSchema.default("development"),
 });
 
+const EngineVersionSchema = z
+  .union([z.literal(4), z.literal(5), z.literal("4"), z.literal("5")])
+  .transform((value) => Number(value) as EngineMajor);
+
+const EngineSchema = RepoSchema.extend({
+  /** Engine major version. Detected from the engine tree when omitted. */
+  version: EngineVersionSchema.optional(),
+});
+
 /** UE plugin metadata. Validated here, not by the core bolt.yaml schema. */
 export const ueConfigSchema = z.object({
-  engine: RepoSchema,
+  engine: EngineSchema,
+  /** Editor target and executable base name, e.g. UnrealEditor. Overrides engine.version. */
+  editor_target: z
+    .string()
+    .regex(/^[A-Za-z0-9_]+$/, "editor_target must be a target name such as UnrealEditor")
+    .optional(),
   project: RepoSchema,
   uproject: z.string().min(1),
   targets: z.record(TargetSchema).default({}),
@@ -37,8 +51,17 @@ export interface UeTarget {
   config: BuildConfig;
 }
 
+export type EngineMajor = 4 | 5;
+
 export interface UeConfig {
-  engine: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
+  engine: {
+    path: string;
+    vcs: "git" | "svn";
+    url?: string;
+    branch?: string;
+    version?: EngineMajor;
+  };
+  editor_target?: string;
   project: { path: string; vcs: "git" | "svn"; url?: string; branch?: string };
   uproject: string;
   targets: Record<string, UeTarget>;
@@ -111,9 +134,80 @@ function ueConfig(ctx: BoltPluginContext): UeConfig {
   return {
     engine: { ...data.engine, path: resolveAgainst(ctx.configDir, data.engine.path) },
     project: { ...data.project, path: resolveAgainst(ctx.configDir, data.project.path) },
+    editor_target: data.editor_target,
     uproject: resolveAgainst(ctx.configDir, data.uproject),
     targets: resolveUeTargets(ctx.cfg.plugins),
   };
+}
+
+export interface EngineFlavor {
+  major: EngineMajor;
+  /** Editor target and executable base name (UE4Editor or UnrealEditor). */
+  editor: string;
+  /** How major was decided, for `ue/info`. */
+  source: "config" | "editor_target" | "Build.version" | "binaries" | "targets" | "default";
+}
+
+/** Major version from Engine/Build/Build.version, or undefined. */
+function buildVersionMajor(root: string): EngineMajor | undefined {
+  const file = path.join(root, "Engine", "Build", "Build.version");
+  if (!existsSync(file)) return undefined;
+  try {
+    const major = (JSON.parse(readFileSync(file, "utf8")) as { MajorVersion?: unknown })
+      .MajorVersion;
+    if (typeof major !== "number") return undefined;
+    return major >= 5 ? 5 : 4;
+  } catch {
+    return undefined;
+  }
+}
+
+function anyExists(root: string, rels: string[]): boolean {
+  return rels.some((rel) => existsSync(path.join(root, rel)));
+}
+
+const editorName = (major: EngineMajor) => (major >= 5 ? "UnrealEditor" : "UE4Editor");
+
+/**
+ * Engine major version and editor name. Order: `editor_target`, then
+ * `engine.version`, then Engine/Build/Build.version MajorVersion, then which
+ * editor binaries or target files exist. An unknown tree is UE4, the
+ * historical behaviour.
+ */
+export function detectEngine(
+  root: string,
+  opts: { version?: EngineMajor; editorTarget?: string } = {},
+): EngineFlavor {
+  const pick = (major: EngineMajor, source: EngineFlavor["source"]): EngineFlavor => ({
+    major,
+    editor: opts.editorTarget ?? editorName(major),
+    source: opts.editorTarget ? "editor_target" : source,
+  });
+  if (opts.version !== undefined) return pick(opts.version, "config");
+  if (opts.editorTarget !== undefined) {
+    return pick(/^UE4/i.test(opts.editorTarget) ? 4 : 5, "editor_target");
+  }
+  const fromFile = buildVersionMajor(root);
+  if (fromFile !== undefined) return pick(fromFile, "Build.version");
+  const bins = (name: string) => [
+    `Engine/Binaries/Win64/${name}.exe`,
+    `Engine/Binaries/Linux/${name}`,
+    `Engine/Binaries/Mac/${name}.app`,
+  ];
+  const ue5Bin = anyExists(root, bins("UnrealEditor"));
+  const ue4Bin = anyExists(root, bins("UE4Editor"));
+  if (ue5Bin !== ue4Bin) return pick(ue5Bin ? 5 : 4, "binaries");
+  const ue5Target = existsSync(path.join(root, "Engine/Source/UnrealEditor.Target.cs"));
+  const ue4Target = existsSync(path.join(root, "Engine/Source/UE4Editor.Target.cs"));
+  if (ue5Target !== ue4Target) return pick(ue5Target ? 5 : 4, "targets");
+  return pick(4, "default");
+}
+
+function engineFlavor(cfg: UeConfig): EngineFlavor {
+  return detectEngine(cfg.engine.path, {
+    version: cfg.engine.version,
+    editorTarget: cfg.editor_target,
+  });
 }
 
 /** Normalise a Windows engine root to backslashes so cmd.exe handles it. */
@@ -210,7 +304,8 @@ class UEPlugin extends PluginBase.withDescriptor({
       throw new Error(`No target specified for ue/build`);
     }
 
-    const uePath = ueConfig(ctx).engine.path;
+    const cfg = ueConfig(ctx);
+    const uePath = cfg.engine.path;
     const platform = params.platform ?? "Win64";
     const buildBat = `"${engineFile(uePath, "Engine/Build/BatchFiles/Build.bat")}"`;
 
@@ -224,7 +319,8 @@ class UEPlugin extends PluginBase.withDescriptor({
       if (!ctx.dryRun) {
         if (existsSync(genFile)) await exec(genCmd, ctx);
       }
-      const cmd = `${buildBat} -Target="UE4Editor ${platform} ${buildType}" -Target="ShaderCompileWorker ${platform} Development -Quiet" -WaitMutex -FromMsBuild`;
+      const { editor } = engineFlavor(cfg);
+      const cmd = `${buildBat} -Target="${editor} ${platform} ${buildType}" -Target="ShaderCompileWorker ${platform} Development -Quiet" -WaitMutex -FromMsBuild`;
       await run(cmd, ctx);
       return;
     }
@@ -309,7 +405,8 @@ class UEPlugin extends PluginBase.withDescriptor({
 
   @handler("Launch ${target} (${config})")
   async start(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ueConfig(ctx).engine.path;
+    const cfg = ueConfig(ctx);
+    const uePath = cfg.engine.path;
     const projFile = ueConfig(ctx).uproject;
     const projectDir = getProjectDir(projFile);
 
@@ -338,16 +435,20 @@ class UEPlugin extends PluginBase.withDescriptor({
         throw new Error(`No binary found for target "${t}" in:\n  ${candidates.join("\n  ")}`);
     } else {
       const binDir = path.join(uePath, "Engine", "Binaries", "Win64");
+      const { editor, major } = engineFlavor(cfg);
       const candidates = suffix
-        ? [
-            path.join(binDir, `UE4Editor${suffix}.exe`),
-            path.join(binDir, `UnrealEditor${suffix}.exe`),
-            path.join(binDir, "UE4Editor.exe"),
-            path.join(binDir, "UnrealEditor.exe"),
-          ]
-        : [path.join(binDir, "UE4Editor.exe"), path.join(binDir, "UnrealEditor.exe")];
+        ? [path.join(binDir, `${editor}${suffix}.exe`), path.join(binDir, `${editor}.exe`)]
+        : [path.join(binDir, `${editor}.exe`)];
       exePath = ctx.dryRun ? candidates[0] : candidates.find(existsSync);
-      if (!exePath) throw new Error(`No UE editor executable found in ${binDir}`);
+      if (!exePath) {
+        throw new Error(
+          `No UE${major} editor executable found in ${binDir} (looked for ${candidates
+            .map((c) => path.basename(c))
+            .join(
+              ", ",
+            )}). Set engine.version or editor_target in the ue config if the engine version was detected wrongly.`,
+        );
+      }
     }
 
     ctx.logger.cmd(`start "" "${exePath}" "${projFile}"`);
@@ -367,6 +468,7 @@ class UEPlugin extends PluginBase.withDescriptor({
       "UE4Editor-Win64-Debug.exe",
       "UE4Editor-Cmd.exe",
       "UnrealEditor.exe",
+      "UnrealEditor-Win64-Debug.exe",
       "UnrealEditor-Cmd.exe",
       "CrashReportClient.exe",
     ];
@@ -379,10 +481,12 @@ class UEPlugin extends PluginBase.withDescriptor({
 
   @handler("Fill DDC for PIE")
   async fillddc(params: Record<string, string>, ctx: BoltPluginContext) {
-    const uePath = ueConfig(ctx).engine.path;
-    const projFile = ueConfig(ctx).uproject;
+    const cfg = ueConfig(ctx);
+    const uePath = cfg.engine.path;
+    const projFile = cfg.uproject;
+    const { editor } = engineFlavor(cfg);
     await run(
-      `"${engineFile(uePath, "Engine/Binaries/Win64/UE4Editor-Cmd.exe")}" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
+      `"${engineFile(uePath, `Engine/Binaries/Win64/${editor}-Cmd.exe`)}" "${projFile}" -run=Automation RunTests FillDDCForPIETest -unattended -buildmachine -nullrhi`,
       ctx,
     );
   }
@@ -504,6 +608,8 @@ class UEPlugin extends PluginBase.withDescriptor({
 
   @handler("Show VCS info")
   async info(params: Record<string, string>, ctx: BoltPluginContext) {
+    const flavor = engineFlavor(ueConfig(ctx));
+    ctx.logger.info(`Engine: UE${flavor.major}, editor ${flavor.editor} (from ${flavor.source})`);
     ctx.logger.info("=== VCS Info ===");
     const engineVcs = ueConfig(ctx).engine.vcs ?? "git";
     const projectVcs = ueConfig(ctx).project.vcs ?? "svn";

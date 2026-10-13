@@ -15,10 +15,12 @@ plugins:
         vcs: git
         # url: https://github.com/EpicGames/UnrealEngine.git
         branch: main
+        # version: 5   # 4 or 5. Detected from Engine/Build/Build.version when omitted.
       project:
         path: D:/Games/MyProject
         vcs: svn
         # url: svn://svn.example.com/project/trunk
+      # editor_target: UnrealEditor   # editor target and exe name; overrides engine.version
       uproject: D:/Games/MyProject/MyProject.uproject
       targets:
         editor:

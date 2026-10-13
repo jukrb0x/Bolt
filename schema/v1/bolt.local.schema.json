@@ -35,6 +35,10 @@
                 },
                 "branch": {
                   "type": "string"
+                },
+                "version": {
+                  "enum": [4, 5, "4", "5"],
+                  "description": "Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist."
                 }
               }
             },
@@ -57,6 +61,11 @@
                   "type": "string"
                 }
               }
+            },
+            "editor_target": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_]+$",
+              "description": "Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version."
             },
             "uproject": {
               "type": "string",

@@ -111,18 +111,62 @@ const WINDOWS_EXES = [
   "Engine/Binaries/Win64/UnrealEditor-Cmd.exe",
 ];
 
-export function installEngine(dest: string): void {
+export type EngineMajor = 4 | 5;
+
+export interface EngineLayout {
+  /** Which engine the tree looks like. Default 4. */
+  major?: EngineMajor;
+  /** Write Engine/Build/Build.version. Default true. False leaves only the binaries to detect. */
+  buildVersion?: boolean;
+}
+
+/** Template paths that belong to the other engine version's layout. */
+function foreignFiles(major: EngineMajor): string[] {
+  const other = major === 5 ? "UE4Editor" : "UnrealEditor";
+  const ubt =
+    major === 5
+      ? ["Engine/Binaries/DotNET/UnrealBuildTool.sh", "Engine/Binaries/DotNET/UnrealBuildTool.cmd"]
+      : ["Engine/Binaries/DotNET/UnrealBuildTool"];
+  return [
+    ...["", "-Cmd"].flatMap((suffix) =>
+      [".sh", ".cmd", ".exe"].map((ext) => `Engine/Binaries/Win64/${other}${suffix}${ext}`),
+    ),
+    ...ubt,
+  ];
+}
+
+const ownsFile = (major: EngineMajor, rel: string) =>
+  !rel.includes(major === 5 ? "UE4Editor" : "UnrealEditor");
+
+/**
+ * Copy the fake engine laid out as UE4 (UE4Editor, DotNET/UnrealBuildTool) or
+ * UE5 (UnrealEditor, DotNET/UnrealBuildTool/UnrealBuildTool). Only that
+ * version's editor binaries exist, so a handler that names the wrong editor
+ * fails.
+ */
+export function installEngine(dest: string, layout: EngineLayout = {}): void {
+  const major = layout.major ?? 4;
   mkdirSync(dest, { recursive: true });
   cpSync(engineTemplate, dest, { recursive: true });
+  for (const rel of foreignFiles(major)) {
+    rmSync(path.join(dest, rel), { recursive: true, force: true });
+  }
+  if (layout.buildVersion !== false) {
+    const version = major === 5 ? [5, 4, 4] : [4, 27, 2];
+    writeFileSync(
+      path.join(dest, "Engine/Build/Build.version"),
+      `${JSON.stringify({ MajorVersion: version[0], MinorVersion: version[1], PatchVersion: version[2] }, null, 2)}\n`,
+    );
+  }
   if (process.platform === "win32") {
-    for (const rel of WINDOWS_EXES) {
+    for (const rel of WINDOWS_EXES.filter((file) => ownsFile(major, file))) {
       const file = path.join(dest, rel);
       mkdirSync(path.dirname(file), { recursive: true });
       cpSync(recordExe, file);
     }
     return;
   }
-  for (const [srcRel, destRel] of POSIX_AS_WINDOWS) {
+  for (const [srcRel, destRel] of POSIX_AS_WINDOWS.filter(([, file]) => ownsFile(major, file))) {
     const file = path.join(dest, destRel);
     mkdirSync(path.dirname(file), { recursive: true });
     cpSync(path.join(engineTemplate, srcRel), file);
@@ -152,7 +196,13 @@ function quote(value: string): string {
 export function writeBolt(
   dir: string,
   body: string,
-  opts?: { tortoise?: boolean; notifications?: string; extraPlugins?: string },
+  opts?: {
+    tortoise?: boolean;
+    notifications?: string;
+    extraPlugins?: string;
+    engineConfig?: string;
+    ueConfig?: string;
+  },
 ): void {
   const engine = path.join(dir, "engine");
   const uproject = path.join(dir, "Sample.uproject");
@@ -166,10 +216,10 @@ ${opts?.notifications ?? ""}plugins:
         path: "${quote(engine)}"
         vcs: git
         branch: main
-      project:
+${opts?.engineConfig ?? ""}      project:
         path: "${quote(dir)}"
         vcs: svn
-      uproject: "${quote(uproject)}"
+${opts?.ueConfig ?? ""}      uproject: "${quote(uproject)}"
       targets:
         editor:
           kind: editor
@@ -274,10 +324,15 @@ export function makeProject(opts?: {
   notifications?: string;
   extraPlugins?: string;
   git?: boolean;
+  engine?: EngineLayout;
+  /** Extra YAML lines under plugins[ue].config.engine (6-space indent). */
+  engineConfig?: string;
+  /** Extra YAML lines under plugins[ue].config (6-space indent). */
+  ueConfig?: string;
 }): Project {
   const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-e2e-"));
   const engine = path.join(dir, "engine");
-  installEngine(engine);
+  installEngine(engine, opts?.engine);
   const uproject = path.join(dir, "Sample.uproject");
   writeFileSync(
     uproject,
