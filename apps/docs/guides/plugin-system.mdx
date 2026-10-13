@@ -36,7 +36,7 @@ That does not look up a `bun` binary on `PATH`. A prebuilt `index.js` is loaded 
 
 ## Brand
 
-`definePlugin` and `PluginBase` set `Symbol.for("boltstack.plugin")` and `apiVersion` `1`. The registry accepts a branded plugin only when `apiVersion` is `1`. A `manifest` getter without that symbol is an error. See [Plugin API](/api/plugin-api).
+`definePlugin` and `PluginBase` set `Symbol.for("boltstack.plugin")` and the declared `apiVersion` (default `1`). The registry accepts a branded plugin only when `apiVersion` is `1` or `2`. A `manifest` getter without that symbol is an error. See [Plugin API](/api/plugin-api).
 
 ## Scaffold
 
@@ -63,7 +63,7 @@ Core `bolt.yaml` stays `version: 1` with `project.name`. Unreal `targets` belong
 
 ## Built-in plugins
 
-See [Built-in Handlers](/api/built-in-handlers). Overriding a builtin means shipping another plugin with the same namespace from a higher-priority scope, created with `definePlugin` so it carries the brand and `apiVersion` `1`.
+See [Built-in Handlers](/api/built-in-handlers). Overriding a builtin means shipping another plugin with the same namespace from a higher-priority scope, created with `definePlugin` so it carries the brand and an `apiVersion`.
 
 ## See Also
 

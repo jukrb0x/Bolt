@@ -1,17 +1,21 @@
 ---
 title: "svn plugin"
-description: ""
+description: "Built-in svn handlers."
 ---
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
+Built-in svn handlers.
+
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `svn`     |         | 7        |
+| `svn`     | `1.0.0` | 7        |
 
 ## Handlers
 
 ### svn/add
+
+svn add $&#123;path&#125;
 
 Step: `uses: svn/add`. AI: `false` (not exposed to AI).
 
@@ -19,11 +23,15 @@ _No declared parameter schema._
 
 ### svn/cleanup
 
+svn cleanup $&#123;path&#125;
+
 Step: `uses: svn/cleanup`. AI: `false` (not exposed to AI).
 
 _No declared parameter schema._
 
 ### svn/commit
+
+svn commit $&#123;path&#125;
 
 Step: `uses: svn/commit`. AI: `false` (not exposed to AI).
 
@@ -31,11 +39,19 @@ _No declared parameter schema._
 
 ### svn/info
 
-Step: `uses: svn/info`. AI: `false` (not exposed to AI).
+svn info $&#123;path&#125;
 
-_No declared parameter schema._
+Step: `uses: svn/info`. AI: `true` (AI may call this handler).
+
+Capabilities: `vcs.info`.
+
+| Param  | Type     | Required | Default | Notes                                |
+| ------ | -------- | -------- | ------- | ------------------------------------ |
+| `path` | `string` | yes      |         | Working copy path inside the project |
 
 ### svn/revert
+
+svn revert $&#123;path&#125;
 
 Step: `uses: svn/revert`. AI: `false` (not exposed to AI).
 
@@ -43,12 +59,20 @@ _No declared parameter schema._
 
 ### svn/status
 
-Step: `uses: svn/status`. AI: `false` (not exposed to AI).
+svn status $&#123;path&#125;
 
-_No declared parameter schema._
+Step: `uses: svn/status`. AI: `"confirm"` (AI may call it after user confirmation).
+
+| Param  | Type     | Required | Default | Notes             |
+| ------ | -------- | -------- | ------- | ----------------- |
+| `path` | `string` | yes      |         | Working copy path |
 
 ### svn/update
 
+svn update $&#123;path&#125;
+
 Step: `uses: svn/update`. AI: `false` (not exposed to AI).
+
+Capabilities: `vcs.sync`.
 
 _No declared parameter schema._
