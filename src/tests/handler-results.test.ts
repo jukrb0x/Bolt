@@ -58,8 +58,8 @@ function harness(plugins: BoltPlugin[], tasks?: BoltConfig["tasks"], flows = {})
     try {
       await p;
     } finally {
-      logger.close();
-      await Bun.sleep(5);
+      // Wait for the log file to be flushed (a fixed sleep raced on Windows).
+      await logger.close();
     }
   };
   return {

@@ -138,13 +138,13 @@ export default defineCommand({
       await dispatchRun(runner, cfg, names, params);
       logger.info(`Done in ${((Date.now() - start) / 1000).toFixed(1)}s`);
       logger.info(`Log: ${logFile}`);
-      logger.close();
+      await logger.close();
       process.exit(0);
     } catch (e: any) {
       // A failed step is already printed by the runner; print only other errors.
       if (!wasReported(e)) logger.error(e.message);
       logger.info(`Log: ${logFile}`);
-      logger.close();
+      await logger.close();
       process.exit(
         e instanceof BoltStepError && e.code === "AI_FORBIDDEN" ? AI_FORBIDDEN_EXIT_CODE : 1,
       );
