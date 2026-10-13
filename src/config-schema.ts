@@ -233,3 +233,49 @@ const BOLT_CONFIG_JSON_SCHEMA = {
 export function boltConfigJsonSchema(): Record<string, unknown> {
   return BOLT_CONFIG_JSON_SCHEMA;
 }
+
+const partialRepo = {
+  type: "object",
+  additionalProperties: false,
+  properties: repo.properties,
+};
+
+const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
+  $schema: "http://json-schema.org/draft-07/schema#",
+  title: "bolt.local.yaml",
+  description:
+    "Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.<namespace> is deep-merged over the config of the bolt.yaml plugin with that namespace before validation.",
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    vars: {
+      type: "object",
+      additionalProperties: { type: "string" },
+    },
+    plugins: {
+      type: "object",
+      properties: {
+        ue: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            engine: partialRepo,
+            project: partialRepo,
+            uproject: { type: "string", minLength: 1 },
+            targets: {
+              type: "object",
+              additionalProperties: { $ref: "#/$defs/ueTarget" },
+            },
+          },
+        },
+        svn: svnConfig,
+      },
+      additionalProperties: { type: "object" },
+    },
+  },
+  $defs: { ueTarget },
+};
+
+export function boltLocalConfigJsonSchema(): Record<string, unknown> {
+  return BOLT_LOCAL_CONFIG_JSON_SCHEMA;
+}

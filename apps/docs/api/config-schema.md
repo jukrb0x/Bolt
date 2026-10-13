@@ -5,7 +5,7 @@ title: "Config Schema"
 Complete reference for Bolt's configuration. Field names and defaults below mirror the Zod schema in `src/config.ts`. Unreal metadata is validated by the `ue` plugin, not by the core schema.
 
 - **`bolt.yaml`** — required. Starts with `version: 1`. `project` is a name. Tasks, flows, and plugin entries live here.
-- **`bolt.local.yaml`** — optional. Only `vars` is read. A missing file is fine.
+- **`bolt.local.yaml`** — optional. `vars` and per-namespace `plugins` overrides. A missing file is fine. JSON Schema: `schema/v1/bolt.local.schema.json`.
 
 ## bolt.yaml
 
@@ -209,16 +209,26 @@ A run emits one start notification. Multi-task runs show the top-level task list
 
 ## bolt.local.yaml (optional)
 
-Only `vars` is read. A missing file is fine. Invalid YAML or any key other than `vars` is an error. Local vars shallow-override the same keys in `bolt.yaml`.
+A missing file is fine. Invalid YAML or any key other than `vars` and `plugins` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error.
 
 ```yaml
 vars:
-  some_key: some_local_value
+  region: eu
+plugins:
+  ue:
+    engine: { path: D:/UE_5.4 }
+    project: { path: D:/Work/MyGame }
+    uproject: D:/Work/MyGame/MyGame.uproject
+  svn:
+    use_tortoise: true
 ```
 
-| Field  | Type                | Required | Description                    |
-| ------ | ------------------- | -------- | ------------------------------ |
-| `vars` | map (string→string) | no       | Per-machine variable overrides |
+| Field     | Type                       | Required | Description                                         |
+| --------- | -------------------------- | -------- | --------------------------------------------------- |
+| `vars`    | map (string→string)        | no       | Per-machine variable overrides                      |
+| `plugins` | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace |
+
+v2.0 keys (`engine_path`, `project_path`, `uproject`, `use_tortoise`) are rejected. Run `bolt migrate` to convert them.
 
 ## Migration from v1
 

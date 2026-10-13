@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bolt.local.yaml",
+  "description": "Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.<namespace> is deep-merged over the config of the bolt.yaml plugin with that namespace before validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "vars": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "plugins": {
+      "type": "object",
+      "properties": {
+        "ue": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "engine": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "vcs": {
+                  "enum": ["git", "svn"],
+                  "default": "git"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": "string"
+                }
+              }
+            },
+            "project": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "vcs": {
+                  "enum": ["git", "svn"],
+                  "default": "git"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": "string"
+                }
+              }
+            },
+            "uproject": {
+              "type": "string",
+              "minLength": 1
+            },
+            "targets": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/ueTarget"
+              }
+            }
+          }
+        },
+        "svn": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "use_tortoise": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  },
+  "$defs": {
+    "ueTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["editor", "program", "game", "client", "server"]
+        },
+        "name": {
+          "type": "string"
+        },
+        "config": {
+          "type": "string",
+          "pattern": "^\\s*(?:[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Mm][Ee][Nn][Tt]|[Dd][Ee][Vv]|[Dd][Ee][Bb][Uu][Gg]|[Dd][Bb][Gg]|[Dd][Ee][Bb][Uu][Gg][Gg][Aa][Mm][Ee]|[Dd][Bb][Gg][Gg][Aa][Mm][Ee]|[Ss][Hh][Ii][Pp][Pp][Ii][Nn][Gg]|[Tt][Ee][Ss][Tt])\\s*$",
+          "description": "Build configuration. Same names bolt check accepts, in any case, with surrounding space allowed."
+        }
+      }
+    }
+  }
+}

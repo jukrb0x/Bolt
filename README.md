@@ -122,7 +122,7 @@ bolt run daily                       # run the predefined flow
 
 ## Configuration
 
-Shared config lives in `bolt.yaml` and starts with `version: 1`. `project` is a name. Unreal engine, project, and target metadata belong to the `ue` plugin. `bolt.local.yaml` is optional and may only override `vars`.
+Shared config lives in `bolt.yaml` and starts with `version: 1`. `project` is a name. Unreal engine, project, and target metadata belong to the `ue` plugin. `bolt.local.yaml` is optional and may override `vars` and, per plugin namespace, plugin config (for machine paths).
 
 ### bolt.yaml (shared, committed)
 
@@ -174,7 +174,14 @@ timeout_hours: 6 # optional: abort a run that exceeds this
 ```yaml
 vars:
   region: eu # overrides the same key in bolt.yaml
+plugins: # deep-merged over the bolt.yaml plugin config with that namespace
+  ue:
+    engine: { path: D:/UE_5.4 }
+  svn:
+    use_tortoise: true
 ```
+
+Upgrading from bolt v2.0 config files? `bolt check` shows what moved; `bolt migrate` rewrites both files (`--dry-run` to preview; backups are kept).
 
 Relative paths in plugin config resolve against the directory containing `bolt.yaml`.
 

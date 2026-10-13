@@ -6,10 +6,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                | Why                                                                 |
-| ----------------- | ------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows. |
-| `bolt.local.yaml` | No (optional) | `vars` overrides only                                   | Per-machine variable overrides. A missing file is fine.             |
+| File              | Committed?    | Contains                                                | Why                                                                         |
+| ----------------- | ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.         |
+| `bolt.local.yaml` | No (optional) | `vars` and `plugins` overrides                          | Per-machine vars and plugin config (machine paths). A missing file is fine. |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -101,14 +101,26 @@ flows:
 
 ## bolt.local.yaml — annotated walkthrough
 
-Optional. A missing file is fine. Only `vars` is read, and those keys shallow-override `bolt.yaml` `vars`.
+Optional and gitignored. A missing file is fine. It may hold two keys:
+
+- `vars` shallow-override the same keys in `bolt.yaml` `vars`.
+- `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace, before validation. Objects merge key by key; arrays and scalars replace. The namespace must be declared under `plugins` in `bolt.yaml`.
+
+Use `plugins` for per-machine paths so they stay out of the committed `bolt.yaml`:
 
 ```yaml
 vars:
   region: eu
+plugins:
+  ue:
+    engine: { path: D:/UE_5.4 }
+    project: { path: D:/Work/MyGame }
+    uproject: D:/Work/MyGame/MyGame.uproject
+  svn:
+    use_tortoise: true
 ```
 
-Engine, project, and uproject paths stay on the `ue` plugin in `bolt.yaml`. `use_tortoise` stays on the `svn` plugin. See [Config Schema](/api/config-schema.md).
+`bolt.yaml` can then leave `path` out of `engine` and `project` and omit `uproject`; `bolt check` validates the merged result. See [Config Schema](/api/config-schema.md).
 
 ## Running
 
@@ -124,6 +136,21 @@ bolt run reset --dry-run             # preview without executing
 ## Migration from v1
 
 `ops`, `variants`, `go-pipeline`, `actions`, and `depends` are removed. Model everything with `tasks` and `flows`; reuse tasks with `call: <name>`. The legacy `uses: task/name` form is rejected and must be changed to `call: name`. Replace `bolt go`/`bolt help` with `bolt run`. Engine, project, uproject, and target metadata now live on the `ue` plugin. `use_tortoise` lives on the `svn` plugin. `project` is only a name, and `bolt.yaml` requires `version: 1`.
+
+### From bolt v2.0 config files
+
+A v2.0 `bolt.yaml` had no `version`, kept `engine`/`project` repo identity under `project`, and put `targets` at the root. A v2.0 `bolt.local.yaml` held `engine_path`, `project_path`, `uproject`, and `use_tortoise`. `bolt check` lists each of these keys and prints the converted files. `bolt migrate` rewrites both files for you (see [bolt migrate](/cli/migrate.md)):
+
+| v2.0                              | Now                                          |
+| --------------------------------- | -------------------------------------------- |
+| `bolt.yaml` `project.engine`      | `plugins[ue].config.engine`                  |
+| `bolt.yaml` `project.project`     | `plugins[ue].config.project`                 |
+| `bolt.yaml` `targets`             | `plugins[ue].config.targets`                 |
+| other `bolt.yaml` `project.<key>` | `vars.<key>` (use `${{ vars.<key> }}`)       |
+| `bolt.local.yaml` `engine_path`   | `bolt.local.yaml` `plugins.ue.engine.path`   |
+| `bolt.local.yaml` `project_path`  | `bolt.local.yaml` `plugins.ue.project.path`  |
+| `bolt.local.yaml` `uproject`      | `bolt.local.yaml` `plugins.ue.uproject`      |
+| `bolt.local.yaml` `use_tortoise`  | `bolt.local.yaml` `plugins.svn.use_tortoise` |
 
 Multi-task start notifications are sent once per invocation and show the top-level task list plus recursively owned actions.
 

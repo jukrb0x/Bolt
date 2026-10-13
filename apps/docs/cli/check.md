@@ -17,8 +17,15 @@ Validates your configuration against Bolt's schema:
 - **`bolt.yaml`** — file existence, YAML syntax, `version: 1`, and the core schema
   (project name, tasks, flows, plugins). `ue` and `svn` plugin metadata is checked
   when those entries are present.
-- **`bolt.local.yaml`** — only if the file exists. It may contain `vars` only.
-  A missing file is not an error.
+- **`bolt.local.yaml`** — only if the file exists. It may contain `vars` and
+  `plugins` (per-namespace overrides). `bolt.yaml` is validated after those
+  overrides are merged. A missing file is not an error.
+
+When either file still uses bolt v2.0 keys (no `version`, root `targets`,
+`project.engine`/`project.project`, or local `engine_path`, `project_path`,
+`uproject`, `use_tortoise`), `bolt check` lists each key, says where it moved,
+and prints the converted `bolt.yaml` and `bolt.local.yaml`. Run
+[`bolt migrate`](./migrate.md) to write them.
 
 Every problem is reported as a `path → message` row.
 

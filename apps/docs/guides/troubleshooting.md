@@ -26,17 +26,20 @@ cd /path/to/project
 
 **Error**: a schema error whose path starts with `bolt.local.yaml`.
 
-**Cause**: The file exists but is not a `vars` map. A missing `bolt.local.yaml` is fine.
+**Cause**: The file has keys other than `vars` and `plugins`, or a `plugins` namespace that `bolt.yaml` does not declare. A missing `bolt.local.yaml` is fine.
 
-**Solution**: Keep only variable overrides, or delete the file.
+**Solution**: Put machine paths under the plugin namespace:
 
 ```yaml
 # bolt.local.yaml
 vars:
   region: eu
+plugins:
+  ue:
+    engine: { path: D:/UE_5.4 }
 ```
 
-Unreal engine, project, and uproject paths belong on the `ue` plugin in `bolt.yaml`, not here.
+If the file has `engine_path`, `project_path`, `uproject`, or `use_tortoise`, it is a bolt v2.0 file. Run `bolt migrate --dry-run` to see the converted files, then `bolt migrate` to write them.
 
 ### Unknown task or flow
 
