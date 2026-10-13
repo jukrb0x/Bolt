@@ -506,3 +506,46 @@ describe("fs/* and json/* through an in-project symlink to outside", () => {
     );
   });
 });
+
+describe("git/info and svn/info: symlinked vs literal out-of-project paths", () => {
+  for (const ref of ["git/info", "svn/info"]) {
+    test(`${ref}: human symlinked Engine dir has no warning; literal ../Engine warns; AI symlink is rejected`, async () => {
+      const { mkdirSync, mkdtempSync, rmSync, symlinkSync } = await import("fs");
+      const os = await import("os");
+      const p = await import("path");
+      const { Logger } = await import("../logger");
+      const base = mkdtempSync(p.join(os.tmpdir(), "bolt-info-link-"));
+      try {
+        const root = p.join(base, "project");
+        const engine = p.join(base, "Engine");
+        mkdirSync(root);
+        mkdirSync(engine);
+        symlinkSync(
+          engine,
+          p.join(root, "Engine"),
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        const cfgFor = (path: string): BoltConfig => ({
+          ...testCfg,
+          tasks: { peek: [{ uses: ref, with: { path } }] },
+        });
+        const human = async (path: string) => {
+          const lines: string[] = [];
+          await new Runner(cfgFor(path), {
+            configDir: root,
+            runtime: mockRuntime,
+            logger: new Logger({ sink: (l) => lines.push(l) }),
+          }).runTask("peek");
+          return lines.filter((l) => l.includes("outside the project directory"));
+        };
+        expect(await human("Engine")).toHaveLength(0);
+        expect(await human("../Engine")).toHaveLength(1);
+        await expect(
+          new Runner(cfgFor("Engine"), { configDir: root, aiInvocation: true }).runTask("peek"),
+        ).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    });
+  }
+});
