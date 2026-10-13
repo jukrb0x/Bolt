@@ -425,3 +425,38 @@ test("a real run still looks up the git branch and runs shell steps", async () =
   expect(calls).toContain("spawnSync git branch --show-current");
   expect(calls).toContain("shell echo hi");
 });
+
+// ---------------------------------------------------------------------------
+// AI invocation: core rejects out-of-project paths for git/info and svn/info
+// ---------------------------------------------------------------------------
+
+for (const ref of ["git/info", "svn/info"]) {
+  test(`AI invocation of ${ref} with an out-of-project path is rejected by core`, async () => {
+    const aiCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { peek: [{ uses: ref, with: { path: "../Engine" } }] },
+    };
+    const calls: string[] = [];
+    const runner = new Runner(aiCfg, {
+      dryRun: true,
+      aiInvocation: true,
+      configDir: process.cwd(),
+      onStep: (s) => calls.push(s),
+    });
+    const run = runner.runTask("peek");
+    await expect(run).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+    await expect(
+      new Runner(aiCfg, { dryRun: true, aiInvocation: true }).runTask("peek"),
+    ).rejects.toThrow(/outside the project directory.*Fix:/);
+  });
+
+  test(`human run of ${ref} with the same path is not rejected by core`, async () => {
+    const humanCfg: BoltConfig = {
+      ...testCfg,
+      tasks: { peek: [{ uses: ref, with: { path: "../Engine" } }] },
+    };
+    await expect(
+      new Runner(humanCfg, { dryRun: true, runtime: mockRuntime }).runTask("peek"),
+    ).resolves.toBeUndefined();
+  });
+}

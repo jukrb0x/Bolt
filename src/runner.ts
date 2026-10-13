@@ -1,3 +1,4 @@
+import { safePath } from "./plugins/path-guard";
 import type { BoltConfig } from "./config";
 import { Logger } from "./logger";
 import { buildRegistry, type PluginRegistry } from "./plugin-registry";
@@ -47,8 +48,9 @@ function parseStepParams(
 interface RunnerOptions {
   dryRun?: boolean;
   /**
-   * Set by the AI permission path when an agent invokes the run; exposed to
-   * handlers as `ctx.aiInvocation`. Human runs leave it unset.
+   * @internal Set by the AI permission path when an agent invokes the run. Core
+   * enforces AI-only restrictions (see {@link AI_PATH_RESTRICTED}); it is not
+   * exposed to plugins. Human runs leave it unset.
    */
   aiInvocation?: boolean;
   onStep?: (cmd: string) => void;
@@ -61,6 +63,12 @@ interface RunnerOptions {
   /** Every validated result returned by a plugin API v2 handler. */
   onStepResult?: (result: StepResult) => void;
 }
+
+/**
+ * Read-only handlers that an AI invocation may only point at paths inside the
+ * project directory. Human runs are not restricted here (the handler warns).
+ */
+const AI_PATH_RESTRICTED = new Set(["git/info", "svn/info"]);
 
 /** Errors the runner already printed (step failure), so callers do not print them twice. */
 const reportedErrors = new WeakSet<object>();
@@ -131,7 +139,6 @@ export class Runner {
       cfg: this.cfg,
       configDir: this.opts.configDir ?? process.cwd(),
       dryRun: this.opts.dryRun ?? false,
-      aiInvocation: this.opts.aiInvocation ?? false,
       logger: this.opts.logger ?? new Logger(),
       runtime: this.runtime,
     };
@@ -299,6 +306,9 @@ export class Runner {
       if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
 
       const params = parseStepParams(plugin, node.ref, operation, node.params);
+      if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(node.ref)) {
+        this.assertAiPathInProject(node.ref, params);
+      }
       const step = [...trail, node.ref].join(" > ");
       // One context object per step, shared by the hooks and the handler as before.
       const scope = this.events.scope(node.ref, step);
@@ -368,6 +378,20 @@ export class Runner {
           ? `${ref} returned status "fail": ${reason}`
           : `${ref} returned status "fail" without summary`,
         result.diagnostics ?? [],
+      );
+    }
+  }
+
+  /** Core-side AI rejection for {@link AI_PATH_RESTRICTED} handlers. */
+  private assertAiPathInProject(ref: string, params: Record<string, string>): void {
+    if (!params.path) return; // the handler reports the missing param
+    const root = this.opts.configDir ?? process.cwd();
+    try {
+      safePath(params.path, root);
+    } catch {
+      throw new BoltStepError(
+        "AI_FORBIDDEN",
+        `${ref}: path "${params.path}" (${path.resolve(root, params.path)}) is outside the project directory "${root}"; AI invocations may only read repositories inside the project. Fix: use a path under the project directory, or read other repositories with a run: step.`,
       );
     }
   }

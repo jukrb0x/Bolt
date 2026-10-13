@@ -59,15 +59,6 @@ test("info: human run with ../Engine outside the project only warns", async () =
   expect(warning).toContain("Fix:");
 });
 
-test("info: the same path via an AI invocation is rejected with AI_FORBIDDEN", async () => {
-  const ctx = { ...makeCtx(), aiInvocation: true };
-  const call = gitPlugin.handlers["info"]({ path: "../Engine" }, ctx);
-  await expect(call).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
-  await expect(gitPlugin.handlers["info"]({ path: "../Engine" }, ctx)).rejects.toThrow(
-    /outside the project directory.*Fix:/,
-  );
-});
-
 test("info resolves a relative path against the project directory", async () => {
   const ctx = makeCtx();
   const result = await gitPlugin.handlers["info"]({ path: "sub" }, ctx);

@@ -2,7 +2,6 @@
 import { defineHandler, definePlugin, type BoltPluginContext, type HandlerResult } from "../plugin";
 import { z } from "zod";
 import path from "path";
-import { BoltStepError } from "../handler-result";
 import { safePath } from "./path-guard";
 
 /** Params schema for handlers that take only a working copy path. */
@@ -17,10 +16,9 @@ function resolvePath(params: Record<string, string>): string {
 
 /**
  * Path for read-only handlers with `ai: true` (`git/info`, `svn/info`). A relative
- * path resolves against the bolt.yaml directory. A path outside the project:
- * - human run: allowed, with a warning that AI invocations will reject it;
- * - AI invocation (`ctx.aiInvocation`): rejected with `AI_FORBIDDEN`, so an agent
- *   cannot use these handlers to inspect unrelated directories.
+ * path resolves against the bolt.yaml directory. A path outside the project is
+ * allowed with a warning; AI invocations of these handlers are rejected by core
+ * (the runner) before the handler runs.
  */
 export function projectPath(
   params: Record<string, string>,
@@ -32,15 +30,8 @@ export function projectPath(
     return safePath(params.path, ctx.configDir);
   } catch {
     const resolved = path.resolve(ctx.configDir, params.path);
-    const fix = `Fix: use a path under the project directory, or read other repositories with a run: step.`;
-    if (ctx.aiInvocation) {
-      throw new BoltStepError(
-        "AI_FORBIDDEN",
-        `${ref}: path "${params.path}" (${resolved}) is outside the project directory "${ctx.configDir}"; AI invocations may only read repositories inside the project. ${fix}`,
-      );
-    }
     ctx.logger.warn(
-      `${ref}: path "${params.path}" (${resolved}) is outside the project directory "${ctx.configDir}". This run continues, but AI invocations of ${ref} will reject this path. ${fix}`,
+      `${ref}: path "${params.path}" (${resolved}) is outside the project directory "${ctx.configDir}". This run continues, but AI invocations of ${ref} will reject this path. Fix: use a path under the project directory, or read other repositories with a run: step.`,
     );
     return resolved;
   }
