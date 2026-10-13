@@ -58,7 +58,10 @@
     "lint": "oxlint src",
     "lint:fix": "oxlint --fix src",
     "fmt": "oxfmt --write .",
-    "fmt:check": "oxfmt --check ."
+    "fmt:check": "oxfmt --check .",
+    "docs:dev": "bun run --cwd apps/docs dev",
+    "docs:gen": "bun apps/docs/scripts/generate.ts",
+    "docs:check": "bun apps/docs/scripts/generate.ts --check && bun run --cwd apps/docs validate && bun run --cwd apps/docs broken-links"
   },
   "dependencies": {
     "citty": "^0.2.1",

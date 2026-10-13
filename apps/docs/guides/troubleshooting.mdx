@@ -1,0 +1,260 @@
+---
+title: "Troubleshooting"
+description: "Common issues and solutions for Bolt."
+---
+
+Common issues and solutions for Bolt.
+
+## Common Errors
+
+### bolt.yaml not found
+
+**Error**: `[ERROR] bolt.yaml not found`
+
+**Cause**: Bolt couldn't find a `bolt.yaml` file in the directory tree.
+
+**Solution**:
+
+1. `cd` into your project root (or any subdirectory of it)
+2. Bolt walks _up_ from the current directory looking for `bolt.yaml`
+3. If the project has no config yet, create `bolt.yaml` with `version: 1`
+
+```bash
+cd /path/to/project
+```
+
+### bolt.local.yaml invalid
+
+**Error**: a schema error whose path starts with `bolt.local.yaml`.
+
+**Cause**: The file has keys other than `vars` and `plugins`, or a `plugins` namespace that `bolt.yaml` does not declare. A missing `bolt.local.yaml` is fine.
+
+**Solution**: Put machine paths under the plugin namespace:
+
+```yaml
+# bolt.local.yaml
+vars:
+  region: eu
+plugins:
+  ue:
+    engine: { path: D:/UE_5.4 }
+```
+
+If the file has `engine_path`, `project_path`, `uproject`, or `use_tortoise`, it is a bolt v2.0 file. Run `bolt migrate --dry-run` to see the converted files, then `bolt migrate` to write them.
+
+### Unknown task or flow
+
+**Error**: `Unknown task: foo` or `Unknown flow: foo`
+
+**Cause**: The name you passed to `bolt run` isn't defined in this project's `bolt.yaml`.
+
+**Solution**: List what's available.
+
+```bash
+bolt list                 # all tasks and flows
+bolt inspect <name...>    # show the resolved steps for a task or flow
+```
+
+### Handler not found
+
+**Error**: `Unknown op "deploy" in plugin "myplugin"` or `Unknown plugin namespace: "myplugin"`
+
+**Cause**: Plugin not loaded, or the namespace/handler name is wrong.
+
+**Solution**:
+
+1. Check the plugin is active: `bolt plugin list`
+2. Verify the `ns/handler` name in your step's `uses:`
+3. For explicit plugins, check the path in the `plugins:` section
+
+```bash
+bolt plugin list
+# Should show: myplugin → deploy
+```
+
+### Command failed
+
+**Error**: `Command failed (exit 1): <cmd>`
+
+**Cause**: A `run:` shell step returned a non-zero exit code.
+
+**Solution**:
+
+1. Preview with `--dry-run` to see the exact command
+2. Check the command output for errors
+3. Add `continue-on-error: true` to the step if the failure is acceptable
+
+```bash
+bolt run daily --dry-run
+```
+
+### Build timed out
+
+**Error**: `Build timed out after 6h`
+
+**Cause**: The run exceeded the configured `timeout_hours`.
+
+**Solution**:
+
+1. Increase `timeout_hours` in `bolt.yaml`
+2. Optimize the long-running task
+
+```yaml
+timeout_hours: 12 # Increase from 6 to 12
+```
+
+### SVN/Git Errors
+
+**Error**: `svn: E155015: Conflict...` or `git: merge conflict`
+
+**Cause**: Version control conflicts in the engine or project working copy.
+
+**Solution**: Resolve them, then re-run. Bolt ships handlers for the common SVN
+cases (both honor `use_tortoise` on the `svn` plugin):
+
+```yaml
+tasks:
+  svn-fix: [{ uses: ue/svn_cleanup }, { uses: ue/svn_revert }]
+```
+
+```bash
+bolt run svn-fix     # ue/svn_cleanup then ue/svn_revert
+```
+
+For git conflicts in the engine working copy, resolve with your git tooling
+(e.g. `git reset --hard` in the engine repo), then re-run.
+
+### Zero-byte DLL / Linker Errors
+
+**Error**: Linker errors caused by zero-byte DLL files in `Binaries/`
+
+**Cause**: Corrupted zero-byte DLL files, often from an interrupted build.
+
+**Solution**: The `ue/fix_dll` handler removes zero-byte DLLs; then rebuild.
+
+```yaml
+tasks:
+  fix-dll: [{ uses: ue/fix_dll }]
+```
+
+```bash
+bolt run fix-dll build     # clean the bad DLLs, then rebuild
+```
+
+### bolt self-update: GitHub API returned 403
+
+**Error**: `Failed to fetch release info: GitHub API returned 403` (or `429`), usually with a rate-limit message.
+
+**Cause**: Anonymous `api.github.com` requests are limited per IP address. On a shared office or VPN IP the limit runs out quickly. Since this release, `bolt self-update` reads the latest release from the `github.com/.../releases/latest` redirect and only uses the API if that fails. Older bolt versions always used the API.
+
+**Solution**: Any one of:
+
+- Set `GH_TOKEN` (or `GITHUB_TOKEN`) to a GitHub token, or log in with `gh auth login`, then run `bolt self-update` again.
+- Rerun the install one-liner, which downloads from `github.com` without the API:
+
+```powershell
+irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh
+```
+
+## Configuration Issues
+
+### Invalid YAML Syntax
+
+**Error**: `YAML syntax error at line 15`
+
+**Cause**: Malformed YAML in `bolt.yaml` or `bolt.local.yaml`.
+
+**Solution**:
+
+1. Run `bolt check` to validate
+2. Fix indentation and quoting
+
+```bash
+bolt check
+```
+
+### Missing Required Fields
+
+**Error**: `Missing required field: project.name`
+
+**Cause**: A required field is absent.
+
+**Solution**: Add the missing field.
+
+```yaml
+project:
+  name: MyGame # Add this
+```
+
+### Invalid Target Kind
+
+**Error**: `Invalid target kind: foo`
+
+**Cause**: The target `kind` is not a supported value.
+
+**Solution**: Use a valid kind.
+
+```yaml
+plugins:
+  - namespace: ue
+    config:
+      targets:
+        mytarget:
+          kind: editor # editor | program | game | client | server
+```
+
+## Performance Issues
+
+### Slow Execution
+
+**Cause**: Large projects, slow networks, many steps.
+
+**Solution**:
+
+1. Use `--dry-run` to verify the plan first
+2. Split large tasks into smaller composable tasks
+3. Add `continue-on-error` to non-critical `run:` steps
+
+```bash
+bolt run daily --dry-run
+```
+
+## Getting Help
+
+### Preview a run
+
+```bash
+bolt run daily --dry-run
+```
+
+### Check Logs
+
+Execution logs are stored in `.bolt/logs/`:
+
+```bash
+# View the latest log
+cat .bolt/logs/bolt_2024-01-15T10-30-00.log
+
+# Or follow it live
+tail -f .bolt/logs/bolt_*.log
+```
+
+### Report Issues
+
+If you encounter a bug:
+
+1. Check existing issues: [GitHub Issues](https://github.com/jukrb0x/Bolt/issues)
+2. Include in your report:
+   - Bolt version (`bolt --version`)
+   - Full error message
+   - Minimal reproduction steps
+   - Your configuration (omit sensitive data)
+
+## See Also
+
+- [bolt check](/cli/check) - Validate bolt.yaml
+- [Error Handling](/guides/error-handling) - Fail-fast, continue_on_fail, continue-on-error

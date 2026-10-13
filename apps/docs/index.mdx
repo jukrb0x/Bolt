@@ -1,0 +1,113 @@
+---
+title: "Bolt"
+description: "Bolt is an AI-native, general-purpose pipeline and workflow tool shipped as a single bolt binary."
+---
+
+<Warning>
+  **Placeholder (TODO(content): intro).** This introduction and Bolt's positioning as an AI-native,
+  general-purpose pipeline tool are still to be written. The text below is the previous landing
+  page, kept as-is until then.
+</Warning>
+
+Your daily Unreal Engine workflow, automated. Build, update, and deploy with a single command.
+
+<ButtonGroup>
+  <Button href="/guides/getting-started">Get Started</Button>
+  <Button href="https://github.com/jukrb0x/Bolt" variant="secondary">
+    View on GitHub
+  </Button>
+</ButtonGroup>
+
+<Features>
+  <Feature title="Tasks + Flows" icon="bolt">
+    Define reusable tasks (named step lists) and compose them into ordered flows. Run tasks ad-hoc
+    in the order you type, or run a flow to hit a goal.
+  </Feature>
+  <Feature title="One Verb" icon="terminal">
+    Everything runs through `bolt run`. What you type is what runs - no hidden reordering. Pass
+    `--key=value` params to steer any run.
+  </Feature>
+  <Feature title="Plugin System" icon="plug">
+    Extend Bolt with custom handlers for deployment, notifications, or any workflow. Override
+    built-ins with your own implementations.
+  </Feature>
+  <Feature title="Shared + Local Config" icon="file-code">
+    Commit a shared `bolt.yaml` (`version: 1`). Unreal paths and targets live on the ue plugin.
+    `bolt.local.yaml` only overrides vars.
+  </Feature>
+  <Feature title="Notifications" icon="bell">
+    Get notified on build start, completion, or failure via WeChat Work, Telegram, and more.
+  </Feature>
+  <Feature title="Library Mode" icon="box">
+    Use Bolt programmatically from Node.js or Bun. Access built-in plugins directly or build your
+    own automation.
+  </Feature>
+</Features>
+
+## Quick Start
+
+Install Bolt:
+
+<Tabs>
+  <Tab title="Windows (PowerShell)">
+    ```powershell irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex ```
+  </Tab>
+  <Tab title="macOS/Linux">
+    ```bash curl -fsSL https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.sh | sh ```
+  </Tab>
+</Tabs>
+
+Open a new terminal so `PATH` includes `bolt`. Windows installs `%USERPROFILE%\.bolt\bin\bolt.exe`. macOS and Linux install `~/.bolt/bin/bolt` (`bolt-mac-x64` on Intel macOS, `bolt-mac-arm64` on Apple Silicon, `bolt-linux-x64` on Linux). Add a `bolt.yaml` with `version: 1`. Unreal targets go under the `ue` plugin, not at the root of the file. See [Installation](/guides/installation).
+
+Run your workflow. Pass tasks to run them in the order you type, or a flow name to hit a predefined goal:
+
+```bash
+bolt run update build start     # tasks, in the typed order
+bolt run daily                  # a flow (update -> build -> start)
+bolt run daily --dry-run        # preview without executing
+```
+
+## Why Bolt?
+
+Stop running `Build.bat` by hand. Stop context-switching between TortoiseSVN, the editor, and a dozen batch scripts. Bolt turns repetitive UE tasks into single commands you can chain, script, and share with your team.
+
+```yaml
+# bolt.yaml — version 1. UE metadata is the ue plugin's config.
+version: 1
+
+project:
+  name: MyGame
+
+plugins:
+  - namespace: ue
+    config:
+      engine:
+        path: C:/UnrealEngine
+        vcs: git
+      project:
+        path: C:/Projects/MyGame
+        vcs: svn
+      uproject: C:/Projects/MyGame/MyGame.uproject
+      targets:
+        editor:
+          kind: editor
+          config: development
+
+tasks:
+  update: [{ uses: ue/update_engine }, { uses: ue/update_project }]
+  build: [{ uses: ue/build, with: { target: editor } }]
+  start: [{ uses: ue/start }]
+
+flows:
+  daily:
+    description: Update, build, and launch the editor
+    steps: [update, build, start]
+    continue_on_fail: [start] # update/build failures abort; start may fail
+```
+
+```bash
+bolt run update build start        # ad-hoc: tasks in the typed order
+bolt run build                     # just rebuild the editor
+bolt run build --config=debug      # params replace the old variants
+bolt run daily                     # run the predefined flow
+```

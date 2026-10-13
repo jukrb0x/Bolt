@@ -2,88 +2,103 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Bolt",
-  "description": "Unreal Engine workflow automation. One bolt binary, extended with TypeScript plugins.",
+  "description": "AI-native, general-purpose pipeline and workflow tool. One bolt binary, extended with TypeScript plugins.",
   "colors": {
-    "primary": "#646cff",
-    "light": "#a5b4fc",
-    "dark": "#4f46e5"
+    "primary": "#525252",
+    "light": "#d4d4d4",
+    "dark": "#262626"
   },
-  "logo": {
-    "light": "/public/logo-light.svg",
-    "dark": "/public/logo-dark.svg"
-  },
-  "favicon": "/public/favicon.svg",
   "navigation": {
-    "tabs": [
+    "groups": [
       {
-        "tab": "Guide",
-        "groups": [
+        "group": "Get started",
+        "pages": [
+          "index",
+          "why-bolt",
+          "guides/getting-started",
+          "guides/installation",
+          "guides/first-project"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/daily-workflow",
+          "guides/bolt-yaml",
+          "guides/interpolation",
+          "guides/project-structure",
+          "guides/error-handling",
+          "guides/architecture",
+          "guides/runtime",
+          "guides/troubleshooting",
+          "api/library-usage"
+        ]
+      },
+      {
+        "group": "CLI reference",
+        "pages": [
+          "cli/index",
+          "cli/run",
+          "cli/list",
+          "cli/info",
+          "cli/inspect",
+          "cli/check",
+          "cli/migrate",
+          "cli/config",
+          "cli/plugin",
+          "cli/version",
+          "cli/self-update",
           {
-            "group": "Introduction",
+            "group": "Generated command reference",
             "pages": [
-              "index",
-              "guides/getting-started",
-              "guides/installation",
-              "guides/first-project"
-            ]
-          },
-          {
-            "group": "Daily Workflow",
-            "pages": ["guides/daily-workflow", "guides/error-handling"]
-          },
-          {
-            "group": "How It Works",
-            "pages": ["guides/architecture", "guides/plugin-system", "guides/runtime"]
-          },
-          {
-            "group": "Plugin Development",
-            "pages": ["guides/plugin-development", "guides/e2e"]
-          },
-          {
-            "group": "Configuration",
-            "pages": [
-              "guides/bolt-yaml",
-              "guides/interpolation",
-              "guides/project-structure",
-              "guides/troubleshooting"
+              "reference/cli/run",
+              "reference/cli/list",
+              "reference/cli/info",
+              "reference/cli/check",
+              "reference/cli/migrate",
+              "reference/cli/config",
+              "reference/cli/init",
+              "reference/cli/types",
+              "reference/cli/plugin",
+              "reference/cli/inspect",
+              "reference/cli/self-update",
+              "reference/cli/ai",
+              "reference/cli/version"
             ]
           }
         ]
       },
       {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "API Reference",
-            "pages": [
-              "api/plugin-api",
-              "api/config-schema",
-              "api/built-in-handlers",
-              "api/library-usage"
-            ]
-          }
+        "group": "Config reference",
+        "pages": [
+          "api/config-schema",
+          "reference/config/bolt-yaml",
+          "reference/config/bolt-local-yaml"
         ]
       },
       {
-        "tab": "CLI Reference",
-        "groups": [
-          {
-            "group": "CLI Reference",
-            "pages": [
-              "cli/index",
-              "cli/run",
-              "cli/list",
-              "cli/info",
-              "cli/inspect",
-              "cli/check",
-              "cli/migrate",
-              "cli/config",
-              "cli/plugin",
-              "cli/version",
-              "cli/self-update"
-            ]
-          }
+        "group": "Plugins",
+        "pages": [
+          "guides/plugin-system",
+          "guides/plugin-development",
+          "api/plugin-api",
+          "guides/e2e"
         ]
+      },
+      {
+        "group": "Built-in plugins",
+        "pages": [
+          "api/built-in-handlers",
+          "reference/plugins/fs",
+          "reference/plugins/git",
+          "reference/plugins/json",
+          "reference/plugins/svn",
+          "reference/plugins/ue"
+        ]
+      },
+      {
+        "group": "AI",
+        "pages": ["ai/overview"]
       }
     ]
   },
@@ -97,8 +112,5 @@
     "socials": {
       "github": "https://github.com/jukrb0x/Bolt"
     }
-  },
-  "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude"]
   }
 }

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "mint dev",
     "validate": "mint validate",
-    "broken-links": "mint broken-links"
+    "broken-links": "mint broken-links",
+    "gen": "bun scripts/generate.ts"
   },
   "devDependencies": {
     "mint": "^4.2.666"

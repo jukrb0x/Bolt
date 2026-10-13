@@ -1,0 +1,174 @@
+---
+title: "bolt.yaml"
+description: "Generated field reference for bolt.yaml (schema/v1/bolt.schema.json)."
+---
+
+{/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
+
+Bolt pipeline contract. version is 1. Unreal engine, project, uproject, and targets belong under the ue plugin config.
+
+Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main/schema/v1/bolt.schema.json). Draft: `http://json-schema.org/draft-07/schema#`.
+
+## Top-level fields
+
+| Field           | Type                                              | Required | Default | Notes               |
+| --------------- | ------------------------------------------------- | -------- | ------- | ------------------- |
+| `version`       | `1`                                               | yes      |         |                     |
+| `project`       | `object`                                          | yes      |         |                     |
+| `vars`          | `map<string, string>`                             |          | `{}`    |                     |
+| `tasks`         | `map<string, stepList>` ([stepList](#steplist))   |          | `{}`    |                     |
+| `flows`         | `map<string, flow>` ([flow](#flow))               |          | `{}`    |                     |
+| `plugins`       | `plugin[]` ([plugin](#plugin))                    |          | `[]`    |                     |
+| `timeout_hours` | `number`                                          |          |         | exclusiveMinimum: 0 |
+| `notifications` | `notifications` ([notifications](#notifications)) |          |         |                     |
+
+Unknown top-level fields are rejected.
+
+## Definitions
+
+### flow
+
+Type: `object`
+
+| Field              | Type       | Required | Default | Notes |
+| ------------------ | ---------- | -------- | ------- | ----- |
+| `description`      | `string`   |          |         |       |
+| `steps`            | `string[]` | yes      |         |       |
+| `continue_on_fail` | `string[]` |          | `[]`    |       |
+
+### notifications
+
+Type: `object`
+
+| Field            | Type                                                           | Required | Default | Notes |
+| ---------------- | -------------------------------------------------------------- | -------- | ------- | ----- |
+| `on_start`       | `boolean`                                                      |          | `true`  |       |
+| `on_op_complete` | `boolean`                                                      |          | `true`  |       |
+| `on_failure`     | `boolean`                                                      |          | `true`  |       |
+| `on_complete`    | `boolean`                                                      |          | `true`  |       |
+| `providers`      | `wecom \| telegram[]` ([wecom](#wecom), [telegram](#telegram)) |          | `[]`    |       |
+
+### plugin
+
+Type: `object \| object \| object`
+
+One of:
+
+1. `object`
+
+| Field       | Type                               | Required | Default | Notes |
+| ----------- | ---------------------------------- | -------- | ------- | ----- |
+| `namespace` | `"ue"`                             | yes      |         |       |
+| `path`      | `string`                           |          |         |       |
+| `config`    | `ueConfig` ([ueConfig](#ueconfig)) | yes      |         |       |
+
+2. `object`
+
+| Field       | Type                                  | Required | Default | Notes |
+| ----------- | ------------------------------------- | -------- | ------- | ----- |
+| `namespace` | `"svn"`                               | yes      |         |       |
+| `path`      | `string`                              |          |         |       |
+| `config`    | `svnConfig` ([svnConfig](#svnconfig)) |          |         |       |
+
+3. `object`
+
+| Field       | Type     | Required | Default | Notes |
+| ----------- | -------- | -------- | ------- | ----- |
+| `namespace` | `string` | yes      |         |       |
+| `path`      | `string` |          |         |       |
+| `config`    | `object` |          |         |       |
+
+### repo
+
+Type: `object`
+
+| Field    | Type             | Required | Default | Notes        |
+| -------- | ---------------- | -------- | ------- | ------------ |
+| `path`   | `string`         | yes      |         | minLength: 1 |
+| `vcs`    | `"git" \| "svn"` |          | `"git"` |              |
+| `url`    | `string`         |          |         |              |
+| `branch` | `string`         |          |         |              |
+
+### step
+
+Type: `object \| object \| object`
+
+One of:
+
+1. `object`
+
+| Field               | Type                  | Required | Default | Notes        |
+| ------------------- | --------------------- | -------- | ------- | ------------ |
+| `uses`              | `string`              | yes      |         | minLength: 1 |
+| `with`              | `map<string, string>` |          |         |              |
+| `continue-on-error` | `boolean`             |          |         |              |
+
+2. `object`
+
+| Field               | Type                  | Required | Default | Notes        |
+| ------------------- | --------------------- | -------- | ------- | ------------ |
+| `call`              | `string`              | yes      |         | minLength: 1 |
+| `with`              | `map<string, string>` |          |         |              |
+| `continue-on-error` | `boolean`             |          |         |              |
+
+3. `object`
+
+| Field               | Type      | Required | Default | Notes        |
+| ------------------- | --------- | -------- | ------- | ------------ |
+| `run`               | `string`  | yes      |         | minLength: 1 |
+| `continue-on-error` | `boolean` |          |         |              |
+
+### stepList
+
+Type: `step[]`
+
+### svnConfig
+
+Type: `object`
+
+| Field          | Type      | Required | Default | Notes |
+| -------------- | --------- | -------- | ------- | ----- |
+| `use_tortoise` | `boolean` |          |         |       |
+
+### telegram
+
+Type: `object`
+
+| Field       | Type         | Required | Default | Notes |
+| ----------- | ------------ | -------- | ------- | ----- |
+| `type`      | `"telegram"` | yes      |         |       |
+| `bot_token` | `string`     | yes      |         |       |
+| `chat_id`   | `string`     | yes      |         |       |
+
+### ueConfig
+
+Type: `object`
+
+Unreal metadata. Valid only under plugins[].config when namespace is ue, never as a root bolt.yaml field.
+
+| Field      | Type                                            | Required | Default | Notes        |
+| ---------- | ----------------------------------------------- | -------- | ------- | ------------ |
+| `engine`   | `repo` ([repo](#repo))                          | yes      |         |              |
+| `project`  | `repo` ([repo](#repo))                          | yes      |         |              |
+| `uproject` | `string`                                        | yes      |         | minLength: 1 |
+| `targets`  | `map<string, ueTarget>` ([ueTarget](#uetarget)) |          | `{}`    |              |
+
+### ueTarget
+
+Type: `object`
+
+| Field    | Type                                                      | Required | Default | Notes                                                                                                                                                                                                                                                                                                                                           |
+| -------- | --------------------------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`   | `"editor" \| "program" \| "game" \| "client" \| "server"` | yes      |         |                                                                                                                                                                                                                                                                                                                                                 |
+| `name`   | `string`                                                  |          |         |                                                                                                                                                                                                                                                                                                                                                 |
+| `config` | `string`                                                  |          |         | Build configuration. Same names bolt check accepts, in any case, with surrounding space allowed.. pattern: ^\\s*(?:[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Mm][Ee][Nn][Tt]\|[Dd][Ee][Vv]\|[Dd][Ee][Bb][Uu][Gg]\|[Dd][Bb][Gg]\|[Dd][Ee][Bb][Uu][Gg][Gg][Aa][Mm][Ee]\|[Dd][Bb][Gg][Gg][Aa][Mm][Ee]\|[Ss][Hh][Ii][Pp][Pp][Ii][Nn][Gg]\|[Tt][Ee][Ss][Tt])\\s*$ |
+
+### wecom
+
+Type: `object`
+
+| Field         | Type      | Required | Default | Notes |
+| ------------- | --------- | -------- | ------- | ----- |
+| `type`        | `"wecom"` | yes      |         |       |
+| `webhook_url` | `string`  | yes      |         |       |
+| `chat_id`     | `string`  |          |         |       |
