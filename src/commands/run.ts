@@ -90,7 +90,11 @@ export async function dispatchRun(
 export default defineCommand({
   meta: { description: "Run tasks (in typed order) or a flow defined in bolt.yaml" },
   args: {
-    "dry-run": { type: "boolean", default: false, description: "Print steps without executing" },
+    "dry-run": {
+      type: "boolean",
+      default: false,
+      description: "Print steps and skip run: steps; local actions and plugin handlers still run",
+    },
   },
   async run({ rawArgs }) {
     const { names, params, dryRun } = parseRunArgs(rawArgs ?? []);
