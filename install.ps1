@@ -1,6 +1,7 @@
 # Install bolt for Windows.
 #   irm https://raw.githubusercontent.com/jukrb0x/Bolt/main/install.ps1 | iex
-# The binary is bolt-win-x64.exe, installed as %LOCALAPPDATA%\bolt\bin\bolt.exe.
+# The binary is bolt-win-x64.exe, installed as %USERPROFILE%\.bolt\bin\bolt.exe.
+# If a bolt.exe is already on PATH, that copy is updated in place instead.
 # Re-running this script renames a running bolt.exe aside before replacing it.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -23,8 +24,38 @@ if ($Arch -ne 'AMD64') {
   throw "Unsupported Windows architecture: $Arch"
 }
 
-$DestDir = Join-Path $env:LOCALAPPDATA 'bolt\bin'
 $ReceiptDir = Join-Path $env:USERPROFILE '.bolt'
+$DefaultDir = Join-Path $ReceiptDir 'bin'
+$DestDir = $DefaultDir
+
+# Update a bolt.exe that is already on PATH instead of installing a second copy.
+# Package-manager copies (npm, winget, scoop) are left to their manager.
+function Test-ManagedPath([string]$Path) {
+  $p = $Path.Replace('\', '/').ToLower()
+  return ($p.Contains('/node_modules/') -or $p.Contains('/winget/packages/') -or
+    $p.Contains('/microsoft/winget/') -or $p.Contains('/scoop/apps/') -or $p.Contains('/scoop/shims/'))
+}
+$Existing = Get-Command bolt -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($Existing -and $Existing.Source) {
+  $ExistingPath = [System.IO.Path]::GetFullPath($Existing.Source)
+  if ([System.IO.Path]::GetFileName($ExistingPath) -ine 'bolt.exe') {
+    Write-Host "Ignoring $ExistingPath on PATH: not bolt.exe."
+  } elseif ($env:LOCALAPPDATA -and ([System.IO.Path]::GetDirectoryName($ExistingPath).TrimEnd('\').ToLower() -eq (Join-Path $env:LOCALAPPDATA 'bolt\bin').TrimEnd('\').ToLower())) {
+    Write-Host "Found the v2.1.x install at $ExistingPath. Installing to $DefaultDir instead."
+  } elseif (Test-ManagedPath $ExistingPath) {
+    Write-Host "Ignoring $ExistingPath on PATH: it belongs to a package manager. Update it with that manager."
+  } else {
+    $ExistingVersion = ''
+    $global:LASTEXITCODE = 1
+    try { $ExistingVersion = (& $ExistingPath version 2>$null | Out-String).Trim() } catch { $ExistingVersion = '' }
+    if ($LASTEXITCODE -eq 0 -and $ExistingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$') {
+      $DestDir = [System.IO.Path]::GetDirectoryName($ExistingPath)
+      Write-Host "Found bolt $ExistingVersion at $ExistingPath. Updating it in place."
+    } else {
+      Write-Host "Ignoring $ExistingPath on PATH: it did not print a bolt version."
+    }
+  }
+}
 New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ReceiptDir | Out-Null
 
@@ -111,18 +142,27 @@ finally {
   }
 }
 
-$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (-not $UserPath) { $UserPath = '' }
-$PathEntries = $UserPath -split ';'
-$Already = $false
-foreach ($Entry in $PathEntries) {
-  if ($Entry.TrimEnd('\').ToLower() -eq $DestDir.TrimEnd('\').ToLower()) { $Already = $true }
+if ($DestDir -eq $DefaultDir) {
+  # Put the install dir first so it wins over a v2.1.x %LOCALAPPDATA%\bolt\bin entry.
+  $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  if (-not $UserPath) { $UserPath = '' }
+  $Want = $DestDir.TrimEnd('\').ToLower()
+  $PathEntries = @($UserPath -split ';' | Where-Object { $_ })
+  $First = ''
+  if ($PathEntries.Count -gt 0) { $First = $PathEntries[0].TrimEnd('\').ToLower() }
+  if ($First -ne $Want) {
+    $Rest = @($PathEntries | Where-Object { $_.TrimEnd('\').ToLower() -ne $Want })
+    [Environment]::SetEnvironmentVariable('Path', ((@($DestDir) + $Rest) -join ';'), 'User')
+    Write-Host "Added $DestDir to the front of your user Path. Open a new terminal."
+  }
 }
-if (-not $Already) {
-  $Prefix = $DestDir
-  if ($UserPath) { $Prefix = "$DestDir;$UserPath" }
-  [Environment]::SetEnvironmentVariable('Path', $Prefix, 'User')
-  Write-Host "Added $DestDir to your user Path. Open a new terminal."
+
+# v2.1.0 to v2.1.2 installed to %LOCALAPPDATA%\bolt\bin. Do not delete it, just say so.
+if ($env:LOCALAPPDATA) {
+  $LegacyDir = Join-Path $env:LOCALAPPDATA 'bolt\bin'
+  if ((Test-Path -LiteralPath $LegacyDir) -and ($LegacyDir.TrimEnd('\').ToLower() -ne $DestDir.TrimEnd('\').ToLower())) {
+    Write-Host "Note: $LegacyDir is from bolt v2.1.x and is no longer used. You can delete it and remove it from your user Path."
+  }
 }
 
 Write-Host "Installed $Asset to $Dest ($Version)"
