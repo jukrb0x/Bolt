@@ -22,7 +22,7 @@ steps; a **flow** is a named, ordered set of tasks. You pass names positionally:
   name is treated as a flow only if it matches a flow; otherwise it must be a task.
 
 If any name is neither a task nor a flow, the run fails before executing anything
-with `Unknown task or flow: "<name>"`, followed by the available tasks and flows.
+with `Unknown task "<name>"` / `Unknown flow "<name>"` (exit code `2`), followed by the available tasks and flows.
 
 Flows are **fail-fast**: the first failing task aborts the flow, unless that task
 is listed in the flow's `continue_on_fail`.
@@ -61,14 +61,31 @@ any step runs:
   `confirmed-by-user`. Only `--dry-run` is implemented; the others fail with
   `--<name> is reserved by bolt and not supported yet`. None of them can be used
   as a param name, neither as `--name=value` nor as `name=value` after `--`;
-  the error tells you to rename the param, e.g. `plan` → `build_plan` in
-  `bolt.yaml`, then pass `-- build_plan=x`. Valued forms such as `--json=v1` or
-  `--plan=<hash>` also report that the flag is not supported yet.
+  the error tells you to rename the param, e.g. `plan` → `my_plan` in
+  `bolt.yaml`, then pass `-- my_plan=x`. Valued forms such as `--json=v1` or
+  `--plan=<hash>` also report that the flag is not supported yet. Reserved names
+  are case-sensitive: `--PLAN=x` is an ordinary param.
+- `--dry-run=false` and `-- dry-run=false`: to run for real, just remove `--dry-run`.
 - `help` with a value (in addition to the 7 reserved names above, handled
   separately): `--help=<value>` fails with `--help takes no value. Use: bolt run --help`,
   and `-- help=<value>` fails with `"help" cannot be used as a param name`. Both
   tell you to rename a `help` param, e.g. to `my_help`. Bare `--help` / `-h`
-  still show help.
+  still show help. This matches `--help=<value>` before the command
+  (`bolt --help=1` fails with `--help takes no value`).
+- Unknown names (`bolt run mrk`) fail with `Unknown task "mrk". Did you mean "mark"?`
+  (or `Unknown flow "…"` when the closest match is a flow) and list the project's
+  tasks and flows in declaration order. When the only match differs by case
+  (`bolt run Mark` / `bolt run Build`), the message adds `Task names are case-sensitive.`
+- No name (`bolt run`) prints the usage with the project's actual tasks and flows;
+  outside a project it points to `bolt list` and `bolt init`.
+
+A mistyped command (`bolt rn mark`) fails with exit code `2` and
+`Unknown command "rn". Did you mean "run"?` plus the list of commands.
+A mistyped global flag before the command (`bolt --verison`) suggests
+`Did you mean "--version"?`.
+
+Suggested commands in error messages quote values that contain spaces or shell
+characters, so they can be copied as-is.
 
 To pass a value that starts with `--` (for example a flag forwarded to an
 external tool), put it after a bare `--` separator. Everything after `--` is

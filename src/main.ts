@@ -1,10 +1,10 @@
 import "./virtual-module"; // Register "boltstack" virtual module before anything loads plugins
-import { defineCommand, runMain } from "citty";
+import { defineCommand, renderUsage, runMain, type CommandDef } from "citty";
 import { cleanupInstalledBolt } from "./commands/update";
 import { commands } from "./commands";
 import { VERSION } from "./version";
-import { checkGlobalArgs } from "./global-args";
-import { USAGE_EXIT_CODE } from "./commands/run";
+import { checkCommandName, checkGlobalArgs } from "./global-args";
+import { loadUsageConfig, printUsageError, USAGE_EXIT_CODE } from "./commands/run";
 
 if (process.platform === "win32") cleanupInstalledBolt(process.execPath);
 
@@ -17,10 +17,52 @@ const main = defineCommand({
   subCommands: commands,
 });
 
-const globalError = checkGlobalArgs(process.argv.slice(2));
+/**
+ * citty builds the usage line from the parent's and the command's meta.name only, so a
+ * nested command would read "plugin new" and a nameless one falls back to the script path
+ * (`/$bunfs/root/bolt`). Prefix the full command path instead: "bolt plugin new".
+ */
+async function showUsage(cmd: CommandDef<any>, parent?: CommandDef<any>): Promise<void> {
+  const argv = process.argv.slice(2).filter((arg) => !arg.startsWith("-"));
+  const path: string[] = [];
+  let node: CommandDef<any> = main;
+  for (const name of argv) {
+    if (node === cmd) break;
+    const subs = (node.subCommands ?? {}) as Record<string, CommandDef<any>>;
+    if (!Object.hasOwn(subs, name)) break;
+    path.push(name);
+    node = subs[name];
+  }
+  const parentName = ["bolt", ...path.slice(0, -1)].join(" ");
+  const fakeParent = parent ? { meta: { name: parentName, version: VERSION } } : undefined;
+  console.log(`${await renderUsage(cmd, fakeParent as CommandDef<any> | undefined)}\n`);
+}
+
+const argv = process.argv.slice(2);
+const globalError = checkGlobalArgs(argv);
 if (globalError) {
-  console.error(`[ERROR] ${globalError}`);
+  printUsageError(globalError);
   process.exit(USAGE_EXIT_CODE);
 }
 
-runMain(main);
+const first = argv.find((arg) => !arg.startsWith("-"));
+const needsProjectNames =
+  first !== undefined &&
+  !Object.hasOwn(commands, first) &&
+  first !== "help" &&
+  first !== "update" &&
+  first !== "upgrade";
+
+const usage = needsProjectNames ? await loadUsageConfig() : undefined;
+const projectNames =
+  usage?.kind === "loaded"
+    ? [...Object.keys(usage.cfg.tasks), ...Object.keys(usage.cfg.flows)]
+    : undefined;
+
+const commandError = checkCommandName(argv, main, projectNames);
+if (commandError) {
+  printUsageError(commandError);
+  process.exit(USAGE_EXIT_CODE);
+}
+
+runMain(main, { showUsage });

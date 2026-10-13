@@ -7,6 +7,7 @@ import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
 import { VERSION } from "../version";
+import { closestFlagMatches, closestMatches, formatDidYouMean, shellQuote } from "../suggest";
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -22,6 +23,17 @@ export interface ParsedRun {
 
 /** Exit code for command-line usage errors (unknown flag, malformed param). */
 export const USAGE_EXIT_CODE = 2;
+
+/**
+ * Print a usage error. `[ERROR]` prefixes only the actual error lines; indented
+ * supplementary lines (Commands:/Tasks:/Flows:/Run …) are printed as-is.
+ */
+export function printUsageError(message: string): void {
+  for (const line of message.split("\n")) {
+    if (/^[ \t]/.test(line)) console.error(line);
+    else console.error(`[ERROR] ${line}`);
+  }
+}
 
 /** A command-line usage error. Callers print the message and exit with USAGE_EXIT_CODE. */
 export class UsageError extends Error {
@@ -59,13 +71,30 @@ function isReserved(name: string): boolean {
   return (RESERVED_FLAGS as readonly string[]).includes(name);
 }
 
+const INSPECT_PREVIEW = "bolt inspect never executes, it is already a side-effect-free preview";
+
 function reservedError(name: string, command: string, known: string[]): UsageError {
   if (IMPLEMENTED_FLAGS.has(name)) {
+    if (command === "inspect" && name === "dry-run") {
+      return new UsageError(
+        `Unknown flag "--${name}" for "bolt inspect": ${INSPECT_PREVIEW}. Remove --${name}.`,
+      );
+    }
     return new UsageError(`Unknown flag "--${name}" for "bolt ${command}".${suggest(name, known)}`);
   }
   return new UsageError(
     `--${name} is reserved by bolt and not supported yet. Remove it from the command.`,
   );
+}
+
+const FALSY = new Set(["false", "0", "no", "off", ""]);
+
+/**
+ * The rename suggested for a param that clashes with a reserved name: `plan` -> `my_plan`,
+ * `dry-run` -> `my_dry_run`, `help` -> `my_help`. One neutral form for every name.
+ */
+export function renamedParam(name: string): string {
+  return `my_${name.replace(/-/g, "_")}`;
 }
 
 export interface ReservedParamContext {
@@ -87,13 +116,14 @@ export function reservedParamError(
   value: string,
   ctx: ReservedParamContext,
 ): UsageError {
-  const rename = name === "help" ? "my_help" : `build_${name.replace(/-/g, "_")}`;
-  const renameHint = `rename it, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.`;
+  const rename = renamedParam(name);
+  const pass = `-- ${rename}=${shellQuote(value)}`;
+  const renameHint = `rename it, e.g. in bolt.yaml use ${rename} and pass ${pass}.`;
 
   if (name === "help" && ctx.afterSeparator) {
     return new UsageError(
       `"help" cannot be used as a param name (it is a bolt flag). ` +
-        `Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.`,
+        `Rename the param, e.g. in bolt.yaml use ${rename} and pass ${pass}.`,
     );
   }
   if (name === "help") {
@@ -103,12 +133,19 @@ export function reservedParamError(
     );
   }
 
+  if (IMPLEMENTED_FLAGS.has(name) && ctx.flags.includes(name) && FALSY.has(value.toLowerCase())) {
+    return new UsageError(
+      `"${name}=${value}" is not a param: --${name} is a bolt flag and takes no value. ` +
+        `To run for real, just remove --${name}. If this is a task param, ${renameHint}`,
+    );
+  }
+
   let flagHint = "";
   if (IMPLEMENTED_FLAGS.has(name)) {
     if (ctx.flags.includes(name)) {
       flagHint = ` To preview the run instead, pass --${name} without a value before "--".`;
     } else if (ctx.command === "inspect") {
-      flagHint = ` No --${name} is needed: bolt inspect never executes, it is already a side-effect-free preview.`;
+      flagHint = ` No --${name} is needed: ${INSPECT_PREVIEW}.`;
     }
   }
 
@@ -122,42 +159,17 @@ export function reservedParamError(
     : `--${name} is reserved by bolt and not supported yet`;
   return new UsageError(
     `"${name}" cannot be used as a param name (${reservation}). ` +
-      `Rename the param, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=${value}.${flagHint}`,
+      `Rename the param, e.g. in bolt.yaml use ${rename} and pass ${pass}.${flagHint}`,
   );
 }
 
 /** Flags citty handles itself before `run()` is called. */
 const HELP_FLAGS = new Set(["--help", "-h"]);
 
-function editDistance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let prev = row[0];
-    row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const tmp = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = tmp;
-    }
-  }
-  return row[b.length];
-}
-
 function suggest(name: string, known: string[]): string {
-  const clean = name.replace(/^-+/, "").toLowerCase();
-  let best: string | undefined;
-  let bestScore = Infinity;
-  for (const flag of known) {
-    const score = editDistance(clean, flag);
-    if (score < bestScore) {
-      best = flag;
-      bestScore = score;
-    }
-  }
-  if (best && bestScore <= Math.max(2, Math.floor(best.length / 3))) {
-    return ` Did you mean "--${best}"?`;
-  }
-  return "";
+  const bare = name.replace(/^-+/, "");
+  const matches = closestFlagMatches(bare, known).map((m) => `--${m}`);
+  return formatDidYouMean(matches);
 }
 
 function parseParam(text: string, origin: string): [string, string] {
@@ -206,7 +218,14 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
       const eq = inner.indexOf("=");
       const name = eq === -1 ? inner : inner.slice(0, eq);
       if (flags.includes(name)) {
-        if (eq !== -1) throw new UsageError(`Flag "--${name}" does not take a value.`);
+        if (eq !== -1) {
+          const value = inner.slice(eq + 1);
+          const fix =
+            name === "dry-run" && FALSY.has(value.toLowerCase())
+              ? " To run for real, just remove --dry-run."
+              : ` Use --${name} on its own.`;
+          throw new UsageError(`Flag "--${name}" does not take a value.${fix}`);
+        }
         if (name === "dry-run") dryRun = true;
         continue;
       }
@@ -237,7 +256,7 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
       if (v.startsWith("--")) {
         throw new UsageError(
           `Param value for "--${k}" may not start with "--". ` +
-            `Pass it after a "--" separator instead: bolt ${command} ... -- ${k}=${v}`,
+            `Pass it after a "--" separator instead: bolt ${command} ... -- ${k}=${shellQuote(v)}`,
         );
       }
       params[k] = v;
@@ -259,10 +278,98 @@ export function parseRunArgsOrExit(rawArgs: string[], opts: ParseRunOptions = {}
     return parseRunArgs(rawArgs, opts);
   } catch (e) {
     if (e instanceof UsageError) {
-      console.error(`[ERROR] ${e.message}`);
+      printUsageError(e.message);
       process.exit(USAGE_EXIT_CODE);
     }
     throw e;
+  }
+}
+
+/** Max names shown on a Tasks:/Flows: line before truncating. */
+const NAME_LIST_LIMIT = 10;
+
+/** Join names in bolt.yaml declaration order (Object key order), truncating after `limit`. */
+function nameList(names: string[], limit = NAME_LIST_LIMIT): string {
+  if (names.length === 0) return "(none)";
+  if (names.length <= limit) return names.join(", ");
+  const more = names.length - limit;
+  return `${names.slice(0, limit).join(", ")}, and ${more} more (see bolt list)`;
+}
+
+/**
+ * Error for names that are neither a task nor a flow: one line per name with a "Did you
+ * mean" hint (plus "Task names are case-sensitive." when the only match differs only by
+ * case). Uses `Unknown flow` when the best match is a flow, otherwise `Unknown task`.
+ * Then lists the project's tasks and flows (truncated). Returns undefined if all known.
+ */
+export function unknownNamesMessage(
+  cfg: BoltConfig,
+  names: string[],
+  command = "run",
+): string | undefined {
+  const tasks = Object.keys(cfg.tasks);
+  const flows = Object.keys(cfg.flows);
+  const taskSet = new Set(tasks);
+  const flowSet = new Set(flows);
+  const isFlow = names.length === 1 && cfg.flows[names[0]];
+  if (isFlow) return undefined;
+  const unknown = names.filter((n) => !cfg.tasks[n]);
+  if (unknown.length === 0) return undefined;
+  const lines = unknown.map((n) => {
+    if (cfg.flows[n]) {
+      return `"${n}" is a flow; a flow runs on its own: bolt ${command} ${n}`;
+    }
+    const matches = closestMatches(n, [...tasks, ...flows]);
+    const best = matches.length === 1 ? matches[0] : undefined;
+    const caseOnly = best !== undefined && best.toLowerCase() === n.toLowerCase();
+    const kind = best !== undefined && flowSet.has(best) && !taskSet.has(best) ? "flow" : "task";
+    const hint = formatDidYouMean(matches) + (caseOnly ? " Task names are case-sensitive." : "");
+    return `Unknown ${kind} "${n}".${hint}`;
+  });
+  return (
+    `${lines.join("\n")}\n  Tasks: ${nameList(tasks)}\n  Flows: ${nameList(flows)}\n` +
+    `  Run bolt list for details.`
+  );
+}
+
+/** Result of loading bolt.yaml only to build a usage message. */
+export type UsageConfig =
+  | { kind: "loaded"; cfg: BoltConfig }
+  | { kind: "missing" }
+  | { kind: "invalid"; path: string };
+
+/**
+ * Usage message when `bolt run` / `bolt inspect` gets no task. Lists the project's actual
+ * tasks and flows when bolt.yaml loads; otherwise points to `bolt init` or `bolt check`.
+ */
+export function missingNameMessage(command: string, project: UsageConfig): string {
+  const head = `No task or flow specified. Usage: bolt ${command} <task...|flow> [--key=value ...]`;
+  if (project.kind === "missing") {
+    return `${head}\n  No bolt.yaml found in this directory or its parents. Run bolt list inside a bolt project to see its tasks, or bolt init to create one.`;
+  }
+  if (project.kind === "invalid") {
+    return `${head}\n  ${project.path} could not be loaded. Run bolt check to see what is wrong, then bolt list to see its tasks.`;
+  }
+  const tasks = Object.keys(project.cfg.tasks);
+  const flows = Object.keys(project.cfg.flows);
+  if (tasks.length === 0 && flows.length === 0) {
+    return `${head}\n  This project defines no tasks or flows yet. Add one under tasks: in bolt.yaml, then check with bolt list.`;
+  }
+  const example = tasks[0] ?? flows[0];
+  return (
+    `${head}\n  Tasks: ${nameList(tasks)}\n  Flows: ${nameList(flows)}\n` +
+    `  Example: bolt ${command} ${example}`
+  );
+}
+
+/** Load bolt.yaml from cwd only to build a usage message; never throws. */
+export async function loadUsageConfig(): Promise<UsageConfig> {
+  const configPath = await findConfig(process.cwd());
+  if (!configPath) return { kind: "missing" };
+  try {
+    return { kind: "loaded", cfg: await loadConfig(configPath) };
+  } catch {
+    return { kind: "invalid", path: configPath };
   }
 }
 
@@ -279,30 +386,21 @@ export async function dispatchRun(
   names: string[],
   params: Record<string, string>,
 ): Promise<void> {
-  if (names.length === 0) {
-    throw new Error("No task or flow specified. Example: bolt run build start");
-  }
+  if (names.length === 0) throw new Error(missingNameMessage("run", { kind: "loaded", cfg }));
 
   if (names.length === 1 && cfg.flows[names[0]]) {
     await runner.runFlow(names[0], params);
     return;
   }
 
-  const unknown = names.filter((n) => !cfg.tasks[n]);
-  if (unknown.length > 0) {
-    const tasks = Object.keys(cfg.tasks).sort().join(", ") || "(none)";
-    const flows = Object.keys(cfg.flows).sort().join(", ") || "(none)";
-    throw new Error(
-      `Unknown task or flow: ${unknown.map((n) => `"${n}"`).join(", ")}\n` +
-        `  Tasks: ${tasks}\n  Flows: ${flows}`,
-    );
-  }
+  const unknown = unknownNamesMessage(cfg, names);
+  if (unknown) throw new Error(unknown);
 
   await runner.runTasks(names, params);
 }
 
 export default defineCommand({
-  meta: { description: "Run tasks (in typed order) or a flow defined in bolt.yaml" },
+  meta: { name: "run", description: "Run tasks (in typed order) or a flow defined in bolt.yaml" },
   args: {
     "dry-run": {
       type: "boolean",
@@ -315,8 +413,8 @@ export default defineCommand({
     const { names, params, dryRun } = parseRunArgsOrExit(rawArgs ?? []);
 
     if (names.length === 0) {
-      console.error("[ERROR] No task or flow specified. Example: bolt run build start");
-      process.exit(1);
+      printUsageError(missingNameMessage("run", await loadUsageConfig()));
+      process.exit(USAGE_EXIT_CODE);
     }
 
     const configPath = await findConfig(process.cwd());
@@ -331,6 +429,12 @@ export default defineCommand({
     } catch (e: any) {
       console.error(`[ERROR] ${e.message}`);
       process.exit(1);
+    }
+
+    const unknown = unknownNamesMessage(cfg, names);
+    if (unknown) {
+      printUsageError(unknown);
+      process.exit(USAGE_EXIT_CODE);
     }
 
     const configDir = path.dirname(configPath);

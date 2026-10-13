@@ -136,7 +136,7 @@ bolt run update build --dry-run     # skip run: steps; plugins still run
 | `--key=value`  | Pass a parameter to the whole run (e.g. `--target=client`)                                |
 | `-- key=value` | Params after a bare `--`; use when the value starts with `--` (e.g. `-- extra=--verbose`) |
 
-Flags go after the command (`bolt run build --dry-run`, never `bolt --dry-run run build`). Unknown flags, `--dry-run=<value>`, values starting with `--`, and reserved names (`dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`; plus `help`, handled separately) as params fail with exit code 2.
+Flags go after the command (`bolt run build --dry-run`, never `bolt --dry-run run build`). Unknown flags, `--dry-run=<value>`, values starting with `--`, and reserved names (`dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`; plus `help`, handled separately) as params fail with exit code 2. Unknown commands and task names also exit 2 with `Did you mean "<name>"?` and the available names; `bolt run` with no name lists the project's tasks (use `bolt list` for details). If a param clashes with a reserved name, rename it to `my_<name>`. Reserved names are case-sensitive.
 
 ### Introspection (when ai-context.md is insufficient)
 
@@ -174,9 +174,9 @@ Check `ai-context.md` for the exact task name — it varies per project. Typical
 
 ## Errors
 
-| Symptom                              | Cause                                        | Fix                                                                                   |
-| ------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------- |
-| "bolt.yaml not found"                | Not in a Bolt project directory              | `cd` to the project root                                                              |
-| "bolt.local.yaml missing or invalid" | Per-machine config absent                    | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
-| "Unknown task or flow"               | Name not defined in this project's bolt.yaml | Run `bolt list` to see available tasks/flows                                          |
-| Build fails mid-flow                 | Build error in UE                            | Check the log file path printed in output                                             |
+| Symptom                                                                                    | Cause                                                         | Fix                                                                                   |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| "bolt.yaml not found"                                                                      | Not in a Bolt project directory                               | `cd` to the project root                                                              |
+| "bolt.local.yaml missing or invalid"                                                       | Per-machine config absent                                     | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
+| `Unknown task "…"` / `Unknown flow "…"` (exit 2); may add `Task names are case-sensitive.` | Name not defined in this project's bolt.yaml (case-sensitive) | Use the "Did you mean" hint, or run `bolt list`                                       |
+| Build fails mid-flow                                                                       | Build error in UE                                             | Check the log file path printed in output                                             |

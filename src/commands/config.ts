@@ -4,7 +4,7 @@ import path from "path";
 import { findConfig } from "../discover";
 
 export default defineCommand({
-  meta: { description: "Open the bolt.yaml config file in an editor" },
+  meta: { name: "config", description: "Open the bolt.yaml config file in an editor" },
   args: {
     editor: {
       type: "string",

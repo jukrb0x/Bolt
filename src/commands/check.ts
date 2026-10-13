@@ -5,7 +5,7 @@ import pc from "picocolors";
 import { planMigration } from "./migrate";
 
 export default defineCommand({
-  meta: { description: "Validate bolt.yaml against the current schema" },
+  meta: { name: "check", description: "Validate bolt.yaml against the current schema" },
   async run() {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {
