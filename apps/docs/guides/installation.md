@@ -24,7 +24,7 @@ Open a new terminal. The script adds the install directory to your user Path, an
 
 Re-running the script renames a running `bolt.exe` to `bolt.exe.old` before writing the new file.
 
-If `bolt.exe` is already on your PATH and prints a bolt version, the script updates that file in place and does not touch your user Path. Copies under npm, winget, or scoop are skipped; update those with their package manager.
+If `bolt.exe` is already on your PATH and prints a bolt version, the script updates that file in place and does not touch your user Path. Copies in a directory you cannot write, or under npm, winget, or scoop, are skipped and the script installs to `%USERPROFILE%\.bolt\bin`. Update package-manager copies with their manager.
 
 Bolt v2.1.0 to v2.1.2 installed to `%LOCALAPPDATA%\bolt\bin`. If that directory exists, the script installs to `%USERPROFILE%\.bolt\bin`, moves that entry to the front of your user Path, and prints a note. It does not delete the old directory. You can remove it and its user Path entry yourself.
 

@@ -49,8 +49,16 @@ if ($Existing -and $Existing.Source) {
     $global:LASTEXITCODE = 1
     try { $ExistingVersion = (& $ExistingPath version 2>$null | Out-String).Trim() } catch { $ExistingVersion = '' }
     if ($LASTEXITCODE -eq 0 -and $ExistingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$') {
-      $DestDir = [System.IO.Path]::GetDirectoryName($ExistingPath)
-      Write-Host "Found bolt $ExistingVersion at $ExistingPath. Updating it in place."
+      $ExistingDir = [System.IO.Path]::GetDirectoryName($ExistingPath)
+      $Probe = Join-Path $ExistingDir ("bolt-install-probe-" + [guid]::NewGuid().ToString('n'))
+      try {
+        [System.IO.File]::WriteAllText($Probe, '')
+        Remove-Item -LiteralPath $Probe -Force -ErrorAction SilentlyContinue
+        $DestDir = $ExistingDir
+        Write-Host "Found bolt $ExistingVersion at $ExistingPath. Updating it in place."
+      } catch {
+        Write-Host "Ignoring $ExistingPath on PATH: $ExistingDir is not writable. Installing to $DefaultDir."
+      }
     } else {
       Write-Host "Ignoring $ExistingPath on PATH: it did not print a bolt version."
     }
