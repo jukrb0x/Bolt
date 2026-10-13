@@ -65,10 +65,20 @@ interface RunnerOptions {
 }
 
 /**
- * Read-only handlers that an AI invocation may only point at paths inside the
- * project directory. Human runs are not restricted here (the handler warns).
+ * Path params that an AI invocation may only point inside the project directory,
+ * after resolving symlinks (fail closed). Human runs are not restricted here:
+ * git/info and svn/info warn; fs/* and json/* keep main's literal check.
  */
-const AI_PATH_RESTRICTED = new Set(["git/info", "svn/info"]);
+const AI_PATH_RESTRICTED = new Map<string, string[]>([
+  ["git/info", ["path"]],
+  ["svn/info", ["path"]],
+  ["fs/copy", ["src", "dst"]],
+  ["fs/move", ["src", "dst"]],
+  ["fs/delete", ["path"]],
+  ["fs/mkdir", ["path"]],
+  ["json/set", ["file"]],
+  ["json/merge", ["file", "patch"]],
+]);
 
 /** Errors the runner already printed (step failure), so callers do not print them twice. */
 const reportedErrors = new WeakSet<object>();
@@ -300,7 +310,9 @@ export class Runner {
 
       const params = parseStepParams(plugin, node.ref, operation, node.params);
       if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(node.ref)) {
-        this.assertAiPathInProject(node.ref, params);
+        for (const key of AI_PATH_RESTRICTED.get(node.ref) ?? []) {
+          this.assertAiPathInProject(node.ref, key, params[key]);
+        }
       }
       const step = [...trail, node.ref].join(" > ");
       // One context object per step, shared by the hooks and the handler as before.
@@ -376,11 +388,11 @@ export class Runner {
   }
 
   /** Core-side AI rejection for {@link AI_PATH_RESTRICTED} handlers. */
-  private assertAiPathInProject(ref: string, params: Record<string, string>): void {
-    if (!params.path) return; // the handler reports the missing param
+  private assertAiPathInProject(ref: string, key: string, value: string | undefined): void {
+    if (!value) return; // the handler reports the missing param
     const root = this.opts.configDir ?? process.cwd();
     try {
-      safePath(params.path, root);
+      safePath(value, root);
     } catch (error) {
       // Fail closed: any resolution failure (symlink loop, permission, ...) rejects.
       const reason = error instanceof Error ? error.message : String(error);
@@ -389,7 +401,7 @@ export class Runner {
         : `is outside the project directory "${root}" (${reason})`;
       throw new BoltStepError(
         "AI_FORBIDDEN",
-        `${ref}: path "${params.path}" ${what}; AI invocations may only read repositories inside the project. Fix: use a path under the project directory, or read other repositories with a run: step.`,
+        `${ref}: ${key} "${value}" ${what}; AI invocations may only use paths inside the project. Fix: use a path under the project directory, or use a run: step for paths outside it.`,
       );
     }
   }
