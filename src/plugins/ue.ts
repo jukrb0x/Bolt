@@ -5,6 +5,12 @@ import { existsSync, readdirSync, readFileSync, statSync, renameSync, mkdirSync 
 import { z } from "zod";
 import { declaredPluginConfig, run, execRaw as exec } from "./helpers";
 import gitPlugin, { gitInfo } from "./git";
+
+/** ue/info ignores result data, so print gitInfo's warn summary itself. */
+async function gitInfoWithWarning(p: string, ctx: BoltPluginContext): Promise<void> {
+  const result = await gitInfo(p, ctx);
+  if (result.status === "warn" && result.summary) ctx.logger.warn(result.summary);
+}
 import svnPlugin, { svnInfo } from "./svn";
 import * as ueIni from "./ue-ini";
 import { BuildConfigSchema, normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
@@ -617,14 +623,14 @@ class UEPlugin extends PluginBase.withDescriptor({
     const projectPath = ueConfig(ctx).project.path;
 
     if (engineVcs === "git") {
-      await gitInfo(enginePath, ctx);
+      await gitInfoWithWarning(enginePath, ctx);
     } else {
       await svnInfo(enginePath, ctx);
     }
     if (projectVcs === "svn") {
       await svnInfo(projectPath, ctx);
     } else {
-      await gitInfo(projectPath, ctx);
+      await gitInfoWithWarning(projectPath, ctx);
     }
   }
 

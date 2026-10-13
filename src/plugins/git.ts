@@ -52,8 +52,6 @@ export async function gitInfo(p: string, ctx: BoltPluginContext): Promise<Handle
   if (logResult.exitCode === 0) {
     data.commit = logResult.stdout.trim();
     ctx.logger.info(`Git: ${data.commit}`);
-  } else {
-    ctx.logger.warn("Git info unavailable");
   }
   const branchResult = ctx.runtime.spawnSync(["git", "-C", p, "rev-parse", "--abbrev-ref", "HEAD"]);
   if (branchResult.exitCode === 0) {
