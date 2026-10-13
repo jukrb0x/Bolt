@@ -14,7 +14,7 @@ import { existsSync } from "fs";
 import { Notifier, type BuildContext } from "./notify";
 import { formatPlanErrors, resolveRunPlan, type PlanNode, type RunPlan } from "./run-plan";
 
-function parseStepParams(
+export function parseStepParams(
   plugin: BoltPlugin,
   ref: string,
   operation: string,
@@ -223,7 +223,7 @@ export class Runner {
           .map(([key, value]) => `${key}=${value}`)
           .join("  ");
         this.opts.logger?.step_detail(`local: ${node.ref}${paramText ? `  ${paramText}` : ""}`);
-        await this.runLocalAction(node.ref, node.params);
+        if (!this.opts.dryRun) await this.runLocalAction(node.ref, node.params);
         continue;
       }
 

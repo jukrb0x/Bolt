@@ -7,6 +7,10 @@ import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
 import { VERSION } from "../version";
+import { CONFIG_EXIT_CODE, USAGE_EXIT_CODE } from "../exit-codes";
+import { loadProjectConfigOrExit } from "../project-config";
+import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
+import { DRY_RUN_HEADER, dryRunFooter, renderDryRun } from "../dry-run";
 import { closestFlagMatches, closestMatches, formatDidYouMean, shellQuote } from "../suggest";
 
 function timestamp(): string {
@@ -19,10 +23,11 @@ export interface ParsedRun {
   /** `--k=v` flags (and `k=v` after a bare `--`) collected as global params. */
   params: Record<string, string>;
   dryRun: boolean;
+  /** `--simulate`: run with plugins loaded in dry-run mode (side effects allowed). */
+  simulate: boolean;
 }
 
-/** Exit code for command-line usage errors (unknown flag, malformed param). */
-export const USAGE_EXIT_CODE = 2;
+export { CONFIG_EXIT_CODE, USAGE_EXIT_CODE };
 
 /**
  * Print a usage error. `[ERROR]` prefixes only the actual error lines; indented
@@ -45,7 +50,7 @@ export class UsageError extends Error {
 }
 
 export interface ParseRunOptions {
-  /** Boolean flags this command accepts (without the leading `--`). Default: `["dry-run"]`. */
+  /** Boolean flags this command accepts (without the leading `--`). Default: `["dry-run", "simulate"]`. */
   flags?: string[];
   /** Command name used in error messages. Default: `run`. */
   command?: string;
@@ -53,7 +58,7 @@ export interface ParseRunOptions {
 
 /**
  * Flag names reserved by Bolt (design §3, 0.4). They are never accepted as user params,
- * neither as `--name[=v]` nor as `name=v` after `--`. Only `dry-run` is implemented today.
+ * neither as `--name[=v]` nor as `name=v` after `--`. Only `dry-run` and `simulate` are implemented today.
  */
 export const RESERVED_FLAGS = [
   "dry-run",
@@ -65,7 +70,7 @@ export const RESERVED_FLAGS = [
   "confirmed-by-user",
 ] as const;
 
-const IMPLEMENTED_FLAGS = new Set<string>(["dry-run"]);
+const IMPLEMENTED_FLAGS = new Set<string>(["dry-run", "simulate"]);
 
 function isReserved(name: string): boolean {
   return (RESERVED_FLAGS as readonly string[]).includes(name);
@@ -75,7 +80,7 @@ const INSPECT_PREVIEW = "bolt inspect never executes, it is already a side-effec
 
 function reservedError(name: string, command: string, known: string[]): UsageError {
   if (IMPLEMENTED_FLAGS.has(name)) {
-    if (command === "inspect" && name === "dry-run") {
+    if (command === "inspect") {
       return new UsageError(
         `Unknown flag "--${name}" for "bolt inspect": ${INSPECT_PREVIEW}. Remove --${name}.`,
       );
@@ -191,12 +196,13 @@ function parseParam(text: string, origin: string): [string, string] {
  * `key=value` params, so values there may start with `--` (e.g. `-- extra=--verbose`).
  */
 export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
-  const flags = opts.flags ?? ["dry-run"];
+  const flags = opts.flags ?? ["dry-run", "simulate"];
   const command = opts.command ?? "run";
   const known = [...flags, "help"];
   const names: string[] = [];
   const params: Record<string, string> = {};
   let dryRun = false;
+  let simulate = false;
 
   for (let i = 0; i < rawArgs.length; i++) {
     const arg = rawArgs[i];
@@ -221,12 +227,13 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
         if (eq !== -1) {
           const value = inner.slice(eq + 1);
           const fix =
-            name === "dry-run" && FALSY.has(value.toLowerCase())
-              ? " To run for real, just remove --dry-run."
+            IMPLEMENTED_FLAGS.has(name) && FALSY.has(value.toLowerCase())
+              ? ` To run for real, just remove --${name}.`
               : ` Use --${name} on its own.`;
           throw new UsageError(`Flag "--${name}" does not take a value.${fix}`);
         }
         if (name === "dry-run") dryRun = true;
+        if (name === "simulate") simulate = true;
         continue;
       }
       if (name === "help" && eq !== -1) {
@@ -269,7 +276,13 @@ export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): Par
     names.push(arg);
   }
 
-  return { names, params, dryRun };
+  if (dryRun && simulate) {
+    throw new UsageError(
+      `--dry-run and --simulate cannot be combined. Use --dry-run for a static preview ` +
+        `(nothing runs), or --simulate to run plugins in dry-run mode.`,
+    );
+  }
+  return { names, params, dryRun, simulate };
 }
 
 /** Parse argv for a command, printing usage errors and exiting with USAGE_EXIT_CODE. */
@@ -402,29 +415,30 @@ export async function dispatchRun(
 export default defineCommand({
   meta: { name: "run", description: "Run tasks (in typed order) or a flow defined in bolt.yaml" },
   args: {
-    "dry-run": { type: "boolean", default: false, description: "Print steps without executing" },
+    "dry-run": {
+      type: "boolean",
+      default: false,
+      description:
+        "Show what would run without running anything: no commands, plugins, hooks, or file writes",
+    },
+    simulate: {
+      type: "boolean",
+      default: false,
+      description:
+        "Load plugins and run hooks and handlers in dry-run mode; writes a log file and may have side effects",
+    },
   },
   async run({ rawArgs }) {
-    const { names, params, dryRun } = parseRunArgsOrExit(rawArgs ?? []);
+    const { names, params, dryRun, simulate } = parseRunArgsOrExit(rawArgs ?? [], {
+      flags: ["dry-run", "simulate"],
+    });
 
     if (names.length === 0) {
       printUsageError(missingNameMessage("run", await loadUsageConfig()));
       process.exit(USAGE_EXIT_CODE);
     }
 
-    const configPath = await findConfig(process.cwd());
-    if (!configPath) {
-      console.error("[ERROR] bolt.yaml not found (searched up from cwd)");
-      process.exit(1);
-    }
-
-    let cfg: BoltConfig;
-    try {
-      cfg = await loadConfig(configPath);
-    } catch (e: any) {
-      console.error(`[ERROR] ${e.message}`);
-      process.exit(1);
-    }
+    const { configPath, cfg } = await loadProjectConfigOrExit();
 
     const unknown = unknownNamesMessage(cfg, names);
     if (unknown) {
@@ -432,22 +446,52 @@ export default defineCommand({
       process.exit(USAGE_EXIT_CODE);
     }
 
+    const isFlow = names.length === 1 && !!cfg.flows[names[0]];
+    const request: PlanRequest = isFlow
+      ? { kind: "flow", name: names[0], params }
+      : { kind: "tasks", names, params };
+    const planned = resolveRunPlan(cfg, request);
+    if (!planned.ok) {
+      printUsageError(
+        `${formatPlanErrors(planned.errors)}\n  Fix bolt.yaml, then check with \`bolt inspect ${names.join(" ")}\`.`,
+      );
+      process.exit(CONFIG_EXIT_CODE);
+    }
+
     const configDir = path.dirname(configPath);
+
+    if (dryRun) {
+      // Pure static preview: no Runner, no logger file, no plugin registry, no notifier.
+      const report = renderDryRun(cfg, planned.plan, { configDir });
+      console.log(DRY_RUN_HEADER);
+      console.log(`Config: ${configPath}`);
+      console.log(`${isFlow ? "Flow" : "Tasks"}: ${names.join(" ")}`);
+      console.log();
+      for (const line of report.lines) console.log(line);
+      for (const line of dryRunFooter(report.problems.length)) console.log(line);
+      process.exit(report.problems.length > 0 ? 1 : 0);
+    }
+
     const logDir = path.join(configDir, ".bolt", "logs");
     mkdirSync(logDir, { recursive: true });
     const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
     const logger = new Logger({ logFile });
 
-    const isFlow = names.length === 1 && !!cfg.flows[names[0]];
     logger.info(`bolt ${VERSION}`);
     logger.info(`Config: ${configPath}`);
-    logger.info(`${isFlow ? "Flow" : "Tasks"}: ${names.join(" ")}${dryRun ? " (dry-run)" : ""}`);
+    logger.info(`${isFlow ? "Flow" : "Tasks"}: ${names.join(" ")}${simulate ? " (simulate)" : ""}`);
+    if (simulate) {
+      logger.warn(
+        "--simulate loads plugins and runs their hooks and handlers with ctx.dryRun = true. " +
+          "run: steps and local actions are skipped. Plugins may still have side effects.",
+      );
+    }
 
     const runner = new Runner(cfg, {
-      dryRun,
+      dryRun: simulate,
       logger,
       configDir,
-      notifier: dryRun ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications),
+      notifier: simulate ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications),
     });
 
     const start = Date.now();
