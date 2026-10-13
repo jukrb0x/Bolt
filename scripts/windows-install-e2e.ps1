@@ -57,6 +57,48 @@ $Old = "$Dest.old"
 $ReceiptPath = Join-Path $env:USERPROFILE ".bolt\install.json"
 $Server = $null
 $Failed = $true
+# Run the probe under the same PowerShell (5.1 or 7) that runs this script.
+$HostExe = (Get-Process -Id $PID).Path
+Write-Host "PowerShell $($PSVersionTable.PSVersion) at $HostExe"
+$ScratchRoot = Join-Path $env:USERPROFILE "bolt-e2e-cases"
+$EnvKeyPath = "Environment"
+$MachineKeyPath = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+
+function Get-RawPath([Microsoft.Win32.RegistryKey]$Hive, [string]$Sub) {
+  $key = $Hive.OpenSubKey($Sub)
+  try {
+    $names = $key.GetValueNames()
+    if ($names -notcontains "Path") { return @{ Exists = $false; Value = ""; Kind = [Microsoft.Win32.RegistryValueKind]::ExpandString } }
+    return @{
+      Exists = $true
+      Value  = [string]$key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+      Kind   = $key.GetValueKind("Path")
+    }
+  } finally { $key.Close() }
+}
+
+function Set-RawPath([Microsoft.Win32.RegistryKey]$Hive, [string]$Sub, $Saved) {
+  $key = $Hive.OpenSubKey($Sub, $true)
+  try {
+    if ($Saved.Exists) { $key.SetValue("Path", $Saved.Value, $Saved.Kind) }
+    else { $key.DeleteValue("Path", $false) }
+  } finally { $key.Close() }
+}
+
+function Invoke-Install([string]$Base, [string]$SessionPath) {
+  $env:Path = $SessionPath
+  $env:BOLT_INSTALL_BASE = $Base
+  try {
+    $out = (& (Join-Path $Root "install.ps1") *>&1 | Out-String)
+  } finally {
+    Remove-Item Env:BOLT_INSTALL_BASE -ErrorAction SilentlyContinue
+  }
+  Write-Host $out
+  return $out
+}
+
+$SavedUserPath = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
+$SavedMachinePath = Get-RawPath ([Microsoft.Win32.Registry]::LocalMachine) $MachineKeyPath
 
 function Get-Sha256([string]$Path) {
   return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLower()
@@ -105,7 +147,7 @@ function Build-One([string]$Version, [string]$RelOut) {
 }
 
 function Invoke-Probe([string]$Version) {
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Mode probe -ExpectedVersion $Version -ExpectedPath $Dest
+  & $HostExe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Mode probe -ExpectedVersion $Version -ExpectedPath $Dest
   if ($LASTEXITCODE -ne 0) { throw "PATH probe for $Version failed" }
 }
 
@@ -159,10 +201,25 @@ try {
   } while (-not $healthy -and (Get-Date) -lt $deadline)
   if (-not $healthy) { throw "local release server did not start" }
 
-  $env:BOLT_INSTALL_BASE = "$PublicBase/current"
-  Write-Host "running install.ps1 against $env:BOLT_INSTALL_BASE"
-  & (Join-Path $Root "install.ps1")
-  Remove-Item Env:BOLT_INSTALL_BASE
+  # The first install starts from a v2.1.x bolt.exe first on PATH and a user Path
+  # with a %VAR% entry, duplicates, an empty entry, and a trailing-'\' copy of the
+  # install dir. Only the install dir may move; every other entry keeps its text.
+  New-Item -ItemType Directory -Force -Path $LegacyDir | Out-Null
+  Copy-Item -LiteralPath $currentExe -Destination (Join-Path $LegacyDir "bolt.exe") -Force
+  $VarEntry = '%USERPROFILE%\foo'
+  $Seed = @($LegacyDir, $VarEntry, "", "$DestDir\", "C:\bolt-e2e-dup", "C:\bolt-e2e-dup", '%USERPROFILE%\.bolt\bin', "") -join ";"
+  $userKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($EnvKeyPath, $true)
+  $userKey.SetValue("Path", $Seed, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+  $userKey.Close()
+  Write-Host "running install.ps1 against $PublicBase/current with $LegacyDir first on PATH"
+  $firstOut = Invoke-Install "$PublicBase/current" ("$LegacyDir;" + (Get-FreshPath))
+  if ($firstOut -notmatch "Found the v2.1.x install") { throw "install.ps1 did not recognise the v2.1.x bolt.exe" }
+  if ($firstOut -notmatch "Added .* to the front of your user Path") { throw "install.ps1 did not update the user Path" }
+  $raw = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
+  if ($raw.Kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) { throw "user Path kind is $($raw.Kind), expected ExpandString" }
+  $wantRaw = @($DestDir, $LegacyDir, $VarEntry, "", "C:\bolt-e2e-dup", "C:\bolt-e2e-dup", "") -join ";"
+  if ($raw.Value -cne $wantRaw) { throw "user Path is '$($raw.Value)', expected '$wantRaw'" }
+  Write-Host "user Path kept '$VarEntry' as text and stayed ExpandString: $($raw.Value)"
 
   if (-not (Test-Path -LiteralPath $Dest)) { throw "install.ps1 did not write $Dest" }
   if ((Get-Sha256 $Dest) -ne $currentHash) { throw "installed bolt.exe is not the 2.0.0 build" }
@@ -174,6 +231,7 @@ try {
     throw "receipt path is '$($receipt.path)', expected '$Dest'"
   }
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if ($userPath -notmatch [regex]::Escape((Join-Path $env:USERPROFILE "foo"))) { throw "expanded user Path lost $VarEntry" }
   $onPath = $false
   foreach ($entry in ($userPath -split ";")) {
     if ($entry.TrimEnd("\").ToLower() -eq $DestDir.TrimEnd("\").ToLower()) { $onPath = $true }
@@ -230,10 +288,84 @@ try {
   }
   Write-Host "install.ps1 updated the bolt.exe on PATH in place"
 
+  New-Item -ItemType Directory -Force -Path $ScratchRoot | Out-Null
+
+  # Re-running the default install with a clean Path must not rewrite it.
+  $before = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
+  $out = Invoke-Install "$PublicBase/newer" (Get-FreshPath)
+  if ($out -match "Added ") { throw "install.ps1 rewrote a user Path that already had $DestDir first" }
+  $after = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
+  if ($after.Value -cne $before.Value -or $after.Kind -ne $before.Kind) { throw "re-run changed the user Path" }
+
+  # A bolt.exe that is not bolt (where.exe) first on the system Path: ignored, and the
+  # installer warns that a new terminal would still run it.
+  $shadowDir = Join-Path $ScratchRoot "shadow"
+  New-Item -ItemType Directory -Force -Path $shadowDir | Out-Null
+  Copy-Item -LiteralPath (Join-Path $env:SystemRoot "System32\where.exe") -Destination (Join-Path $shadowDir "bolt.exe") -Force
+  $machineKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($MachineKeyPath, $true)
+  $machineKey.SetValue("Path", "$shadowDir;" + $SavedMachinePath.Value, $SavedMachinePath.Kind)
+  $machineKey.Close()
+  try {
+    $stamp = (Get-Item -LiteralPath $Dest).LastWriteTimeUtc
+    $out = Invoke-Install "$PublicBase/newer" (Get-FreshPath)
+    if ($out -notmatch "did not print a bolt version") { throw "install.ps1 did not reject the non-bolt bolt.exe" }
+    if ($out -notmatch "Warning: a new terminal will run") { throw "install.ps1 did not warn about system Path precedence" }
+    if ((Get-Item -LiteralPath $Dest).LastWriteTimeUtc -eq $stamp) { throw "install.ps1 did not reinstall $Dest" }
+  } finally {
+    Set-RawPath ([Microsoft.Win32.Registry]::LocalMachine) $MachineKeyPath $SavedMachinePath
+  }
+  Write-Host "non-bolt bolt.exe ignored and system Path precedence reported"
+
+  # A real bolt.exe in a directory this user cannot write: default dir instead.
+  $roDir = Join-Path $ScratchRoot "ro\bin"
+  New-Item -ItemType Directory -Force -Path $roDir | Out-Null
+  Copy-Item -LiteralPath $currentExe -Destination (Join-Path $roDir "bolt.exe") -Force
+  $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+  & icacls.exe $roDir /deny "${me}:(W)" | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "icacls deny failed" }
+  try {
+    $stamp = (Get-Item -LiteralPath $Dest).LastWriteTimeUtc
+    $out = Invoke-Install "$PublicBase/newer" ("$roDir;" + (Get-FreshPath))
+    if ($out -notmatch "is not writable") { throw "install.ps1 did not skip the unwritable directory" }
+    if ((Get-Sha256 (Join-Path $roDir "bolt.exe")) -ne $currentHash) { throw "install.ps1 changed the bolt.exe in $roDir" }
+    if ((Get-Item -LiteralPath $Dest).LastWriteTimeUtc -eq $stamp) { throw "install.ps1 did not install to $Dest" }
+  } finally {
+    & icacls.exe $roDir /remove:d $me | Out-Null
+  }
+  Write-Host "unwritable directory skipped"
+
+  # Package-managed copies are left alone.
+  $chocoDir = Join-Path $ScratchRoot "chocolatey\bin"
+  New-Item -ItemType Directory -Force -Path $chocoDir | Out-Null
+  Copy-Item -LiteralPath $currentExe -Destination (Join-Path $chocoDir "bolt.exe") -Force
+  $out = Invoke-Install "$PublicBase/newer" ("$chocoDir;" + (Get-FreshPath))
+  if ($out -notmatch "belongs to a package manager") { throw "install.ps1 did not skip the chocolatey copy" }
+  if ((Get-Sha256 (Join-Path $chocoDir "bolt.exe")) -ne $currentHash) { throw "install.ps1 changed the chocolatey bolt.exe" }
+  Write-Host "package-managed copy skipped"
+
+  # A symlinked bolt.exe is not replaced in place.
+  $linkDir = Join-Path $ScratchRoot "link"
+  $linkTargetDir = Join-Path $ScratchRoot "link-target"
+  New-Item -ItemType Directory -Force -Path $linkDir, $linkTargetDir | Out-Null
+  $linkTarget = Join-Path $linkTargetDir "bolt.exe"
+  Copy-Item -LiteralPath $currentExe -Destination $linkTarget -Force
+  New-Item -ItemType SymbolicLink -Path (Join-Path $linkDir "bolt.exe") -Target $linkTarget | Out-Null
+  $out = Invoke-Install "$PublicBase/newer" ("$linkDir;" + (Get-FreshPath))
+  if ($out -notmatch "reparse point") { throw "install.ps1 did not skip the symlinked bolt.exe" }
+  if ((Get-Sha256 $linkTarget) -ne $currentHash) { throw "install.ps1 wrote through the symlink" }
+  Write-Host "symlinked bolt.exe skipped"
+
+  $raw = Get-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath
+  if ($raw.Value -cne $wantRaw -or $raw.Kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) {
+    throw "user Path changed during the later cases: $($raw.Value) ($($raw.Kind))"
+  }
+
   Write-Host "windows install and self-update ok"
   $Failed = $false
 } finally {
-  foreach ($dir in @($LegacyDir, (Split-Path -Parent $CustomDir))) {
+  Set-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath $SavedUserPath
+  Set-RawPath ([Microsoft.Win32.Registry]::LocalMachine) $MachineKeyPath $SavedMachinePath
+  foreach ($dir in @($LegacyDir, (Split-Path -Parent $CustomDir), $ScratchRoot)) {
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
   }
   if ($Server -and -not $Server.HasExited) {

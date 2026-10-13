@@ -63,9 +63,14 @@ jobs:
   # Two compiled builds, served locally. The public `irm | iex` run is not here:
   # it has to hit a real GitHub Release, and that tag does not exist yet.
   windows-install:
-    name: windows install
+    name: windows install (${{ matrix.host }})
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows PowerShell 5.1 and PowerShell 7.
+        host: [powershell, pwsh]
     timeout-minutes: 45
     steps:
       - name: Keep LF line endings
@@ -83,8 +88,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install from a local release and self-update
-        shell: powershell
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-e2e.ps1
+        shell: pwsh
+        run: ${{ matrix.host }}.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-e2e.ps1
 
   # Pull requests and main. Tag pushes are built by the Release workflow.
   binaries:
