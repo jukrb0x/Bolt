@@ -174,7 +174,9 @@ export function generateAiContext(
   // --- Flags ---
   lines.push(`## Flags`);
   lines.push(``);
-  lines.push(`- \`--dry-run\` — preview steps without executing`);
+  lines.push(
+    `- \`--dry-run\` — skips \`run:\` steps and local actions, but still calls plugin handlers in the current version. Use \`bolt inspect\` first to show the plan, and get the user's consent before running \`--dry-run\`.`,
+  );
   lines.push(
     `- \`--key=value\` — pass parameters to the run (e.g. \`--target=client --config=debug\`)`,
   );
