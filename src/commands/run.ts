@@ -470,7 +470,7 @@ export default defineCommand({
       console.log();
       for (const line of report.lines) console.log(line);
       for (const line of dryRunFooter(report.problems.length)) console.log(line);
-      process.exit(report.problems.length > 0 ? 1 : 0);
+      process.exit(report.problems.length > 0 ? CONFIG_EXIT_CODE : 0);
     }
 
     const logDir = path.join(configDir, ".bolt", "logs");

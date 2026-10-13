@@ -12,6 +12,8 @@ import { tmpdir } from "os";
 import { randomBytes } from "crypto";
 import path from "path";
 import pc from "picocolors";
+import { CONFIG_EXIT_CODE } from "../exit-codes";
+import { configNotFoundMessage } from "../project-config";
 import { stringify } from "yaml";
 import { findConfig } from "../discover";
 import { checkConfig } from "../config";
@@ -96,8 +98,8 @@ export default defineCommand({
   async run({ args }) {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {
-      console.error(pc.red("bolt.yaml not found"));
-      process.exit(1);
+      console.error(pc.red(`[ERROR] ${configNotFoundMessage(process.cwd())}`));
+      process.exit(CONFIG_EXIT_CODE);
     }
     const plan = planMigration(configPath);
     if (!plan.changed) {

@@ -11,6 +11,9 @@ import jsonPlugin from "./plugins/json";
 import gitPlugin from "./plugins/git";
 import svnPlugin from "./plugins/svn";
 import path from "path";
+import type { ZodTypeAny } from "zod";
+import { BUILTIN_PARAM_SCHEMAS } from "./plugins/builtin-params";
+import { closestMatches } from "./suggest";
 import { existsSync } from "fs";
 import { Notifier, type BuildContext } from "./notify";
 import { formatPlanErrors, resolveRunPlan, type PlanNode, type RunPlan } from "./run-plan";
@@ -29,20 +32,57 @@ export interface StepResult extends HandlerResult {
   step: string;
 }
 
+const BUILTINS: Record<string, BoltPlugin> = {
+  ue: uePlugin,
+  fs: fsPlugin,
+  json: jsonPlugin,
+  git: gitPlugin,
+  svn: svnPlugin,
+};
+
+/** The param schema for a handler: its manifest schema, or the built-in table. */
+function stepParamSchema(plugin: BoltPlugin, operation: string): ZodTypeAny | undefined {
+  const declared = plugin.manifest?.handlers[operation]?.params as ZodTypeAny | undefined;
+  if (declared) return declared;
+  // Only the real built-in object, not a user plugin that shadows the namespace.
+  if (BUILTINS[plugin.namespace] !== plugin) return undefined;
+  return BUILTIN_PARAM_SCHEMAS[plugin.namespace]?.[operation];
+}
+
+function schemaKeys(schema: ZodTypeAny): string[] {
+  const shape = (schema as { shape?: Record<string, unknown> }).shape;
+  return shape ? Object.keys(shape) : [];
+}
+
+/**
+ * Validate step params against the handler's schema. Errors name the param, suggest a
+ * close match for a misspelled key (`dest` -> `dst`), and say how to fix bolt.yaml.
+ */
 export function parseStepParams(
   plugin: BoltPlugin,
   ref: string,
   operation: string,
   raw: Record<string, string>,
 ): Record<string, string> {
-  const schema = plugin.manifest?.handlers[operation]?.params;
+  const schema = stepParamSchema(plugin, operation);
   if (!schema) return raw;
   const result = schema.safeParse(normalizeTextualBooleans(schema, raw));
   if (result.success) return result.data as Record<string, string>;
-  const issues = result.error.issues
-    .map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
-    .join("\n");
-  throw new Error(`Invalid params for "${ref}":\n${issues}`);
+  const expected = schemaKeys(schema);
+  const unknown = Object.keys(raw).filter((k) => !expected.includes(k));
+  const lines = result.error.issues.map((issue) => {
+    const key = issue.path.join(".");
+    const missing = issue.code === "invalid_type" && issue.received === "undefined";
+    if (!missing) return `  ${key}: ${issue.message}`;
+    const typo = unknown.find((u) => closestMatches(u, [key]).length > 0);
+    return typo
+      ? `  missing param "${key}" (you passed "${typo}"; did you mean "${key}"?)`
+      : `  missing param "${key}"`;
+  });
+  const known = expected.length > 0 ? `\n  ${ref} params: ${expected.join(", ")}` : "";
+  throw new Error(
+    `Invalid params for "${ref}":\n${lines.join("\n")}${known}\n  Fix the step's with: in bolt.yaml.`,
+  );
 }
 
 interface RunnerOptions {
