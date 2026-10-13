@@ -584,4 +584,8 @@ describe("suggestion follow-ups (PR #30 review P2)", () => {
       'Unknown task "MARK". Did you mean "mark" or "Mark"?',
     );
   });
+  test("equal distance prefers the case-matching candidate", () => {
+    expect(closest("mrak", ["Mark", "mark"])).toBe("mark");
+    expect(closest("Mrak", ["mark", "Mark"])).toBe("Mark");
+  });
 });
