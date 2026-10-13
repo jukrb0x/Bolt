@@ -317,11 +317,12 @@ try {
   Write-Host "non-bolt bolt.exe ignored and system Path precedence reported"
 
   # A real bolt.exe in a directory this user cannot write: default dir instead.
+  # Deny only WD,AD: the generic W right also denies SYNCHRONIZE and hides the dir.
   $roDir = Join-Path $ScratchRoot "ro\bin"
   New-Item -ItemType Directory -Force -Path $roDir | Out-Null
   Copy-Item -LiteralPath $currentExe -Destination (Join-Path $roDir "bolt.exe") -Force
   $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-  & icacls.exe $roDir /deny "${me}:(W)" | Out-Null
+  & icacls.exe $roDir /deny "${me}:(WD,AD)" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "icacls deny failed" }
   try {
     $stamp = (Get-Item -LiteralPath $Dest).LastWriteTimeUtc
