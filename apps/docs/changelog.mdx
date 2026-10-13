@@ -68,6 +68,10 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
     shipping together with **BOLT-P0-1**. Until BOLT-P0-1 lands on main they still
     exit `1`; do not treat exit `1` as "config error".
 
+### Changed
+
+- `--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`). Previously it could also run local actions.
+
 ### Plugin API v2: Added
 
 - Plugin API v2 (BOLT-EXT-1). Plugins opt in with `definePlugin({ apiVersion: 2 })` or the class instance field `apiVersion = 2;`. A plugin without `apiVersion` is still v1 and behaves exactly as before. See the [migration guide](/guides/migrating-to-plugin-api-2).
