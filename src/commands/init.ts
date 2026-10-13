@@ -88,6 +88,7 @@ export function scaffoldProject(dir: string, opts: { force: boolean }): Scaffold
 
 export default defineCommand({
   meta: {
+    name: "init",
     description: "Scaffold a bolt project (bolt.yaml, JSON Schema, plugin types)",
   },
   args: {

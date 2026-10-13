@@ -32,9 +32,7 @@ export function writePluginTypes(dir: string, opts: { force: boolean }): Scaffol
 }
 
 export default defineCommand({
-  meta: {
-    description: "Write TypeScript types and a tsconfig for plugin authors",
-  },
+  meta: { name: "types", description: "Write TypeScript types and a tsconfig for plugin authors" },
   args: {
     force: {
       type: "boolean",

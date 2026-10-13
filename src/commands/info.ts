@@ -8,7 +8,7 @@ function row(label: string, value: string) {
 }
 
 export default defineCommand({
-  meta: { description: "Print project config summary from bolt.yaml" },
+  meta: { name: "info", description: "Print project config summary from bolt.yaml" },
   async run() {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {

@@ -61,14 +61,27 @@ any step runs:
   `confirmed-by-user`. Only `--dry-run` is implemented; the others fail with
   `--<name> is reserved by bolt and not supported yet`. None of them can be used
   as a param name, neither as `--name=value` nor as `name=value` after `--`;
-  the error tells you to rename the param, e.g. `plan` → `build_plan` in
-  `bolt.yaml`, then pass `-- build_plan=x`. Valued forms such as `--json=v1` or
-  `--plan=<hash>` also report that the flag is not supported yet.
+  the error tells you to rename the param, e.g. `plan` → `my_plan` in
+  `bolt.yaml`, then pass `-- my_plan=x`. Valued forms such as `--json=v1` or
+  `--plan=<hash>` also report that the flag is not supported yet. Reserved names
+  are case-sensitive: `--PLAN=x` is an ordinary param.
+- `--dry-run=false` and `-- dry-run=false`: to run for real, just remove `--dry-run`.
 - `help` with a value (in addition to the 7 reserved names above, handled
   separately): `--help=<value>` fails with `--help takes no value. Use: bolt run --help`,
   and `-- help=<value>` fails with `"help" cannot be used as a param name`. Both
   tell you to rename a `help` param, e.g. to `my_help`. Bare `--help` / `-h`
-  still show help.
+  still show help. This matches `--help=<value>` before the command
+  (`bolt --help=1` fails with `--help takes no value`).
+- Unknown task or flow names (`bolt run mrk`) fail with
+  `Unknown task "mrk". Did you mean "mark"?` and list the project's tasks and flows.
+- No name (`bolt run`) prints the usage with the project's actual tasks and flows;
+  outside a project it points to `bolt list` and `bolt init`.
+
+A mistyped command (`bolt rn mark`) fails with exit code `2` and
+`Unknown command "rn". Did you mean "run"?` plus the list of commands.
+
+Suggested commands in error messages quote values that contain spaces or shell
+characters, so they can be copied as-is.
 
 To pass a value that starts with `--` (for example a flag forwarded to an
 external tool), put it after a bare `--` separator. Everything after `--` is

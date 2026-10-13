@@ -676,8 +676,8 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       ],
       [["inspect", "mark", "--", "dry-run=1"], "already a side-effect-free preview"],
       [["run", "mark", "--execute"], "--execute is reserved by bolt and not supported yet"],
-      [["run", "mark", "--", "plan=x"], "in bolt.yaml use build_plan and pass -- build_plan=x"],
-      [["run", "mark", "--", "dry-run=false"], "pass -- build_dry_run=false"],
+      [["run", "mark", "--", "plan=x"], "in bolt.yaml use my_plan and pass -- my_plan=x"],
+      [["run", "mark", "--", "dry-run=false"], "pass -- my_dry_run=false"],
       [["inspect", "mark", "--json"], "--json is reserved by bolt and not supported yet"],
       [["--version=1"], "--version takes no value. Use: bolt --version"],
       [["--version", "run", "mark"], "--version must be used on its own. Use: bolt --version"],
@@ -708,6 +708,62 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
     const param = await bolt(project.dir, ["run", "mark", "--extra=plain"]);
     expect(param.exitCode).toBe(0);
     expect(readFileSync(marker, "utf8").replace(/"/g, "").trim()).toBe("plain");
+  } finally {
+    dispose(project.dir);
+  }
+});
+
+test("DX-1: suggest commands and tasks, clear usage, no script path (exit 2, nothing runs)", async () => {
+  const project = makeProject({
+    tasks: `tasks:
+  mark:
+    - run: echo "\${{ params.extra }}" > marker.txt
+`,
+  });
+  const marker = path.join(project.dir, "marker.txt");
+  try {
+    const cases: Array<[string[], string[], string[]]> = [
+      [
+        ["rn", "mark"],
+        ['Unknown command "rn". Did you mean "run"?', "Commands: run, list"],
+        ["USAGE"],
+      ],
+      [["inspec", "mark"], ['Unknown command "inspec". Did you mean "inspect"?'], ["USAGE"]],
+      [["plugin", "nw"], ['Unknown command "nw". Did you mean "new"?'], ["USAGE"]],
+      [["run", "mrk"], ['Unknown task "mrk". Did you mean "mark"?', "Tasks: "], []],
+      [["inspect", "mrk"], ['Unknown task "mrk". Did you mean "mark"?'], []],
+      [["run"], ["Usage: bolt run <task...|flow>", "Example: bolt run "], ["build start"]],
+      [["inspect"], ["Usage: bolt inspect <task...|flow>"], []],
+      [["run", "mark", "--", "dry-run=false"], ["To run for real, just remove --dry-run"], []],
+      [["run", "mark", "--dry-run=false"], ["To run for real, just remove --dry-run"], []],
+      [["run", "mark", "--", "plan=yes please"], ['pass -- my_plan="yes please"'], ["build_"]],
+      [["inspect", "mark", "--dry-run"], ["already a side-effect-free preview"], []],
+      [["inspect", "mark", "--dry-run=1"], ["already a side-effect-free preview"], []],
+      [["run", "mark", "--help=1"], ["--help takes no value. Use: bolt run --help"], []],
+    ];
+    for (const [args, wanted, unwanted] of cases) {
+      const result = await bolt(project.dir, args);
+      expect(result.exitCode).toBe(2);
+      for (const text of wanted) expect(result.output).toContain(text);
+      for (const text of unwanted) expect(result.output).not.toContain(text);
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(path.join(project.dir, ".bolt"))).toBe(false);
+    }
+
+    const outside = await bolt(path.dirname(project.dir), ["run"]);
+    expect(outside.exitCode).toBe(2);
+    expect(outside.output).toContain("bolt list");
+
+    for (const [args, usage] of [
+      [["run", "--help"], "USAGE bolt run"],
+      [["inspect", "--help"], "USAGE bolt inspect"],
+      [["plugin", "new", "--help"], "USAGE bolt plugin new"],
+    ] as Array<[string[], string]>) {
+      const help = await bolt(project.dir, args);
+      expect(help.exitCode).toBe(0);
+      expect(help.output).toContain(usage);
+      expect(help.output).not.toContain("main.ts");
+    }
   } finally {
     dispose(project.dir);
   }

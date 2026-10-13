@@ -78,6 +78,7 @@ export function backupPath(file: string): string {
 
 export default defineCommand({
   meta: {
+    name: "migrate",
     description: "Rewrite a v2.0 bolt.yaml and bolt.local.yaml to the current format",
   },
   args: {

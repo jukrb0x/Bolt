@@ -371,7 +371,7 @@ function writeReceiptVersion(version: string, asset: string): void {
 }
 
 export default defineCommand({
-  meta: { description: "Update a script-installed bolt to a GitHub release" },
+  meta: { name: "self-update", description: "Update a script-installed bolt to a GitHub release" },
   args: {
     force: {
       type: "boolean",

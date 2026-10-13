@@ -3,7 +3,10 @@ import { Runner } from "../runner";
 import { testCfg } from "./env";
 import type { BoltConfig } from "../config";
 import { parseRunArgs, dispatchRun, UsageError, RESERVED_FLAGS } from "../commands/run";
-import { checkGlobalArgs } from "../global-args";
+import { checkCommandName, checkGlobalArgs } from "../global-args";
+import { closest, shellQuote } from "../suggest";
+import { commands } from "../commands";
+import { missingNameMessage, renamedParam, unknownNamesMessage } from "../commands/run";
 import { formatPlanNodes } from "../inspect-utils";
 import { resolveRunPlan } from "../run-plan";
 
@@ -165,16 +168,14 @@ test("(c) params from --k=v reach the task", async () => {
 
 test("(d) an unknown name errors and lists available tasks/flows", async () => {
   const runner = new Runner(cfg, { dryRun: true });
-  await expect(dispatchRun(runner, cfg, ["nope"], {})).rejects.toThrow(
-    'Unknown task or flow: "nope"',
-  );
+  await expect(dispatchRun(runner, cfg, ["nope"], {})).rejects.toThrow('Unknown task "nope".');
 });
 
 test("a multi-name list containing a flow name errors (flow only runs solo)", async () => {
   const runner = new Runner(cfg, { dryRun: true });
   // "daily" is a flow, not a task, so it is invalid inside a multi-task list.
   await expect(dispatchRun(runner, cfg, ["a", "daily"], {})).rejects.toThrow(
-    'Unknown task or flow: "daily"',
+    '"daily" is a flow; a flow runs on its own: bolt run daily',
   );
 });
 
@@ -223,7 +224,7 @@ describe("reserved flag names (design 0.4)", () => {
 
   for (const name of unsupported) {
     test(`--${name} is rejected in every form`, () => {
-      const rename = `build_${name.replace(/-/g, "_")}`;
+      const rename = `my_${name.replace(/-/g, "_")}`;
       const rn = `rename it, e.g. in bolt.yaml use ${rename} and pass -- ${rename}=x.`;
       const flagForm = `--${name} is reserved by bolt and not supported yet. If this is a task param, ${rn}`;
       const param = `"${name}" cannot be used as a param name (--${name} is reserved by bolt and not supported yet). R${rn.slice(1).replace("it,", "the param,")}`;
@@ -237,15 +238,46 @@ describe("reserved flag names (design 0.4)", () => {
   }
 
   test("dry-run cannot be passed as a param after --", () => {
-    const msg = usage(["build", "--", "dry-run=false"]);
+    const msg = usage(["build", "--", "dry-run=1"]);
     expect(msg).toContain('"dry-run" cannot be used as a param name');
-    expect(msg).toContain("use build_dry_run and pass -- build_dry_run=false");
+    expect(msg).toContain("use my_dry_run and pass -- my_dry_run=1");
     expect(msg).toContain("pass --dry-run without a value");
+  });
+
+  test("dry-run=false says to just remove --dry-run, before the rename hint", () => {
+    const msg = usage(["build", "--", "dry-run=false"]);
+    expect(msg).toStartWith('"dry-run=false" is not a param');
+    expect(msg.indexOf("just remove --dry-run")).toBeLessThan(msg.indexOf("my_dry_run"));
+    expect(usage(["build", "--dry-run=false"])).toBe(
+      'Flag "--dry-run" does not take a value. To run for real, just remove --dry-run.',
+    );
+    expect(usage(["build", "--dry-run=yes"])).toContain("Use --dry-run on its own.");
+  });
+
+  test("suggested commands quote values with spaces", () => {
+    expect(usage(["build", "--", "plan=yes please"])).toContain('pass -- my_plan="yes please".');
+    expect(usage(["build", "--", "plan=a$b"])).toContain("pass -- my_plan='a$b'.");
+    expect(usage(["build", "--", "plan="])).toContain('pass -- my_plan="".');
+  });
+
+  test("inspect --dry-run explains inspect is already a preview", () => {
+    for (const arg of ["--dry-run", "--dry-run=1"]) {
+      expect(usage(["build", arg], { flags: [], command: "inspect" })).toContain(
+        "bolt inspect never executes, it is already a side-effect-free preview. Remove --dry-run.",
+      );
+    }
+  });
+
+  test("reserved names are case-sensitive", () => {
+    expect(parseRunArgs(["build", "--PLAN=x", "--", "Json=y"]).params).toEqual({
+      PLAN: "x",
+      Json: "y",
+    });
   });
 
   test("valued forms of future flags say not supported yet and offer a rename", () => {
     expect(usage(["build", "--json=v1"])).toBe(
-      "--json is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use build_json and pass -- build_json=v1.",
+      "--json is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use my_json and pass -- my_json=v1.",
     );
     expect(usage(["build", "--plan=abc123"])).toContain(
       "--plan is reserved by bolt and not supported yet. If this is a task param",
@@ -259,7 +291,7 @@ describe("reserved flag names (design 0.4)", () => {
     const msg = usage(["build", "--", "dry-run=1"], { flags: [], command: "inspect" });
     expect(msg).not.toContain("pass --dry-run");
     expect(msg).toContain("bolt inspect never executes, it is already a side-effect-free preview");
-    expect(msg).toContain("pass -- build_dry_run=1");
+    expect(msg).toContain("pass -- my_dry_run=1");
   });
 
   test("--help with a value and help= after -- are rejected", () => {
@@ -317,5 +349,76 @@ describe("checkGlobalArgs", () => {
     expect(checkGlobalArgs(["--help=1"])).toContain("--help takes no value");
     expect(checkGlobalArgs(["--help", "--bogus"])).toContain('Unknown global flag "--bogus"');
     expect(checkGlobalArgs(["--bogus"])).toContain('"--bogus"');
+  });
+});
+
+describe("checkGlobalArgs edge cases", () => {
+  test("valued, bundled and bare dashes before the subcommand", () => {
+    expect(checkGlobalArgs(["-hx", "run", "mark"])).toContain('Unknown global flag "-hx"');
+    expect(checkGlobalArgs(["-", "run", "mark"])).toContain('Unknown global flag "-"');
+    expect(checkGlobalArgs(["-h=1"])).toContain("-h takes no value");
+    expect(checkGlobalArgs(["--version", "--bogus"])).toContain('Unknown global flag "--bogus"');
+    expect(checkGlobalArgs(["--DRY-RUN", "run"])).toContain('"--DRY-RUN"');
+    expect(checkGlobalArgs(["--", "run"])).toContain('Unknown global flag "--"');
+  });
+
+  test("flags after the subcommand are not its business", () => {
+    expect(checkGlobalArgs(["run", "-x", "--version=1", "--", "a=b"])).toBeUndefined();
+    expect(checkGlobalArgs(["run", "--help"])).toBeUndefined();
+  });
+});
+
+describe("checkCommandName", () => {
+  const root = { subCommands: commands };
+  test("suggests the closest command and lists all commands", () => {
+    const msg = checkCommandName(["rn", "mark"], root)!;
+    expect(msg).toStartWith('Unknown command "rn". Did you mean "run"?');
+    expect(msg).toContain("Commands: run, list,");
+    expect(msg).toContain("Run bolt --help for details.");
+    expect(checkCommandName(["inspec", "mark"], root)).toContain('Did you mean "inspect"?');
+  });
+  test("checks nested commands and omits a far-off suggestion", () => {
+    expect(checkCommandName(["plugin", "nw"], root)).toContain('Did you mean "new"?');
+    expect(checkCommandName(["plugin", "nw"], root)).toContain("Run bolt plugin --help");
+    expect(checkCommandName(["xyzzy"], root)).toBe(
+      `Unknown command "xyzzy".\n  Commands: ${Object.keys(commands).join(", ")}\n  Run bolt --help for details.`,
+    );
+  });
+  test("accepts known commands, help and leaves positional args alone", () => {
+    expect(checkCommandName(["run", "mrk"], root)).toBeUndefined();
+    expect(checkCommandName(["plugin", "new", "x"], root)).toBeUndefined();
+    expect(checkCommandName(["rn", "--help"], root)).toBeUndefined();
+    expect(checkCommandName([], root)).toBeUndefined();
+  });
+});
+
+describe("task suggestions and usage", () => {
+  test("unknown task suggests the closest name and lists tasks", () => {
+    const msg = unknownNamesMessage(cfg, ["gret"])!;
+    expect(msg).toStartWith('Unknown task "gret". Did you mean "greet"?');
+    expect(msg).toContain("Tasks: ");
+    expect(msg).toContain("Run bolt list for details.");
+    expect(unknownNamesMessage(cfg, ["daily"])).toBeUndefined();
+    expect(unknownNamesMessage(cfg, ["zzzzzzzz"])).toStartWith('Unknown task "zzzzzzzz".\n');
+  });
+  test("missing task lists the project's tasks, or hints bolt list", () => {
+    const msg = missingNameMessage("run", { kind: "loaded", cfg });
+    expect(msg).toContain("Usage: bolt run <task...|flow>");
+    expect(msg).toContain(`Tasks: ${Object.keys(cfg.tasks).sort().join(", ")}`);
+    expect(msg).not.toContain("build start");
+    expect(missingNameMessage("run", { kind: "missing" })).toContain("bolt list");
+    expect(missingNameMessage("inspect", { kind: "invalid", path: "/p/bolt.yaml" })).toContain(
+      "bolt check",
+    );
+    const empty = { ...cfg, tasks: {}, flows: {} };
+    expect(missingNameMessage("run", { kind: "loaded", cfg: empty })).toContain("bolt list");
+  });
+  test("helpers", () => {
+    expect(renamedParam("confirmed-by-user")).toBe("my_confirmed_by_user");
+    expect(renamedParam("help")).toBe("my_help");
+    expect(closest("rn", ["run", "list"])).toBe("run");
+    expect(closest("qqq", ["run", "list"])).toBeUndefined();
+    expect(shellQuote("abc")).toBe("abc");
+    expect(shellQuote("a b")).toBe('"a b"');
   });
 });
