@@ -5,6 +5,8 @@ import type { BoltConfig } from "./config";
 import type { BoltPlugin } from "./plugin";
 import { builtinPlugins } from "./plugins";
 import { parseStepParams } from "./runner";
+import { LOCAL_RUNNERS } from "./local-runners";
+import { shellQuote } from "./suggest";
 import type { PlanNode, RunPlan } from "./run-plan";
 
 /**
@@ -16,7 +18,7 @@ import type { PlanNode, RunPlan } from "./run-plan";
  * process, and never writes a file (no log file, no .bolt/ directory, no plugin cache).
  */
 
-export const LOCAL_RUNNERS = ["run.ts", "run.js", "run.py", "run.sh", "run.bat"] as const;
+export { LOCAL_RUNNERS };
 
 export interface DryRunReport {
   /** Lines to print, in order. */
@@ -62,7 +64,7 @@ function pluginSource(cfg: BoltConfig, namespace: string, opts: DryRunOptions): 
 
 function paramText(params: Record<string, string>): string {
   return Object.entries(params)
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${k}=${shellQuote(v)}`)
     .join("  ");
 }
 
@@ -121,6 +123,15 @@ export function renderDryRun(cfg: BoltConfig, plan: RunPlan, opts: DryRunOptions
       const slash = node.ref.indexOf("/");
       const namespace = node.ref.slice(0, slash);
       const operation = node.ref.slice(slash + 1);
+      const declared = (cfg.plugins ?? []).find((p) => p.namespace === namespace && p.path);
+      if (declared?.path && !existsSync(path.resolve(opts.configDir, declared.path))) {
+        problem(
+          pad,
+          `Plugin "${namespace}" is declared in bolt.yaml plugins: with path ${declared.path}, ` +
+            `which does not exist. Fix the path in bolt.yaml.`,
+        );
+        continue;
+      }
       const source = pluginSource(cfg, namespace, opts);
       if (source) {
         unloaded = true;

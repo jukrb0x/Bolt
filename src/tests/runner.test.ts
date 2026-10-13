@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Runner } from "../runner";
+import { mkdtempSync, writeFileSync } from "fs";
+import os from "os";
+import path from "path";
 import { mockRuntime, testCfg } from "./env";
 import type { Runtime } from "../runtime/types";
 import type { BoltConfig } from "../config";
@@ -398,10 +401,17 @@ function recordingRuntime(calls: string[]): Runtime {
   };
 }
 
+const actionDir = mkdtempSync(path.join(os.tmpdir(), "bolt-runner-action-"));
+writeFileSync(path.join(actionDir, "action.yaml"), "name: a\n");
+writeFileSync(path.join(actionDir, "run.sh"), "#!/bin/sh\nexit 9\n");
+const rel = path.relative(process.cwd(), actionDir).split(path.sep).join("/");
+const actionRef = rel.startsWith("../") ? rel : `./${rel}`;
+
 const localCfg: BoltConfig = {
   ...testCfg,
   tasks: {
-    local: [{ uses: "./actions/does-not-exist", with: { mode: "x" } }, { run: "echo hi" }],
+    local: [{ uses: actionRef, with: { mode: "x" } }, { run: "echo hi" }],
+    missing: [{ uses: "./actions/does-not-exist" }],
   },
 };
 
@@ -414,8 +424,14 @@ test("dry-run does not execute local actions, shell steps, or git", async () => 
     onStep: (s) => ran.push(s),
   });
   await runner.runTask("local");
-  expect(ran).toEqual(["./actions/does-not-exist", "echo hi"]);
+  expect(ran).toEqual([actionRef, "echo hi"]);
   expect(calls).toEqual([]);
+});
+
+test("dry-run (simulate) still reports a missing local action, with task and step", async () => {
+  const runner = new Runner(localCfg, { dryRun: true, runtime: recordingRuntime([]) });
+  const err = await runner.runTask("missing").catch((e) => e);
+  expect(err.message).toStartWith("missing > ./actions/does-not-exist: No action.yaml in ");
 });
 
 test("a real run still looks up the git branch and runs shell steps", async () => {
