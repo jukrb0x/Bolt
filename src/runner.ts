@@ -46,6 +46,11 @@ function parseStepParams(
 
 interface RunnerOptions {
   dryRun?: boolean;
+  /**
+   * Set by the AI permission path when an agent invokes the run; exposed to
+   * handlers as `ctx.aiInvocation`. Human runs leave it unset.
+   */
+  aiInvocation?: boolean;
   onStep?: (cmd: string) => void;
   logger?: Logger;
   configDir?: string;
@@ -126,6 +131,7 @@ export class Runner {
       cfg: this.cfg,
       configDir: this.opts.configDir ?? process.cwd(),
       dryRun: this.opts.dryRun ?? false,
+      aiInvocation: this.opts.aiInvocation ?? false,
       logger: this.opts.logger ?? new Logger(),
       runtime: this.runtime,
     };
