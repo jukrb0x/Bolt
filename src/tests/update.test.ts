@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -609,11 +610,48 @@ runInstallSh("install.sh accepts a hand-edited .bolt/bin PATH line", () => {
   }
 });
 
+// session is field 6 of /proc/pid/stat: "pid (comm) state ppid pgrp session".
+function sessionId(pid: number): number | null {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const end = stat.lastIndexOf(")");
+    if (end < 0) return null;
+    return Number(stat.slice(end + 2).split(" ")[3]);
+  } catch {
+    return null;
+  }
+}
+
+function sessionSnapshot(sid: number): { left: string[]; sleep1: number } {
+  const left: string[] = [];
+  let sleep1 = 0;
+  for (const ent of readdirSync("/proc")) {
+    if (!/^\d+$/.test(ent)) continue;
+    try {
+      const stat = readFileSync(`/proc/${ent}/stat`, "utf8");
+      const end = stat.lastIndexOf(")");
+      const cmd = readFileSync(`/proc/${ent}/cmdline`, "utf8").replaceAll("\0", " ").trim();
+      if (end >= 0 && Number(stat.slice(end + 2).split(" ")[3]) === sid) left.push(cmd || ent);
+      if (cmd === "sleep 1") sleep1++;
+    } catch {
+      continue;
+    }
+  }
+  return { left, sleep1 };
+}
+
 for (const shell of ["/bin/sh", "/bin/bash"]) {
   runInstallSh(
     `install.sh kills a hanging bolt and its child without timeout(1) (${shell})`,
-    () => {
+    async () => {
       const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+      // A machine-wide `sleep 1` scan flakes whenever any other process sleeps 1.
+      const decoy = Bun.spawn(["/bin/sh", "-c", "while true; do sleep 1; done"], {
+        detached: true,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      });
       try {
         const home = path.join(root, "home");
         mkdirSync(home);
@@ -648,7 +686,12 @@ for (const shell of ["/bin/sh", "/bin/bash"]) {
         const seconds = 40 + (process.pid % 17) + (shell.endsWith("bash") ? 1 : 0);
         const hang = fakeBolt(path.join(root, "hang"), `sleep ${seconds} &\nwait\necho 2.0.0`);
         const started = Date.now();
-        const result = Bun.spawnSync([shell, path.resolve("install.sh")], {
+        // Own session: bash monitor mode puts the probe in another process group,
+        // but the child keeps this session id. pid is that session id.
+        const proc = Bun.spawn([shell, path.resolve("install.sh")], {
+          detached: true,
+          stdout: "pipe",
+          stderr: "pipe",
           env: {
             HOME: home,
             SHELL: "/bin/bash",
@@ -657,18 +700,44 @@ for (const shell of ["/bin/sh", "/bin/bash"]) {
             BOLT_INSTALL_PROBE_TIMEOUT: "1",
           },
         });
-        const out = result.stdout.toString() + result.stderr.toString();
-        expect(result.exitCode).toBe(0);
+        const sid = proc.pid;
+        const output = Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+        ]);
+        let ownSession = false;
+        while (Date.now() - started < 3000) {
+          if (sessionId(sid) === sid) {
+            ownSession = true;
+            break;
+          }
+          if (proc.exitCode !== null) break;
+          Bun.sleepSync(10);
+        }
+        const exitCode = await proc.exited;
+        const [stdout, stderr] = await output;
+        const out = stdout + stderr;
+        expect(ownSession).toBe(true);
+        expect(exitCode).toBe(0);
         expect(Date.now() - started).toBeLessThan(20000);
         expect(out).toContain("did not print a bolt version");
         expect(out).not.toContain("Killed");
         expect(readFileSync(path.join(home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
-        // Neither the probe's child nor the watcher's sleep is left running.
-        Bun.sleepSync(300);
-        const ps = Bun.spawnSync(["ps", "-eo", "args"]).stdout.toString().split("\n");
-        expect(ps.filter((l) => l.trim() === `sleep ${seconds}`)).toHaveLength(0);
-        expect(ps.filter((l) => l.trim() === "sleep 1")).toHaveLength(0);
+        // The decoy must be visible, and this install's processes must be gone.
+        const deadline = Date.now() + 5000;
+        let snap = sessionSnapshot(sid);
+        while ((snap.left.length > 0 || snap.sleep1 === 0) && Date.now() < deadline) {
+          Bun.sleepSync(20);
+          snap = sessionSnapshot(sid);
+        }
+        expect(snap.sleep1).toBeGreaterThan(0);
+        expect(snap.left).toEqual([]);
       } finally {
+        try {
+          process.kill(-decoy.pid, "SIGKILL");
+        } catch {
+          // Already exited.
+        }
         rmSync(root, { recursive: true, force: true });
       }
     },
