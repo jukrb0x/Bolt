@@ -576,3 +576,40 @@ export default definePlugin({
     dispose(project.dir);
   }
 });
+
+test("run rejects unknown flags, valued boolean flags and --prefixed values (exit 2, nothing runs)", async () => {
+  const project = makeProject({
+    tasks: `tasks:
+  mark:
+    - run: echo "\${{ params.extra }}" > marker.txt
+`,
+  });
+  const marker = path.join(project.dir, "marker.txt");
+  try {
+    const cases: Array<[string[], string]> = [
+      [["run", "mark", "--dryrun"], 'Did you mean "--dry-run"?'],
+      [["run", "mark", "-x"], 'Unknown flag "-x"'],
+      [["run", "mark", "--dry-run=false"], "does not take a value"],
+      [["run", "mark", "--extra=--dry-run"], "-- extra=--dry-run"],
+      [["run", "mark", "--", "--execute"], "Malformed param"],
+      [["inspect", "mark", "--bogus"], 'Unknown flag "--bogus" for "bolt inspect"'],
+    ];
+    for (const [args, message] of cases) {
+      const result = await bolt(project.dir, args);
+      expect(result.exitCode).toBe(2);
+      expect(result.output).toContain(message);
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(path.join(project.dir, ".bolt"))).toBe(false);
+    }
+
+    const passthrough = await bolt(project.dir, ["run", "mark", "--", "extra=--verbose"]);
+    expect(passthrough.exitCode).toBe(0);
+    expect(readFileSync(marker, "utf8").replace(/"/g, "").trim()).toBe("--verbose");
+
+    const param = await bolt(project.dir, ["run", "mark", "--extra=plain"]);
+    expect(param.exitCode).toBe(0);
+    expect(readFileSync(marker, "utf8").replace(/"/g, "").trim()).toBe("plain");
+  } finally {
+    dispose(project.dir);
+  }
+});
