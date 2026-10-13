@@ -54,12 +54,15 @@ any step runs:
 - A value on a boolean flag (`--dry-run=false`).
 - A param value that starts with `--` (`--extra=--verbose`).
 - Flags before the command (`bolt --dry-run run deploy`). Flags go after the
-  command: `bolt run deploy --dry-run`. Only `-h`, `--help`, and a lone
-  `--version` are allowed before it.
+  command: `bolt run deploy --dry-run`. Only `-h`, `--help`, and `--version`
+  are allowed before it. A help flag wins (`bolt --help --version` shows help);
+  otherwise `--version` must be used on its own (`bolt --version`) and takes no value.
 - Reserved names: `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`,
   `confirmed-by-user`. Only `--dry-run` is implemented; the others fail with
-  `--<name> is reserved and not supported yet`. None of them can be used as a
-  param name, neither as `--name=value` nor as `name=value` after `--`.
+  `--<name> is reserved by bolt and not supported yet`. None of them can be used
+  as a param name, neither as `--name=value` nor as `name=value` after `--`;
+  the error tells you to rename the param, e.g. `plan` → `build_plan` in
+  `bolt.yaml`, then pass `-- build_plan=x`.
 
 To pass a value that starts with `--` (for example a flag forwarded to an
 external tool), put it after a bare `--` separator. Everything after `--` is

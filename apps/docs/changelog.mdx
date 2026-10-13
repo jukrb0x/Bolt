@@ -14,8 +14,8 @@ following now fail with `[ERROR] …` and exit code `2` before anything runs:
 2. **`--dry-run=<value>`**: boolean flags take no value. Before, `--dry-run=false` executed the run.
 3. **Param values starting with `--`**: `bolt run build --extra=--verbose`.
 4. **`bolt inspect --dry-run`**: `inspect` never executes, so it no longer accepts the flag.
-5. **Flags before the command**: `bolt --dry-run run deploy` used to drop the flag and **execute**. Only `-h`, `--help`, and a lone `--version` are allowed before the command.
-6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved and not supported yet`.
+5. **Flags before the command**: `bolt --dry-run run deploy` used to drop the flag and **execute**. Only `-h`, `--help`, and `--version` are allowed before the command. Help wins (`bolt --help --version` shows help, exit 0); `--version` otherwise must be alone and takes no value.
+6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name (`--plan=x`, `-- plan=x`) fails with a rename hint: `"plan" is reserved by bolt … use build_plan and pass -- build_plan=x`.
 
 ### Migration
 
