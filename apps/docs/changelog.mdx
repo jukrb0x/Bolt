@@ -28,13 +28,13 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 
 ### Breaking: `--dry-run` runs nothing and writes nothing (BOLT-P0-1)
 
-This is another dry-run behavior change after #27. `bolt run … --dry-run` is now a
+This supersedes the #27 change below. `bolt run … --dry-run` is now a
 pure static preview: it reads `bolt.yaml`, resolves the plan like `bolt inspect`, and
 prints every step as `would run …`. It no longer:
 
 - imports, compiles, or installs plugins (no `.bolt/.cache`, no `bun install`);
 - calls plugin `onInit`, `onBeforeStep`, `onAfterStep`, or handlers;
-- executes local actions (`uses: ./…`); before, they **ran** during a dry run;
+- reaches local actions at all (`uses: ./…`); #27 already stopped running them, and a dry run now only checks that `action.yaml` and a run script exist;
 - spawns any process, including `git` for notifications;
 - creates `.bolt/` or writes a log file under `.bolt/logs/`.
 
@@ -43,13 +43,16 @@ handler params are validated against their schema (a misspelled key such as `des
 for `fs/copy` is reported as `missing param "dst" (you passed "dest"; did you mean "dst"?)`),
 and `call:` targets and local action scripts are checked. Config problems a real run would
 hit (unknown plugin namespace or op, bad built-in params, missing action script) are marked
-with `!` and exit `3`. Third-party plugin params are not validated and are not an error. A dry run cannot show
+with `!` and exit `3`. Third-party plugin params are not validated and are not an error.
+A `plugins:` entry whose `path` does not exist is also reported. Param values with spaces
+are quoted in the output (`dest="b c"`). A dry run cannot show
 the exact command a plugin handler builds (for example the `Build.bat` line from
 `ue/build`), because the handler is not called.
 
 New flag `--simulate`: the previous plugin-level preview. Plugins load and their hooks
 and handlers run with `ctx.dryRun = true`; `run:` steps and local actions are skipped;
-a log file is written; notifications are not sent. Plugins may still have side effects.
+a missing `action.yaml` or run script still fails the step; a log file is written;
+notifications are not sent. Plugins may still have side effects.
 `--dry-run` and `--simulate` cannot be combined. With the library API, `dryRun: true`
 still behaves like `--simulate` (plugins load and hooks run), and now also skips local
 actions; a pure library dry run is tracked as BOLT-DX-3.
@@ -61,14 +64,17 @@ graph (unknown `call:` target, call cycle, malformed `uses:` ref, legacy `task/<
 now exits `3` instead of `1`, before anything runs and before a log file is created.
 This applies to `bolt run` (with or without `--dry-run`), `inspect`, `list`, `info`,
 `check`, `ai`, `plugin list`, `migrate`, and `config` (when `bolt.yaml` is missing;
-`bolt config` still creates it from `bolt.template.yaml` when that exists). `bolt plugin new`
-is unchanged. A `bolt.yaml` that exists but cannot be read exits `4`.
+`bolt config` still creates it from `bolt.template.yaml` when that exists). Both now print
+the same `[ERROR] bolt.yaml not found in …` message as the other commands. `bolt plugin new`
+is unchanged. A `bolt.yaml` that exists but cannot be read also exits `3`, with
+`Permission denied reading <path>. Check the file permissions …` (the error's `code` is
+`CONFIG_UNREADABLE`; missing and invalid files are `CONFIG_NOT_FOUND` and `CONFIG_INVALID`).
 Errors say how to fix them, for example
 `bolt.yaml not found in <dir> or any parent directory.` followed by
 `Run bolt from your project directory, or create one with bolt init.`
 
 Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
-`4` permission denied.
+`4` denied (reserved for `AI_FORBIDDEN`, used once AI invocation is enabled).
 
 ### Improved error hints
 
@@ -92,13 +98,13 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 
 ### Migration: exit codes (#30 and BOLT-P0-1)
 
-| Code | Meaning                                                                                                                          | Before                              |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `0`  | Success                                                                                                                          | `0`                                 |
-| `1`  | Task failure (a step failed while running)                                                                                       | `1`                                 |
-| `2`  | Usage error: unknown command, flag, task, or flow; malformed param; no task given; `bolt plugin` with no subcommand              | `1`                                 |
-| `3`  | Config error: `bolt.yaml` missing, unparseable, failing the schema, invalid task graph, or a config problem found by `--dry-run` | `1` (`0` for some dry-run problems) |
-| `4`  | Permission denied reading `bolt.yaml`                                                                                            | `1`                                 |
+| Code | Meaning                                                                                                                                      | Before                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `0`  | Success                                                                                                                                      | `0`                                 |
+| `1`  | Task failure (a step failed while running)                                                                                                   | `1`                                 |
+| `2`  | Usage error: unknown command, flag, task, or flow; malformed param; no task given; `bolt plugin` with no subcommand                          | `1`                                 |
+| `3`  | Config error: `bolt.yaml` missing, unreadable, unparseable, failing the schema, invalid task graph, or a config problem found by `--dry-run` | `1` (`0` for some dry-run problems) |
+| `4`  | Denied: reserved for `AI_FORBIDDEN` (AI permission / confirmation, with the AI features); not used for config files                          | -                                   |
 
 - `bolt run x || exit`, `bolt run x || …`, and `if ! bolt run x` are **unchanged**:
   any non-zero still fails.
@@ -107,7 +113,8 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 - Scripts that used `-eq 1` to detect a broken or missing `bolt.yaml` must check
   `-eq 3` instead. `bolt check` exits `3` when `bolt.yaml` is invalid or missing.
 - To tell failures apart: `1` = a task failed, `2` = fix the command line,
-  `3` = fix `bolt.yaml`, `4` = fix file permissions.
+  `3` = fix `bolt.yaml` (including its file permissions), `4` = denied (AI permission or
+  confirmation).
 
 ### Migration
 
@@ -132,13 +139,11 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 - Move flags placed before the command to after it: `bolt run deploy --dry-run`.
 - **Relying on `--dry-run` to run plugin code** (hooks, handler dry-run logging,
   compiling a project plugin, `bun install`, or a log file): use `--simulate`
-  instead. To warm the plugin cache or install plugin dependencies, run any real
-  task or `bolt plugin list`. If you used `--dry-run` to execute a local action,
-  run the task for real.
+  instead. To build a project plugin or install its dependencies, run a real task once.
 
 ### Changed
 
-- `--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`). Previously it could also run local actions.
+- (#27, superseded by BOLT-P0-1 above) `--dry-run` skipped `run:` steps and local actions but still loaded plugins and called plugin hooks and handlers (with `ctx.dryRun=true`); previously it could also run local actions. That plugin-level preview is now `--simulate`; `--dry-run` runs no plugin code at all.
 
 ### Plugin API v2: Added
 
@@ -154,7 +159,7 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 - **Built-in git/svn AI permissions changed.** These handlers used to be `ai: false` for everything. Now: `git/info` and `svn/info` are `ai: true` (read-only; for AI invocations `path` must be inside the project directory); `git/status` and `svn/status` are `ai: "confirm"` (`git status` runs the repository's `core.fsmonitor` command); `git/pull`, `git/checkout`, `git/clone`, `svn/update`, `svn/cleanup`, `svn/revert`, `svn/commit`, and `svn/add` stay `ai: false`. This changes `.bolt/ai-context.md` and its context hash.
 - Built-in git and svn are now plugin API v2 plugins tagged `vcs.sync` (`git/pull`, `svn/update`) and `vcs.info` (`git/info`, `svn/info`). `git/info`, `git/status`, `svn/info`, and `svn/status` declare a `path` param schema, so a missing `path` is reported as a param error.
 - `git/info` and `svn/info` with a `path` outside the project directory: human runs behave as before and succeed, but now print a warning that AI invocations will reject the path, with the fix. `ue/info` is unchanged and still reads engine and project paths anywhere.
-- **AI invocations of `git/info` and `svn/info` reject a `path` outside the project directory** with `AI_FORBIDDEN` (exit code `4`, permission denied) and a fix (use a path under the project, or a `run:` step for other repositories).
+- **AI invocations of `git/info` and `svn/info` reject a `path` outside the project directory** with `AI_FORBIDDEN` (exit code `4`, denied) and a fix (use a path under the project, or a `run:` step for other repositories).
 - **Migration: `git/info` and `svn/info` resolve a relative `path` against the `bolt.yaml` directory**, not the current working directory. Example: with `bolt.yaml` in `/proj` and running from `/proj/tools`, `path: ../Engine` used to resolve to `<cwd>/../Engine` (`/proj/Engine`); it now resolves to `<bolt.yaml dir>/../Engine` (`/Engine`). To keep the old target, use an absolute path or adjust the relative path so it is relative to the `bolt.yaml` directory (here `path: Engine`).
 - Plugin API version errors now list the supported versions and, for a newer plugin, tell you to run `bolt self-update`. A class plugin with a `static apiVersion` that differs from its instance field is rejected; a matching one warns.
 - Manifest format is now 2. After upgrading, run `bolt ai` to regenerate `.bolt/ai-context.md`; `bolt run` warns (`AI_CONTEXT_STALE`) until you do.
