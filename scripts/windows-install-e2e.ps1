@@ -243,11 +243,21 @@ try {
   Invoke-Probe "2.0.0"
   if (Test-Path -LiteralPath $Old) { throw "bolt.exe.old existed before self-update" }
 
-  $env:BOLT_RELEASES_API = "$PublicBase/repos/jukrb0x/Bolt/releases"
-  Write-Host "running bolt self-update against $env:BOLT_RELEASES_API"
-  & bolt self-update
-  if ($LASTEXITCODE -ne 0) { throw "bolt self-update exited $LASTEXITCODE" }
-  Remove-Item Env:BOLT_RELEASES_API
+  # The github.com redirect path. The output must not mention a GitHub API fallback.
+  $env:BOLT_RELEASES_URL = "$PublicBase/releases"
+  Write-Host "running bolt self-update against $env:BOLT_RELEASES_URL"
+  $savedEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $updateOut = (& bolt self-update 2>&1 | Out-String)
+    $updateExit = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $savedEap
+  }
+  Remove-Item Env:BOLT_RELEASES_URL
+  Write-Host $updateOut
+  if ($updateExit -ne 0) { throw "bolt self-update exited $updateExit" }
+  if ($updateOut -match "GitHub API") { throw "self-update used the GitHub API instead of the release redirect" }
 
   if (-not (Test-Path -LiteralPath $Old)) { throw "self-update did not rename the running exe to bolt.exe.old" }
   if ((Get-Sha256 $Old) -ne $currentHash) { throw "bolt.exe.old is not the exe that was running" }

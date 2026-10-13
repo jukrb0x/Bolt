@@ -58,17 +58,17 @@ norm_dir() {
   (cd "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1" | sed 's:/*$::'
 }
 
-# Run "<bolt> version" with a timeout. stderr is discarded. Uses timeout(1) or
+# Run "<bolt> version" with a timeout. stdin is /dev/null and stderr is discarded. Uses timeout(1) or
 # gtimeout (Homebrew coreutils on macOS), else a background job that is killed.
 PROBE_TIMEOUT="${BOLT_INSTALL_PROBE_TIMEOUT:-15}"
 probe_version() {
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$PROBE_TIMEOUT" "$1" version 2>/dev/null
+    timeout "$PROBE_TIMEOUT" "$1" version </dev/null 2>/dev/null
   elif command -v gtimeout >/dev/null 2>&1; then
-    gtimeout "$PROBE_TIMEOUT" "$1" version 2>/dev/null
+    gtimeout "$PROBE_TIMEOUT" "$1" version </dev/null 2>/dev/null
   else
     probe_out=$(mktemp)
-    "$1" version >"$probe_out" 2>/dev/null &
+    "$1" version </dev/null >"$probe_out" 2>/dev/null &
     probe_pid=$!
     (
       sleep "$PROBE_TIMEOUT"
@@ -148,7 +148,7 @@ fi
 # Run the download before replacing a working bolt. A bad version leaves the old file in place.
 cp "${TMP}/${ASSET}" "${DEST}/bolt.new"
 chmod 755 "${DEST}/bolt.new"
-if ! version=$("${DEST}/bolt.new" version); then
+if ! version=$("${DEST}/bolt.new" version </dev/null); then
   rm -f "${DEST}/bolt.new"
   echo "Downloaded bolt failed to run. The existing bolt was not replaced." >&2
   exit 1

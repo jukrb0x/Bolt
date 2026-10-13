@@ -1,6 +1,7 @@
 /**
  * Serve two local bolt builds in the shape install.ps1 and self-update expect.
- * current/ is the install. Newer is what GET .../releases/latest returns.
+ * current/ is the install. Newer is v2.0.1, what /releases/latest (github.com redirect)
+ * and the API's .../releases/latest return.
  *
  *   bun scripts/serve-release-fixture.ts <root> <port> <public-base>
  */
@@ -29,6 +30,21 @@ Bun.serve({
   fetch(req) {
     const pathname = new URL(req.url).pathname;
     if (pathname === "/health") return new Response("ok");
+    // github.com shape: /releases/latest redirects to the tag page, assets live under /releases/download/<tag>/.
+    if (pathname === "/releases/latest") {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${base}/releases/tag/v2.0.1` },
+      });
+    }
+    const download = /^\/releases\/download\/v2\.0\.1\/([^/]+)$/.exec(pathname);
+    if (download) {
+      const abs = join(root, "newer", download[1]);
+      if (!files.has(`newer/${download[1]}`) || !existsSync(abs)) {
+        return new Response("not found", { status: 404 });
+      }
+      return new Response(Bun.file(abs));
+    }
     if (pathname === "/repos/jukrb0x/Bolt/releases/latest") {
       return Response.json({
         tag_name: "v2.0.1",
