@@ -306,11 +306,12 @@ try {
   $machineKey.SetValue("Path", "$shadowDir;" + $SavedMachinePath.Value, $SavedMachinePath.Kind)
   $machineKey.Close()
   try {
-    $stamp = (Get-Item -LiteralPath $Dest).LastWriteTimeUtc
+    # Copy-Item keeps mtimes, so mark the default install with the old build and check the hash.
+    Copy-Item -LiteralPath $currentExe -Destination $Dest -Force
     $out = Invoke-Install "$PublicBase/newer" (Get-FreshPath)
     if ($out -notmatch "did not print a bolt version") { throw "install.ps1 did not reject the non-bolt bolt.exe" }
     if ($out -notmatch "Warning: a new terminal will run") { throw "install.ps1 did not warn about system Path precedence" }
-    if ((Get-Item -LiteralPath $Dest).LastWriteTimeUtc -eq $stamp) { throw "install.ps1 did not reinstall $Dest" }
+    if ((Get-Sha256 $Dest) -ne $newerHash) { throw "install.ps1 did not reinstall $Dest" }
   } finally {
     Set-RawPath ([Microsoft.Win32.Registry]::LocalMachine) $MachineKeyPath $SavedMachinePath
   }
@@ -325,11 +326,12 @@ try {
   & icacls.exe $roDir /deny "${me}:(WD,AD)" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "icacls deny failed" }
   try {
-    $stamp = (Get-Item -LiteralPath $Dest).LastWriteTimeUtc
+    # Copy-Item keeps mtimes, so mark the default install with the old build and check the hash.
+    Copy-Item -LiteralPath $currentExe -Destination $Dest -Force
     $out = Invoke-Install "$PublicBase/newer" ("$roDir;" + (Get-FreshPath))
     if ($out -notmatch "is not writable") { throw "install.ps1 did not skip the unwritable directory" }
     if ((Get-Sha256 (Join-Path $roDir "bolt.exe")) -ne $currentHash) { throw "install.ps1 changed the bolt.exe in $roDir" }
-    if ((Get-Item -LiteralPath $Dest).LastWriteTimeUtc -eq $stamp) { throw "install.ps1 did not install to $Dest" }
+    if ((Get-Sha256 $Dest) -ne $newerHash) { throw "install.ps1 did not install to $Dest" }
   } finally {
     & icacls.exe $roDir /remove:d $me | Out-Null
   }
