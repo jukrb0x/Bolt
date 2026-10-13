@@ -88,12 +88,16 @@ test("a v2 plugin reports results and events; a returned fail fails the run", as
     const report = await bolt(dir, ["run", "report"]);
     expect(report.exitCode, report.output).toBe(0);
     expect(report.output).toContain("modern/report progress 1/2: scanning");
-    expect(report.output).toContain("modern/report: warn — cache cold");
+    expect(report.output).toContain("modern/report: cache cold");
     expect(report.output).toContain("modern/report: CACHE_COLD: no cache Fix: run warmup");
 
     const broken = await bolt(dir, ["run", "broken"]);
     expect(broken.exitCode).toBe(1);
     expect(broken.output).toContain('modern/broken returned status "fail": disk full');
+    // Printed once (by the runner), not again by the run command.
+    expect(broken.output.split('modern/broken returned status "fail": disk full').length - 1).toBe(
+      1,
+    );
   } finally {
     dispose(dir);
   }

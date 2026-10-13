@@ -120,7 +120,7 @@ test("static apiVersion that differs from the instance field is rejected with th
     async run() {}
   }
   expect(() => new PluginRegistry().register(new StaticOnly())).toThrow(
-    'Plugin "st": static apiVersion is ignored by bolt (static 2, instance 1). Fix: remove the static field and use the instance field `apiVersion = 2;`.',
+    'Plugin "st": static apiVersion conflicts with the instance field (static 2, instance 1). Fix: remove the static field and use the instance field `apiVersion = 2;`.',
   );
 });
 
@@ -134,7 +134,7 @@ test("static apiVersion equal to the instance field only warns", () => {
   const reg = new PluginRegistry();
   reg.register(new Both());
   expect(reg.warnings).toEqual([
-    'Plugin "both": static apiVersion is ignored by bolt. Remove it; the instance field `apiVersion = 1;` already declares the version.',
+    'Plugin "both": static apiVersion is redundant (bolt reads only the instance field). Remove it; the instance field `apiVersion = 1;` already declares the version.',
   ]);
 });
 

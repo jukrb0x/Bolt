@@ -461,7 +461,10 @@ export function assertPluginApiVersion(plugin: { namespace?: string; apiVersion?
 /**
  * Class plugins declare the version with the instance field. A `static apiVersion`
  * is invisible to older bolts, so it is rejected when it disagrees with the
- * instance field and warned about when it agrees.
+ * instance field and warned about when it agrees. A conflict fails plugin loading
+ * (the whole run), not just the tasks that use the plugin: the registry loads every
+ * plugin up front, the same as for an unsupported apiVersion, so a broken plugin is
+ * reported before any step runs instead of part-way through a flow.
  */
 export function checkStaticApiVersion(plugin: object): string | undefined {
   const ctor = (plugin as { constructor?: unknown }).constructor;
@@ -473,10 +476,10 @@ export function checkStaticApiVersion(plugin: object): string | undefined {
   const instanceVersion = (plugin as { apiVersion?: unknown }).apiVersion;
   if (staticVersion !== instanceVersion) {
     throw new Error(
-      `Plugin "${name}": static apiVersion is ignored by bolt (static ${JSON.stringify(staticVersion)}, instance ${JSON.stringify(instanceVersion)}). Fix: remove the static field and use the instance field \`apiVersion = ${JSON.stringify(staticVersion)};\`.`,
+      `Plugin "${name}": static apiVersion conflicts with the instance field (static ${JSON.stringify(staticVersion)}, instance ${JSON.stringify(instanceVersion)}). Fix: remove the static field and use the instance field \`apiVersion = ${JSON.stringify(staticVersion)};\`.`,
     );
   }
-  return `Plugin "${name}": static apiVersion is ignored by bolt. Remove it; the instance field \`apiVersion = ${JSON.stringify(instanceVersion)};\` already declares the version.`;
+  return `Plugin "${name}": static apiVersion is redundant (bolt reads only the instance field). Remove it; the instance field \`apiVersion = ${JSON.stringify(instanceVersion)};\` already declares the version.`;
 }
 
 /**

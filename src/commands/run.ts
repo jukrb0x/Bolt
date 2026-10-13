@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
-import { Runner } from "../runner";
+import { Runner, wasReported } from "../runner";
 import { Logger } from "../logger";
 import { Notifier } from "../notify";
 import path from "path";
@@ -467,7 +467,8 @@ export default defineCommand({
       logger.close();
       process.exit(0);
     } catch (e: any) {
-      logger.error(e.message);
+      // A failed step is already printed by the runner; print only other errors.
+      if (!wasReported(e)) logger.error(e.message);
       if (logFile) logger.info(`Log: ${logFile}`);
       logger.close();
       process.exit(1);
