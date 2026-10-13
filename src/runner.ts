@@ -109,11 +109,14 @@ export class Runner {
     ].join("");
 
     let gitBranch: string | undefined;
-    try {
-      const proc = this.runtime.spawnSync(["git", "branch", "--show-current"]);
-      if (proc.exitCode === 0) gitBranch = proc.stdout.trim() || undefined;
-    } catch {
-      /* not a git repo or git not available */
+    // Dry-run spawns nothing: skip the git branch lookup (notifications are off anyway).
+    if (!this.opts.dryRun) {
+      try {
+        const proc = this.runtime.spawnSync(["git", "branch", "--show-current"]);
+        if (proc.exitCode === 0) gitBranch = proc.stdout.trim() || undefined;
+      } catch {
+        /* not a git repo or git not available */
+      }
     }
 
     return { buildId, projectName: this.cfg.project.name, mode: "run", gitBranch, startTime };
@@ -223,7 +226,11 @@ export class Runner {
           .map(([key, value]) => `${key}=${value}`)
           .join("  ");
         this.opts.logger?.step_detail(`local: ${node.ref}${paramText ? `  ${paramText}` : ""}`);
-        await this.runLocalAction(node.ref, node.params);
+        if (this.opts.dryRun) {
+          this.opts.logger?.step_detail(`[dry-run] would run local action ${node.ref}`);
+        } else {
+          await this.runLocalAction(node.ref, node.params);
+        }
         continue;
       }
 
