@@ -178,7 +178,7 @@ export function generateAiContext(
   lines.push(`## Flags`);
   lines.push(``);
   lines.push(
-    `- \`--dry-run\` — skips \`run:\` steps and local actions, but still calls plugin handlers in the current version. Use \`bolt inspect\` first to show the plan, and get the user's consent before running \`--dry-run\`.`,
+    `- \`--dry-run\` — pure preview: prints each step as \`would run …\`; no commands, plugins, hooks, or handlers run and no files are written. \`--simulate\` runs plugin hooks and handlers with \`ctx.dryRun = true\` and may have side effects; get the user's consent before running it.`,
   );
   lines.push(
     `- \`--key=value\` — pass parameters to the run (e.g. \`--target=client --config=debug\`)`,

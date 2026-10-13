@@ -211,7 +211,7 @@ interface BoltPluginContext {
 
 `runtime` is `spawn`, `spawnSync`, `shell`, and `parseYaml`.
 
-`dryRun` is true when `--dry-run` was passed. Return before side effects.
+`dryRun` is true when `--simulate` was passed (or `dryRun: true` in the library API, which still behaves like `--simulate`; a pure library dry run is tracked as BOLT-DX-3). Return before side effects. `--dry-run` never loads plugins, so handlers and hooks are not called.
 
 For unit tests, `createTestContext(overrides?)` returns a context with a silent logger, a runtime stub, and `emit` recording into `.events`.
 

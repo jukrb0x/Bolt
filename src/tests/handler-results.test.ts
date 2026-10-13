@@ -275,14 +275,14 @@ test("v2 fail → onAfterStep runs before HANDLER_FAILED", async () => {
   });
   expect(order).toEqual(["handler", "after", "thrown"]);
   expect(err.code).toBe("HANDLER_FAILED");
-  expect(err.message).toBe('failing/run returned status "fail": disk full');
+  expect(err.message).toBe('t > failing/run returned status "fail": disk full');
 });
 
 test("v2 fail without summary gets a default message", async () => {
   const err = await harness([v2(async () => ({ status: "fail" }))])
     .run()
     .catch((e) => e);
-  expect(err.message).toBe('modern/run returned status "fail" without summary');
+  expect(err.message).toBe('t > modern/run returned status "fail" without summary');
 });
 
 test("v2 fail follows continue_on_fail like a throw", async () => {

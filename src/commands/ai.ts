@@ -1,6 +1,5 @@
 import { defineCommand } from "citty";
-import { findConfig } from "../discover";
-import { loadConfig } from "../config";
+import { loadProjectConfigOrExit } from "../project-config";
 import { generateAiContext } from "../ai-context";
 import { buildRegistry } from "../plugin-registry";
 import { builtinPlugins } from "../plugins";
@@ -17,13 +16,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const configPath = await findConfig(process.cwd());
-    if (!configPath) {
-      console.error("[ERROR] bolt.yaml not found");
-      process.exit(1);
-    }
-
-    const cfg = await loadConfig(configPath);
+    const { configPath, cfg } = await loadProjectConfigOrExit();
     const configDir = path.dirname(path.resolve(configPath));
     const registry = await buildRegistry(cfg, configDir, Object.values(builtinPlugins));
     const content = generateAiContext(cfg, configPath, registry);

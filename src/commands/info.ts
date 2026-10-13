@@ -1,6 +1,5 @@
 import { defineCommand } from "citty";
-import { findConfig } from "../discover";
-import { loadConfig } from "../config";
+import { loadProjectConfigOrExit } from "../project-config";
 import pc from "picocolors";
 
 function row(label: string, value: string) {
@@ -10,12 +9,7 @@ function row(label: string, value: string) {
 export default defineCommand({
   meta: { name: "info", description: "Print project config summary from bolt.yaml" },
   async run() {
-    const configPath = await findConfig(process.cwd());
-    if (!configPath) {
-      console.error("bolt.yaml not found");
-      process.exit(1);
-    }
-    const cfg = await loadConfig(configPath);
+    const { configPath, cfg } = await loadProjectConfigOrExit();
 
     console.log(pc.dim(`bolt.yaml: ${configPath}`));
     console.log("");

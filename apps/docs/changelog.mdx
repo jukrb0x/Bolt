@@ -15,7 +15,7 @@ following now fail with `[ERROR] …` and exit code `2` before anything runs:
 3. **Param values starting with `--`**: `bolt run build --extra=--verbose` used to pass `--verbose` as the value. It now fails with exit code `2`: `Param value for "--extra" may not start with "--". Pass it after a "--" separator instead: bolt run ... -- extra=--verbose`
 4. **`bolt inspect --dry-run`**: `inspect` never executes, so it no longer accepts the flag. It fails with `Unknown flag "--dry-run" for "bolt inspect": bolt inspect never executes, it is already a side-effect-free preview. Remove --dry-run.`
 5. **Flags before the command**: `bolt --dry-run run deploy` used to drop the flag and **execute**. Only `-h`, `--help`, and `--version` are allowed before the command. A near miss such as `bolt --verison` suggests the match: `Unknown global flag "--verison". Did you mean "--version"?`. Help wins (`bolt --help --version` shows help, exit 0); `--version` otherwise must be alone and takes no value.
-6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`
+6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` and `--simulate` (added by BOLT-P0-1, see below) are implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use my_plan and pass -- my_plan=x.`
 7. **`help` is also reserved after the command**, in addition to the 7 reserved names above (it is handled separately): `--help=<value>` and `help=<value>` after `--` used to be passed as a task param (so `bolt run mark --help=1` **ran the task**). Now `--help=1` fails with `--help takes no value. Use: bolt run --help. …`, and `-- help=1` fails with `"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=1.` Bare `--help` / `-h` still show help.
 
 Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary params.
@@ -26,6 +26,56 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 9. **Unknown task or flow**: `bolt run mrk` / `bolt inspect mrk` exited `1` with `Unknown task or flow: "mrk"`. They now exit `2` with `Unknown task "mrk". Did you mean "mark"?` followed by the project's tasks and flows, before any log file is created. When the only match differs by case (`bolt run Mark` → `mark`), the message adds `Task names are case-sensitive.`
 10. **No task given**: `bolt run` / `bolt inspect` without a name exited `1` with a fixed `bolt run build start` example. They now exit `2` and list the project's actual tasks and flows (`Example: bolt run <first task>`); outside a project they point to `bolt list` / `bolt init`.
 
+### Breaking: `--dry-run` runs nothing and writes nothing (BOLT-P0-1)
+
+This supersedes the #27 change below. `bolt run … --dry-run` is now a
+pure static preview: it reads `bolt.yaml`, resolves the plan like `bolt inspect`, and
+prints every step as `would run …`. It no longer:
+
+- imports, compiles, or installs plugins (no `.bolt/.cache`, no `bun install`);
+- calls plugin `onInit`, `onBeforeStep`, `onAfterStep`, or handlers;
+- reaches local actions at all (`uses: ./…`); #27 already stopped running them, and a dry run now only checks that `action.yaml` and a run script exist;
+- spawns any process, including `git` for notifications;
+- creates `.bolt/` or writes a log file under `.bolt/logs/`.
+
+The output ends with `Nothing was executed …` and points to `--simulate`. Built-in
+handler params are validated against their schema (a misspelled key such as `dest`
+for `fs/copy` is reported as `missing param "dst" (you passed "dest"; did you mean "dst"?)`),
+and `call:` targets and local action scripts are checked. Config problems a real run would
+hit (unknown plugin namespace or op, bad built-in params, missing action script) are marked
+with `!` and exit `3`. Third-party plugin params are not validated and are not an error.
+A `plugins:` entry whose `path` does not exist is also reported. Param values with spaces
+are quoted in the output (`dest="b c"`). A dry run cannot show
+the exact command a plugin handler builds (for example the `Build.bat` line from
+`ue/build`), because the handler is not called.
+
+New flag `--simulate`: the previous plugin-level preview. Plugins load and their hooks
+and handlers run with `ctx.dryRun = true`; `run:` steps and local actions are skipped;
+a missing `action.yaml` or run script still fails the step; a log file is written;
+notifications are not sent. Plugins may still have side effects.
+`--dry-run` and `--simulate` cannot be combined. With the library API, `dryRun: true`
+still behaves like `--simulate` (plugins load and hooks run), and now also skips local
+actions; a pure library dry run is tracked as BOLT-DX-3.
+
+### Breaking: exit code `3` for config errors (BOLT-P0-1)
+
+`bolt.yaml` missing, unparseable, failing the schema, or describing an invalid task
+graph (unknown `call:` target, call cycle, malformed `uses:` ref, legacy `task/<name>`)
+now exits `3` instead of `1`, before anything runs and before a log file is created.
+This applies to `bolt run` (with or without `--dry-run`), `inspect`, `list`, `info`,
+`check`, `ai`, `plugin list`, `migrate`, and `config` (when `bolt.yaml` is missing;
+`bolt config` still creates it from `bolt.template.yaml` when that exists). Both now print
+the same `[ERROR] bolt.yaml not found in …` message as the other commands. `bolt plugin new`
+is unchanged. A `bolt.yaml` that exists but cannot be read also exits `3`, with
+`Permission denied reading <path>. Check the file permissions …` (the error's `code` is
+`CONFIG_UNREADABLE`; missing and invalid files are `CONFIG_NOT_FOUND` and `CONFIG_INVALID`).
+Errors say how to fix them, for example
+`bolt.yaml not found in <dir> or any parent directory.` followed by
+`Run bolt from your project directory, or create one with bolt init.`
+
+Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
+`4` denied (reserved for `AI_FORBIDDEN`, used once AI invocation is enabled).
+
 ### Improved error hints
 
 - Rename hints for a reserved param name now use one neutral form for every name: `my_<name>` with `-` turned into `_` (`plan` → `my_plan`, `dry-run` → `my_dry_run`, `help` → `my_help`).
@@ -34,6 +84,37 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 - `bolt run --help`, `bolt plugin new --help` and other command help now show `USAGE bolt run …` instead of the script path (for example `/$bunfs/root/bolt`).
 - Short mistypes no longer guess wildly (`bolt x` / `bolt run d` give no suggestion). Adjacent letter swaps still suggest (`mrak` → `mark`, `buidl` → `build`). Ambiguous prefixes list matches (`Did you mean "build" or "build-editor"?`). Long task lists truncate after 10 names in declaration order (`and N more (see bolt list)`).
 - Common mix-ups: `bolt help` → `bolt --help`; `bolt update` / `upgrade` → `bolt self-update`; `bolt build` (when `build` is a task) → `bolt run build`. `bolt plugin` with no subcommand exits `2` with the subcommand list. A flow typo says `Unknown flow "…"`.
+
+### Fixed
+
+- `--simulate` and real runs (this also affects `main` and earlier releases) with a misspelled built-in param, for example
+  `uses: fs/copy` with `dest:` instead of `dst:`, printed the native error
+  `The "paths[1]" property must be of type string` twice. It now prints once:
+  `Invalid params for "fs/copy": missing param "dst" (you passed "dest"; did you mean "dst"?)`,
+  lists the handler's params, and says to fix the step's `with:` in `bolt.yaml`.
+  Built-in `fs`, `json`, `git`, and `svn` handlers now validate their params before
+  running. Keys a handler does not use (for example run-wide `--key=value` params) are
+  still allowed.
+
+### Migration: exit codes (#30 and BOLT-P0-1)
+
+| Code | Meaning                                                                                                                                      | Before                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `0`  | Success                                                                                                                                      | `0`                                 |
+| `1`  | Task failure (a step failed while running)                                                                                                   | `1`                                 |
+| `2`  | Usage error: unknown command, flag, task, or flow; malformed param; no task given; `bolt plugin` with no subcommand                          | `1`                                 |
+| `3`  | Config error: `bolt.yaml` missing, unreadable, unparseable, failing the schema, invalid task graph, or a config problem found by `--dry-run` | `1` (`0` for some dry-run problems) |
+| `4`  | Denied: reserved for `AI_FORBIDDEN` (AI permission / confirmation, with the AI features); not used for config files                          | -                                   |
+
+- `bolt run x || exit`, `bolt run x || …`, and `if ! bolt run x` are **unchanged**:
+  any non-zero still fails.
+- Scripts that used `if [ $? -eq 1 ]` or PowerShell `if ($LASTEXITCODE -eq 1)` to
+  mean "any failure" should use `-ne 0` instead (same operator in bash and PowerShell).
+- Scripts that used `-eq 1` to detect a broken or missing `bolt.yaml` must check
+  `-eq 3` instead. `bolt check` exits `3` when `bolt.yaml` is invalid or missing.
+- To tell failures apart: `1` = a task failed, `2` = fix the command line,
+  `3` = fix `bolt.yaml` (including its file permissions), `4` = denied (AI permission or
+  confirmation).
 
 ### Migration
 
@@ -56,21 +137,13 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
   everywhere at once: the step `with:` keys and every `${{ params.help }}`
   reference in `bolt.yaml`, and on the command line (`-- my_help=foo`).
 - Move flags placed before the command to after it: `bolt run deploy --dry-run`.
-- **Exit codes for usage mistakes are now `2`** (unknown command, unknown task/flow,
-  missing task, `bolt plugin` with no subcommand, strict flag errors). Task failures
-  still exit `1`.
-
-  - `bolt run x || exit`, `bolt run x || …`, and `if ! bolt run x` are **unchanged** (any non-zero still fails).
-  - Scripts that used `if [ $? -eq 1 ]` or PowerShell `if ($LASTEXITCODE -eq 1)` to
-    mean "any failure" should use `-ne 0` instead (same operator in bash and PowerShell).
-  - To distinguish usage errors from task failures: `2` = usage, `1` = task failure.
-  - Config errors (`bolt.yaml` missing/invalid) will exit `3` in this same release,
-    shipping together with **BOLT-P0-1**. Until BOLT-P0-1 lands on main they still
-    exit `1`; do not treat exit `1` as "config error".
+- **Relying on `--dry-run` to run plugin code** (hooks, handler dry-run logging,
+  compiling a project plugin, `bun install`, or a log file): use `--simulate`
+  instead. To build a project plugin or install its dependencies, run a real task once.
 
 ### Changed
 
-- `--dry-run` skips `run:` steps and local actions, but still loads plugins and calls plugin hooks and handlers (with `ctx.dryRun=true`). Previously it could also run local actions.
+- (#27, superseded by BOLT-P0-1 above) `--dry-run` skipped `run:` steps and local actions but still loaded plugins and called plugin hooks and handlers (with `ctx.dryRun=true`); previously it could also run local actions. That plugin-level preview is now `--simulate`; `--dry-run` runs no plugin code at all.
 
 ### Plugin API v2: Added
 
@@ -86,7 +159,7 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 - **Built-in git/svn AI permissions changed.** These handlers used to be `ai: false` for everything. Now: `git/info` and `svn/info` are `ai: true` (read-only; for AI invocations `path` must be inside the project directory); `git/status` and `svn/status` are `ai: "confirm"` (`git status` runs the repository's `core.fsmonitor` command); `git/pull`, `git/checkout`, `git/clone`, `svn/update`, `svn/cleanup`, `svn/revert`, `svn/commit`, and `svn/add` stay `ai: false`. This changes `.bolt/ai-context.md` and its context hash.
 - Built-in git and svn are now plugin API v2 plugins tagged `vcs.sync` (`git/pull`, `svn/update`) and `vcs.info` (`git/info`, `svn/info`). `git/info`, `git/status`, `svn/info`, and `svn/status` declare a `path` param schema, so a missing `path` is reported as a param error.
 - `git/info` and `svn/info` with a `path` outside the project directory: human runs behave as before and succeed, but now print a warning that AI invocations will reject the path, with the fix. `ue/info` is unchanged and still reads engine and project paths anywhere.
-- **AI invocations of `git/info` and `svn/info` reject a `path` outside the project directory** with `AI_FORBIDDEN` (exit code `4`, permission denied) and a fix (use a path under the project, or a `run:` step for other repositories).
+- **AI invocations of `git/info` and `svn/info` reject a `path` outside the project directory** with `AI_FORBIDDEN` (exit code `4`, denied) and a fix (use a path under the project, or a `run:` step for other repositories).
 - **Migration: `git/info` and `svn/info` resolve a relative `path` against the `bolt.yaml` directory**, not the current working directory. Example: with `bolt.yaml` in `/proj` and running from `/proj/tools`, `path: ../Engine` used to resolve to `<cwd>/../Engine` (`/proj/Engine`); it now resolves to `<bolt.yaml dir>/../Engine` (`/Engine`). To keep the old target, use an absolute path or adjust the relative path so it is relative to the `bolt.yaml` directory (here `path: Engine`).
 - Plugin API version errors now list the supported versions and, for a newer plugin, tell you to run `bolt self-update`. A class plugin with a `static apiVersion` that differs from its instance field is rejected; a matching one warns.
 - Manifest format is now 2. After upgrading, run `bolt ai` to regenerate `.bolt/ai-context.md`; `bolt run` warns (`AI_CONTEXT_STALE`) until you do.

@@ -33,6 +33,22 @@ export function formatPlanErrors(errors: PlanError[]): string {
   return errors.map((error) => `${error.path}: ${error.message}`).join("\n");
 }
 
+/**
+ * Static check of a `uses:` reference. Local actions start with `./` or `../`; everything
+ * else must be `namespace/op`. `task/<name>` is the removed v2.0 form of `call: <name>`.
+ */
+export function usesRefError(ref: string): string | undefined {
+  if (ref.startsWith("./") || ref.startsWith("../")) return undefined;
+  const slash = ref.indexOf("/");
+  if (slash <= 0 || slash === ref.length - 1) {
+    return `Invalid uses format (expected "ns/op" or "./local-action"): "${ref}"`;
+  }
+  if (ref.slice(0, slash) === "task") {
+    return `legacy task reference "${ref}"; replace with "call: ${ref.slice(slash + 1)}"`;
+  }
+  return undefined;
+}
+
 export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResult {
   let names: string[];
   let planName: string | undefined;
@@ -99,6 +115,9 @@ export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResul
         if (!nested.ok) return nested;
         nodes.push({ kind: "call", name: step.call, nodes: nested.nodes });
       } else if ("uses" in step && step.uses !== undefined) {
+        const refError = usesRefError(step.uses);
+        if (refError)
+          return { ok: false, errors: [{ path: `${stepPath}.uses`, message: refError }] };
         nodes.push({ kind: "uses", ref: step.uses, params: effectiveParams });
       }
     }

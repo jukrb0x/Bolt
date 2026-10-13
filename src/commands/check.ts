@@ -3,14 +3,16 @@ import { findConfig } from "../discover";
 import { checkConfig } from "../config";
 import pc from "picocolors";
 import { planMigration } from "./migrate";
+import { CONFIG_EXIT_CODE } from "../exit-codes";
+import { configNotFoundMessage } from "../project-config";
 
 export default defineCommand({
   meta: { name: "check", description: "Validate bolt.yaml against the current schema" },
   async run() {
     const configPath = await findConfig(process.cwd());
     if (!configPath) {
-      console.error(pc.red("bolt.yaml not found"));
-      process.exit(1);
+      console.error(pc.red(`[ERROR] ${configNotFoundMessage(process.cwd())}`));
+      process.exit(CONFIG_EXIT_CODE);
     }
 
     console.log(pc.dim(`bolt.yaml: ${configPath}`));
@@ -47,6 +49,6 @@ export default defineCommand({
         console.log(pc.yellow("\nRun `bolt migrate --dry-run` to see the converted files."));
       }
     }
-    process.exit(1);
+    process.exit(CONFIG_EXIT_CODE);
   },
 });

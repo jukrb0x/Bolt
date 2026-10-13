@@ -1,4 +1,6 @@
 import { defineCommand } from "citty";
+import { CONFIG_EXIT_CODE } from "../exit-codes";
+import { configNotFoundMessage } from "../project-config";
 import { existsSync, copyFileSync } from "fs";
 import path from "path";
 import { findConfig } from "../discover";
@@ -22,8 +24,8 @@ export default defineCommand({
         copyFileSync(templatePath, configPath);
         console.log(`Created bolt.yaml from template.`);
       } else {
-        console.error("No bolt.yaml found in current directory or parent directories.");
-        process.exit(1);
+        console.error(`[ERROR] ${configNotFoundMessage(process.cwd())}`);
+        process.exit(CONFIG_EXIT_CODE);
       }
     }
 

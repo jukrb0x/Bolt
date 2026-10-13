@@ -367,7 +367,11 @@ export async function checkConfig(
   try {
     raw = readFileSync(filepath, "utf8");
   } catch (e: any) {
-    return { ok: false, errors: [{ path: "<file>", message: e.message }], legacy: [] };
+    const message =
+      e?.code === "EACCES" || e?.code === "EPERM"
+        ? `Permission denied reading ${filepath}. Check the file permissions (it must be readable by the current user).`
+        : e.message;
+    return { ok: false, errors: [{ path: "<file>", message }], legacy: [] };
   }
   let parsed: unknown;
   try {

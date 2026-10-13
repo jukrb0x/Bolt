@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
-import { findConfig } from "../discover";
-import { loadConfig, type BoltConfig } from "../config";
+import { loadProjectConfigOrExit } from "../project-config";
+import { CONFIG_EXIT_CODE } from "../exit-codes";
 import { formatPlanNodes } from "../inspect-utils";
 import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
 import {
@@ -25,19 +25,7 @@ export default defineCommand({
       process.exit(USAGE_EXIT_CODE);
     }
 
-    const configPath = await findConfig(process.cwd());
-    if (!configPath) {
-      console.error("[ERROR] bolt.yaml not found");
-      process.exit(1);
-    }
-
-    let cfg: BoltConfig;
-    try {
-      cfg = await loadConfig(configPath);
-    } catch (e: any) {
-      console.error(`[ERROR] ${e.message}`);
-      process.exit(1);
-    }
+    const { configPath, cfg } = await loadProjectConfigOrExit();
 
     const unknown = unknownNamesMessage(cfg, names, "inspect");
     if (unknown) {
@@ -54,8 +42,10 @@ export default defineCommand({
         : { kind: "tasks", names, params };
     const result = resolveRunPlan(cfg, request);
     if (!result.ok) {
-      console.error(`[ERROR] ${formatPlanErrors(result.errors)}`);
-      process.exit(1);
+      printUsageError(
+        `${formatPlanErrors(result.errors)}\n  Fix bolt.yaml, then run bolt inspect again.`,
+      );
+      process.exit(CONFIG_EXIT_CODE);
     }
 
     for (const task of result.plan.tasks) {

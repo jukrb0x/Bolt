@@ -30,9 +30,11 @@ Resolution mirrors `bolt run`:
   (params win), exactly as they would at run time.
 
 Argument parsing is as strict as `bolt run`: unknown flags, reserved names, and param
-values starting with `--` fail with exit code `2`. `--dry-run` (with or without a value)
-is rejected with an explanation: `inspect` never executes, it is already a
-side-effect-free preview, so just drop the flag. Unknown names fail with
+values starting with `--` fail with exit code `2`. `--dry-run` and `--simulate` (with or
+without a value) are rejected with an explanation: `inspect` never executes, it is already a
+side-effect-free preview, so just drop the flag. A missing or invalid `bolt.yaml`, an unknown
+`call:` target, or a call cycle exits `3`. `bolt inspect` prints the same plan as
+`bolt run --dry-run`; it never loads plugins, spawns processes, or writes files. Unknown names fail with
 `Unknown task "mrk". Did you mean "mark"?` (and `Task names are case-sensitive.` when
 the only match differs by case), and `bolt inspect` without a name lists
 the project's tasks. Pass such values after `--`:

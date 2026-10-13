@@ -1,5 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { Runner } from "../runner";
+import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import path from "path";
 import { mockRuntime, testCfg } from "./env";
 import type { Runtime } from "../runtime/types";
 import type { BoltConfig } from "../config";
@@ -398,10 +400,20 @@ function recordingRuntime(calls: string[]): Runtime {
   };
 }
 
+// Local action refs resolve against the project dir (cwd). Create the action
+// inside it so the ref stays relative; a tmpdir on another drive (Windows CI)
+// has no relative path from the project.
+const actionDir = mkdtempSync(path.join(process.cwd(), ".bolt-test-action-"));
+afterAll(() => rmSync(actionDir, { recursive: true, force: true }));
+writeFileSync(path.join(actionDir, "action.yaml"), "name: a\n");
+writeFileSync(path.join(actionDir, "run.sh"), "#!/bin/sh\nexit 9\n");
+const actionRef = `./${path.basename(actionDir)}`;
+
 const localCfg: BoltConfig = {
   ...testCfg,
   tasks: {
-    local: [{ uses: "./actions/does-not-exist", with: { mode: "x" } }, { run: "echo hi" }],
+    local: [{ uses: actionRef, with: { mode: "x" } }, { run: "echo hi" }],
+    missing: [{ uses: "./actions/does-not-exist" }],
   },
 };
 
@@ -414,8 +426,14 @@ test("dry-run does not execute local actions, shell steps, or git", async () => 
     onStep: (s) => ran.push(s),
   });
   await runner.runTask("local");
-  expect(ran).toEqual(["./actions/does-not-exist", "echo hi"]);
+  expect(ran).toEqual([actionRef, "echo hi"]);
   expect(calls).toEqual([]);
+});
+
+test("dry-run (simulate) still reports a missing local action, with task and step", async () => {
+  const runner = new Runner(localCfg, { dryRun: true, runtime: recordingRuntime([]) });
+  const err = await runner.runTask("missing").catch((e) => e);
+  expect(err.message).toStartWith("missing > ./actions/does-not-exist: No action.yaml in ");
 });
 
 test("a real run still looks up the git branch and runs shell steps", async () => {

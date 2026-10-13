@@ -125,16 +125,17 @@ bolt run daily                      # flow: run a predefined goal
 bolt run build --target=client      # params (replace old variants)
 bolt run build --config=debug       # build configuration param
 bolt run build --config=debuggame   # aliases: dbggame, DebugGame
-bolt run update build --dry-run     # skip run: steps; plugins still run
+bolt run update build --dry-run     # pure preview: nothing runs, nothing is written
 ```
 
 ### Flags
 
-| Flag           | Effect                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------- |
-| `--dry-run`    | Skip `run:` steps and local actions; plugin handlers still run                            |
-| `--key=value`  | Pass a parameter to the whole run (e.g. `--target=client`)                                |
-| `-- key=value` | Params after a bare `--`; use when the value starts with `--` (e.g. `-- extra=--verbose`) |
+| Flag           | Effect                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| `--dry-run`    | Pure preview: prints each step as `would run …`; no commands, plugins, hooks, handlers, or file writes |
+| `--simulate`   | Loads plugins and runs hooks and handlers with `ctx.dryRun = true`; may have side effects              |
+| `--key=value`  | Pass a parameter to the whole run (e.g. `--target=client`)                                             |
+| `-- key=value` | Params after a bare `--`; use when the value starts with `--` (e.g. `-- extra=--verbose`)              |
 
 Flags go after the command (`bolt run build --dry-run`, never `bolt --dry-run run build`). Unknown flags, `--dry-run=<value>`, values starting with `--`, and reserved names (`dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user`; plus `help`, handled separately) as params fail with exit code 2. Unknown commands and task names also exit 2 with `Did you mean "<name>"?` and the available names; `bolt run` with no name lists the project's tasks (use `bolt list` for details). If a param clashes with a reserved name, rename it to `my_<name>`. Reserved names are case-sensitive.
 
@@ -148,7 +149,7 @@ bolt info                    # project and VCS summary
 
 ## Safety Rules
 
-1. **Use `bolt inspect` first** to show the user the plan for build, update, or any destructive operation. In the current version `--dry-run` still calls plugin handlers, so get the user's consent before running it too.
+1. **Use `bolt inspect` first** to show the user the plan for build, update, or any destructive operation. `bolt run <task> --dry-run` is also a pure preview (no plugins, hooks, or handlers run, no files are written) and is safe to run without asking. `--simulate` runs plugin code, so get the user's consent before running it.
 2. **Never run a `kill` task without confirmation** — it terminates all running UE processes.
 3. **Respect fail-fast** — flows abort on the first failing task by default; do not work around an aborted flow (e.g. by re-running downstream tasks) unless the user explicitly asks.
 4. **Do not modify bolt.yaml / bolt.local.yaml** unless the user explicitly asks. Configuration changes can break workflows.
