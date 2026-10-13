@@ -594,6 +594,7 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       [["run", "mark", "--", "--execute"], "Malformed param"],
       [["inspect", "mark", "--bogus"], 'Unknown flag "--bogus" for "bolt inspect"'],
       [["--dry-run", "run", "mark"], 'Unknown global flag "--dry-run"'],
+      [["--verison"], 'Did you mean "--version"?'],
       [["-x", "run", "mark"], 'Unknown global flag "-x"'],
       [
         ["run", "mark", "--plan=x"],
@@ -661,8 +662,13 @@ test("DX-1: suggest commands and tasks, clear usage, no script path (exit 2, not
       ],
       [["inspec", "mark"], ['Unknown command "inspec". Did you mean "inspect"?'], ["USAGE"]],
       [["plugin", "nw"], ['Unknown command "nw". Did you mean "new"?'], ["USAGE"]],
-      [["run", "mrk"], ['Unknown task "mrk". Did you mean "mark"?', "Tasks: "], []],
-      [["inspect", "mrk"], ['Unknown task "mrk". Did you mean "mark"?'], []],
+      [["run", "mrk"], ['Unknown task "mrk". Did you mean "mark"?', "Tasks: "], ["case-sensitive"]],
+      [["inspect", "mrk"], ['Unknown task "mrk". Did you mean "mark"?'], ["case-sensitive"]],
+      [
+        ["run", "Mark"],
+        ['Unknown task "Mark". Did you mean "mark"? Task names are case-sensitive.', "Tasks: "],
+        [],
+      ],
       [["run"], ["Usage: bolt run <task...|flow>", "Example: bolt run "], ["build start"]],
       [["inspect"], ["Usage: bolt inspect <task...|flow>"], []],
       [["run", "mark", "--", "dry-run=false"], ["To run for real, just remove --dry-run"], []],
@@ -671,6 +677,16 @@ test("DX-1: suggest commands and tasks, clear usage, no script path (exit 2, not
       [["inspect", "mark", "--dry-run"], ["already a side-effect-free preview"], []],
       [["inspect", "mark", "--dry-run=1"], ["already a side-effect-free preview"], []],
       [["run", "mark", "--help=1"], ["--help takes no value. Use: bolt run --help"], []],
+      [["--verison"], ['Did you mean "--version"?'], []],
+      [["plugin"], ["No command specified.", "Commands: new, list"], ["USAGE"]],
+      [["help"], ['Did you mean "bolt --help"?'], ["USAGE"]],
+      [["update"], ['Did you mean "bolt self-update"?'], ["USAGE"]],
+      [["mark"], ['Did you mean "bolt run mark"?'], ["USAGE"]],
+      [
+        ["run", "zz", "mrk"],
+        ['[ERROR] Unknown task "zz".', '[ERROR] Unknown task "mrk". Did you mean "mark"?'],
+        [],
+      ],
     ];
     for (const [args, wanted, unwanted] of cases) {
       const result = await bolt(project.dir, args);

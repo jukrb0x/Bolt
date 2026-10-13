@@ -22,7 +22,7 @@ steps; a **flow** is a named, ordered set of tasks. You pass names positionally:
   name is treated as a flow only if it matches a flow; otherwise it must be a task.
 
 If any name is neither a task nor a flow, the run fails before executing anything
-with `Unknown task or flow: "<name>"`, followed by the available tasks and flows.
+with `Unknown task "<name>"` / `Unknown flow "<name>"` (exit code `2`), followed by the available tasks and flows.
 
 Flows are **fail-fast**: the first failing task aborts the flow, unless that task
 is listed in the flow's `continue_on_fail`.
@@ -74,11 +74,15 @@ any step runs:
   (`bolt --help=1` fails with `--help takes no value`).
 - Unknown task or flow names (`bolt run mrk`) fail with
   `Unknown task "mrk". Did you mean "mark"?` and list the project's tasks and flows.
+  When the only match differs by case (`bolt run Mark`), the message adds
+  `Task names are case-sensitive.`
 - No name (`bolt run`) prints the usage with the project's actual tasks and flows;
   outside a project it points to `bolt list` and `bolt init`.
 
 A mistyped command (`bolt rn mark`) fails with exit code `2` and
 `Unknown command "rn". Did you mean "run"?` plus the list of commands.
+A mistyped global flag before the command (`bolt --verison`) suggests
+`Did you mean "--version"?`.
 
 Suggested commands in error messages quote values that contain spaces or shell
 characters, so they can be copied as-is.

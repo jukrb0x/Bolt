@@ -33,7 +33,8 @@ Argument parsing is as strict as `bolt run`: unknown flags, reserved names, and 
 values starting with `--` fail with exit code `2`. `--dry-run` (with or without a value)
 is rejected with an explanation: `inspect` never executes, it is already a
 side-effect-free preview, so just drop the flag. Unknown names fail with
-`Unknown task "mrk". Did you mean "mark"?`, and `bolt inspect` without a name lists
+`Unknown task "mrk". Did you mean "mark"?` (and `Task names are case-sensitive.` when
+the only match differs by case), and `bolt inspect` without a name lists
 the project's tasks. Pass such values after `--`:
 `bolt inspect build -- extra=--verbose`. See
 [strict argument parsing](/cli/run#strict-argument-parsing).

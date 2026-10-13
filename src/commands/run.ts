@@ -7,7 +7,7 @@ import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
 import { VERSION } from "../version";
-import { closest, shellQuote } from "../suggest";
+import { closestMatches, formatDidYouMean, shellQuote } from "../suggest";
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -23,6 +23,13 @@ export interface ParsedRun {
 
 /** Exit code for command-line usage errors (unknown flag, malformed param). */
 export const USAGE_EXIT_CODE = 2;
+
+/** Print a usage error; every line gets an `[ERROR]` prefix (multi-name messages too). */
+export function printUsageError(message: string): void {
+  for (const line of message.split("\n")) {
+    console.error(`[ERROR] ${line}`);
+  }
+}
 
 /** A command-line usage error. Callers print the message and exit with USAGE_EXIT_CODE. */
 export class UsageError extends Error {
@@ -156,8 +163,9 @@ export function reservedParamError(
 const HELP_FLAGS = new Set(["--help", "-h"]);
 
 function suggest(name: string, known: string[]): string {
-  const best = closest(name.replace(/^-+/, ""), known);
-  return best ? ` Did you mean "--${best}"?` : "";
+  const bare = name.replace(/^-+/, "");
+  const matches = closestMatches(bare, known).map((m) => `--${m}`);
+  return formatDidYouMean(matches);
 }
 
 function parseParam(text: string, origin: string): [string, string] {
@@ -266,20 +274,29 @@ export function parseRunArgsOrExit(rawArgs: string[], opts: ParseRunOptions = {}
     return parseRunArgs(rawArgs, opts);
   } catch (e) {
     if (e instanceof UsageError) {
-      console.error(`[ERROR] ${e.message}`);
+      printUsageError(e.message);
       process.exit(USAGE_EXIT_CODE);
     }
     throw e;
   }
 }
 
-function nameList(names: string[]): string {
-  return names.length > 0 ? [...names].sort().join(", ") : "(none)";
+/** Max names shown on a Tasks:/Flows: line before truncating. */
+const NAME_LIST_LIMIT = 10;
+
+function nameList(names: string[], limit = NAME_LIST_LIMIT): string {
+  if (names.length === 0) return "(none)";
+  const sorted = [...names].sort();
+  if (sorted.length <= limit) return sorted.join(", ");
+  const more = sorted.length - limit;
+  return `${sorted.slice(0, limit).join(", ")}, and ${more} more (see bolt list)`;
 }
 
 /**
- * Error for names that are neither a task nor a flow: one `Unknown task "x". Did you mean
- * "y"?` line per name, then the project's tasks and flows. Returns undefined if all known.
+ * Error for names that are neither a task nor a flow: one line per name with a "Did you
+ * mean" hint (plus "Task names are case-sensitive." when the only match differs only by
+ * case). Uses `Unknown flow` when the best match is a flow, otherwise `Unknown task`.
+ * Then lists the project's tasks and flows (truncated). Returns undefined if all known.
  */
 export function unknownNamesMessage(
   cfg: BoltConfig,
@@ -288,6 +305,8 @@ export function unknownNamesMessage(
 ): string | undefined {
   const tasks = Object.keys(cfg.tasks);
   const flows = Object.keys(cfg.flows);
+  const taskSet = new Set(tasks);
+  const flowSet = new Set(flows);
   const isFlow = names.length === 1 && cfg.flows[names[0]];
   if (isFlow) return undefined;
   const unknown = names.filter((n) => !cfg.tasks[n]);
@@ -296,8 +315,12 @@ export function unknownNamesMessage(
     if (cfg.flows[n]) {
       return `"${n}" is a flow; a flow runs on its own: bolt ${command} ${n}`;
     }
-    const best = closest(n, [...tasks, ...flows]);
-    return `Unknown task "${n}".${best ? ` Did you mean "${best}"?` : ""}`;
+    const matches = closestMatches(n, [...tasks, ...flows]);
+    const best = matches.length === 1 ? matches[0] : undefined;
+    const caseOnly = best !== undefined && best.toLowerCase() === n.toLowerCase();
+    const kind = best !== undefined && flowSet.has(best) && !taskSet.has(best) ? "flow" : "task";
+    const hint = formatDidYouMean(matches) + (caseOnly ? " Task names are case-sensitive." : "");
+    return `Unknown ${kind} "${n}".${hint}`;
   });
   return (
     `${lines.join("\n")}\n  Tasks: ${nameList(tasks)}\n  Flows: ${nameList(flows)}\n` +
@@ -381,7 +404,7 @@ export default defineCommand({
     const { names, params, dryRun } = parseRunArgsOrExit(rawArgs ?? []);
 
     if (names.length === 0) {
-      console.error(`[ERROR] ${missingNameMessage("run", await loadUsageConfig())}`);
+      printUsageError(missingNameMessage("run", await loadUsageConfig()));
       process.exit(USAGE_EXIT_CODE);
     }
 
@@ -401,7 +424,7 @@ export default defineCommand({
 
     const unknown = unknownNamesMessage(cfg, names);
     if (unknown) {
-      console.error(`[ERROR] ${unknown}`);
+      printUsageError(unknown);
       process.exit(USAGE_EXIT_CODE);
     }
 

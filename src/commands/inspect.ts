@@ -7,6 +7,7 @@ import {
   missingNameMessage,
   parseRunArgsOrExit,
   loadUsageConfig,
+  printUsageError,
   unknownNamesMessage,
   USAGE_EXIT_CODE,
 } from "./run";
@@ -20,7 +21,7 @@ export default defineCommand({
   async run({ rawArgs }) {
     const { names, params } = parseRunArgsOrExit(rawArgs ?? [], { flags: [], command: "inspect" });
     if (names.length === 0) {
-      console.error(`[ERROR] ${missingNameMessage("inspect", await loadUsageConfig())}`);
+      printUsageError(missingNameMessage("inspect", await loadUsageConfig()));
       process.exit(USAGE_EXIT_CODE);
     }
 
@@ -40,7 +41,7 @@ export default defineCommand({
 
     const unknown = unknownNamesMessage(cfg, names, "inspect");
     if (unknown) {
-      console.error(`[ERROR] ${unknown}`);
+      printUsageError(unknown);
       process.exit(USAGE_EXIT_CODE);
     }
 
