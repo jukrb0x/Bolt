@@ -375,7 +375,14 @@ try {
   $clmScript = Join-Path $ScratchRoot "clm.ps1"
   $installText = Join-Path $Root "install.ps1"
   [System.IO.File]::WriteAllText($clmScript, "`$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'`nInvoke-Expression (Get-Content -Raw -LiteralPath '$installText')`n")
-  $clmOut = (& $HostExe -NoProfile -ExecutionPolicy Bypass -File $clmScript 2>&1 | Out-String) -replace '\s+', ' '
+  # Windows PowerShell 5.1 turns redirected native stderr into an error under Stop.
+  $savedEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $clmOut = (& $HostExe -NoProfile -ExecutionPolicy Bypass -File $clmScript 2>&1 | Out-String) -replace '\s+', ' '
+  } finally {
+    $ErrorActionPreference = $savedEap
+  }
   Write-Host $clmOut
   if ($LASTEXITCODE -eq 0) { throw "install.ps1 succeeded in Constrained Language Mode" }
   if ($clmOut -notmatch "needs PowerShell FullLanguage mode") { throw "install.ps1 did not explain Constrained Language Mode" }
