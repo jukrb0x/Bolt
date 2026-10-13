@@ -81,6 +81,21 @@ test("run-wide params that a built-in does not use are not an error", () => {
   expect(report.problems).toEqual([]);
 });
 
+test("a plugins: path that does not exist is a problem; values with spaces are quoted", () => {
+  const withPlugin: BoltConfig = {
+    ...cfg,
+    plugins: [{ namespace: "gone", path: "./nope.ts" }],
+    tasks: { t: [{ uses: "gone/go" }, { uses: "fs/copy", with: { src: "a b", dst: "c" } }] },
+  };
+  const r = resolveRunPlan(withPlugin, { kind: "tasks", names: ["t"], params: {} });
+  if (!r.ok) throw new Error("plan failed");
+  const report = renderDryRun(withPlugin, r.plan, { configDir: root, cwd: root, home });
+  expect(report.problems).toEqual([
+    'Plugin "gone" is declared in bolt.yaml plugins: with path ./nope.ts, which does not exist. Fix the path in bolt.yaml.',
+  ]);
+  expect(report.lines).toContain('  would run uses: fs/copy  src="a b"  dst=c');
+});
+
 test("dry-run step lines match bolt inspect lines", () => {
   const { plan, report } = render(["nested", "plugins"]);
   const inspect = plan.tasks.flatMap((t) => [`>> ${t.name}`, ...formatPlanNodes(t.nodes, 1)]);

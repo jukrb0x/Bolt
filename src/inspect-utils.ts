@@ -1,3 +1,4 @@
+import { shellQuote } from "./suggest";
 import type { PlanNode } from "./run-plan";
 
 export function formatPlanNodes(nodes: PlanNode[], depth = 0): string[] {
@@ -8,7 +9,7 @@ export function formatPlanNodes(nodes: PlanNode[], depth = 0): string[] {
     }
     if (node.kind === "run") return [`${pad}run: ${node.command}`];
     const params = Object.entries(node.params)
-      .map(([k, v]) => `${k}=${v}`)
+      .map(([k, v]) => `${k}=${shellQuote(v)}`)
       .join("  ");
     return [`${pad}uses: ${node.ref}${params ? `  ${params}` : ""}`];
   });

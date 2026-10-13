@@ -154,10 +154,10 @@ interface Outcome {
 
 let f: Fixture;
 beforeAll(() => {
-  if (posix) f = makeFixture();
+  f = makeFixture();
 });
 afterAll(() => {
-  if (posix) rmSync(f.root, { recursive: true, force: true });
+  rmSync(f.root, { recursive: true, force: true });
 });
 
 async function runCase(cwd: string, args: string[]): Promise<Outcome> {
@@ -174,7 +174,7 @@ async function runCase(cwd: string, args: string[]): Promise<Outcome> {
       ...process.env,
       HOME: f.home,
       USERPROFILE: f.home,
-      PATH: `${f.bin}:${process.env.PATH}`,
+      PATH: `${f.bin}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`,
       NO_COLOR: "1",
     },
     stdout: "pipe",
@@ -217,7 +217,9 @@ function expectPure(o: Outcome): void {
   expect(o.exitCode).toBe(0);
 }
 
-describe.skipIf(!posix)("BOLT-P0-1 dry-run is pure", () => {
+// Dry-run and inspect never execute anything, so these run on every platform. Only the
+// strace check (inside runCase) is Linux-only.
+describe("BOLT-P0-1 dry-run is pure", () => {
   test("D-01 run: steps only: full plan, no writes, no spawns", async () => {
     const o = await runCase(f.proj, ["run", "shell", "--dry-run"]);
     expectPure(o);
@@ -279,7 +281,10 @@ describe.skipIf(!posix)("BOLT-P0-1 dry-run is pure", () => {
     expectPure(await runCase(f.proj, ["inspect", "all"]));
     expectPure(await runCase(f.fresh, ["inspect", "shell"]));
   });
+});
 
+// The positive controls execute shell scripts (run.sh, the git shim): POSIX only.
+describe.skipIf(!posix)("BOLT-P0-1 positive controls", () => {
   test("D-10 --simulate is the positive control: writes and hooks are detected", async () => {
     const o = await runCase(f.proj, ["run", "plug", "nested", "--simulate"]);
     expect(o.exitCode).toBe(0);
@@ -307,7 +312,7 @@ describe.skipIf(!posix)("BOLT-P0-1 dry-run is pure", () => {
   });
 });
 
-describe.skipIf(!posix)("BOLT-P0-1 config errors exit 3", () => {
+describe("BOLT-P0-1 config errors exit 3", () => {
   const cases: Array<[string, string | undefined, string[]]> = [
     ["missing bolt.yaml", undefined, ["bolt.yaml not found in", "bolt init"]],
     ["unparseable YAML", "version: 1\nproject: [oops\n", ["could not be parsed", "bolt check"]],
@@ -389,14 +394,42 @@ describe.skipIf(!posix)("BOLT-P0-1 config errors exit 3", () => {
     expect((await runCase(dir, ["check"])).exitCode).toBe(3);
   });
 
-  test.skipIf(process.getuid?.() === 0)("an unreadable bolt.yaml exits 4", async () => {
+  // chmod 000 does not make a file unreadable on Windows or for root.
+  test.skipIf(!posix || process.getuid?.() === 0)("an unreadable bolt.yaml exits 3", async () => {
     const dir = mkdtempSync(path.join(f.root, "cfg-"));
     writeFileSync(path.join(dir, "bolt.yaml"), "version: 1\nproject:\n  name: x\ntasks: {}\n");
     chmodSync(path.join(dir, "bolt.yaml"), 0o000);
     const o = await runCase(dir, ["run", "a", "--dry-run"]);
+    const check = await runCase(dir, ["check"]);
     chmodSync(path.join(dir, "bolt.yaml"), 0o644);
-    expect(o.exitCode).toBe(4);
+    expect(o.exitCode).toBe(3);
     expect(o.output).toContain("Permission denied reading");
+    expect(o.output).toContain("Check the file permissions");
+    expect(check.exitCode).toBe(3);
+    expect(check.output).toContain("Check the file permissions");
+  });
+
+  test("a native handler error names the task and step, and is printed once", async () => {
+    const dir = mkdtempSync(path.join(f.root, "cfg-"));
+    mkdirSync(path.join(dir, ".bolt/plugins/boom"), { recursive: true });
+    writeFileSync(
+      path.join(dir, ".bolt/plugins/boom/index.js"),
+      'import { readFileSync } from "fs";\nexport default { namespace: "boom", handlers: { go: async () => { readFileSync("no-such-file.txt"); } } };\n',
+    );
+    writeFileSync(
+      path.join(dir, "bolt.yaml"),
+      "version: 1\nproject:\n  name: x\ntasks:\n  outer:\n    - call: inner\n  inner:\n    - uses: boom/go\n",
+    );
+    for (const args of [
+      ["run", "outer", "--simulate"],
+      ["run", "outer"],
+    ]) {
+      const o = await runCase(dir, args);
+      expect(o.exitCode).toBe(1);
+      const lines = o.output.split("\n").filter((l) => l.includes("no-such-file.txt"));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("outer > inner > boom/go: ENOENT");
+    }
   });
 
   test("a usage error still exits 2 and a task failure exits 1", async () => {

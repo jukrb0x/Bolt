@@ -11,6 +11,7 @@ import jsonPlugin from "./plugins/json";
 import gitPlugin from "./plugins/git";
 import svnPlugin from "./plugins/svn";
 import path from "path";
+import { LOCAL_RUNNERS } from "./local-runners";
 import type { ZodTypeAny } from "zod";
 import { BUILTIN_PARAM_SCHEMAS } from "./plugins/builtin-params";
 import { closestMatches } from "./suggest";
@@ -126,6 +127,41 @@ const reportedErrors = new WeakSet<object>();
 /** Whether `error` was already printed by the runner as a task failure. */
 export function wasReported(error: unknown): boolean {
   return typeof error === "object" && error !== null && reportedErrors.has(error);
+}
+
+const contextualized = new WeakSet<object>();
+
+/**
+ * Prefix a step failure with where it happened: `<task> > <call...> > <ref>: <message>`.
+ * Native errors (ENOENT, TypeError, ...) otherwise carry no task or step. The error object
+ * is kept (so BoltStepError codes and wasReported still work); only its message changes,
+ * and only once.
+ */
+export function withStepContext(error: unknown, where: string): unknown {
+  if (!(error instanceof Error)) return new Error(`${where}: ${String(error)}`);
+  if (contextualized.has(error)) return error;
+  contextualized.add(error);
+  // Avoid "t > fs/copy: fs/copy ..." when the message already starts with the step.
+  const step = where.split(" > ").pop() ?? where;
+  error.message = error.message.startsWith(`${step} `)
+    ? `${where.slice(0, where.length - step.length)}${error.message}`
+    : `${where}: ${error.message}`;
+  return error;
+}
+
+/** The run script a local action would execute; throws if action.yaml or the script is missing. */
+export function resolveLocalAction(actionPath: string): string {
+  const actionDir = path.resolve(actionPath);
+  if (!existsSync(path.join(actionDir, "action.yaml"))) {
+    throw new Error(`No action.yaml in ${actionDir}`);
+  }
+  for (const runner of LOCAL_RUNNERS) {
+    const runFile = path.join(actionDir, runner);
+    if (existsSync(runFile)) return runFile;
+  }
+  throw new Error(
+    `No run script found in ${actionDir} (expected one of ${LOCAL_RUNNERS.join(", ")})`,
+  );
 }
 
 export class Runner {
@@ -312,77 +348,91 @@ export class Runner {
         await this.executeNodes(node.nodes, [...trail, node.name]);
         continue;
       }
-
-      if (node.kind === "run") {
-        this.opts.onStep?.(node.command);
-        this.opts.logger?.step_detail(`run: ${node.command}`);
-        if (!this.opts.dryRun) await this.shell(node.command, node.continueOnError);
-        continue;
+      try {
+        await this.executeStep(node, trail);
+      } catch (error) {
+        const label = node.kind === "run" ? `run: ${node.command}` : node.ref;
+        throw withStepContext(error, [...trail, label].join(" > "));
       }
+    }
+  }
 
-      this.opts.onStep?.(node.ref);
-      if (node.ref.startsWith("./") || node.ref.startsWith("../")) {
-        const paramText = Object.entries(node.params)
-          .map(([key, value]) => `${key}=${value}`)
-          .join("  ");
-        this.opts.logger?.step_detail(`local: ${node.ref}${paramText ? `  ${paramText}` : ""}`);
-        if (this.opts.dryRun) {
-          this.opts.logger?.step_detail(`[dry-run] would run local action ${node.ref}`);
-        } else {
-          await this.runLocalAction(node.ref, node.params);
-        }
-        continue;
-      }
+  private async executeStep(
+    node: Exclude<PlanNode, { kind: "call" }>,
+    trail: string[],
+  ): Promise<void> {
+    if (node.kind === "run") {
+      this.opts.onStep?.(node.command);
+      this.opts.logger?.step_detail(`run: ${node.command}`);
+      if (!this.opts.dryRun) await this.shell(node.command, node.continueOnError);
+      return;
+    }
 
-      const slash = node.ref.indexOf("/");
-      if (slash === -1) {
-        throw new Error(`Invalid uses format (expected "ns/op"): "${node.ref}"`);
-      }
-      const namespace = node.ref.slice(0, slash);
-      const operation = node.ref.slice(slash + 1);
-      if (namespace === "task") {
-        throw new Error(`legacy task reference "${node.ref}"; replace with "call: ${operation}"`);
-      }
-
+    this.opts.onStep?.(node.ref);
+    if (node.ref.startsWith("./") || node.ref.startsWith("../")) {
       const paramText = Object.entries(node.params)
         .map(([key, value]) => `${key}=${value}`)
         .join("  ");
-      this.opts.logger?.step_detail(`${node.ref}${paramText ? `  ${paramText}` : ""}`);
-
-      const registry = await this.ensureRegistry();
-      const plugin = registry.get(namespace);
-      if (!plugin) throw new Error(`Unknown plugin namespace: "${namespace}"`);
-      const handler = plugin.handlers[operation];
-      if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
-
-      const params = parseStepParams(plugin, node.ref, operation, node.params);
-      if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(node.ref)) {
-        for (const key of AI_PATH_RESTRICTED.get(node.ref) ?? []) {
-          this.assertAiPathInProject(node.ref, key, params[key]);
-        }
+      this.opts.logger?.step_detail(`local: ${node.ref}${paramText ? `  ${paramText}` : ""}`);
+      if (this.opts.dryRun) {
+        const runFile = resolveLocalAction(node.ref);
+        this.opts.logger?.step_detail(
+          `[dry-run] would run local action ${node.ref} (${path.basename(runFile)})`,
+        );
+      } else {
+        await this.runLocalAction(node.ref, node.params);
       }
-      const step = [...trail, node.ref].join(" > ");
-      // One context object per step, shared by the hooks and the handler as before.
-      const scope = this.events.scope(node.ref, step);
-      const pluginCtx = scope.bind(this.pluginContext());
-      const pluginInstance = plugin as any;
-      let returned: unknown;
-      try {
-        if (typeof pluginInstance.onBeforeStep === "function") {
-          await pluginInstance.onBeforeStep(operation, node.params, pluginCtx);
-        }
-        try {
-          returned = await handler(params, pluginCtx);
-        } finally {
-          if (typeof pluginInstance.onAfterStep === "function") {
-            await pluginInstance.onAfterStep(operation, node.params, pluginCtx);
-          }
-        }
-      } finally {
-        scope.settle();
-      }
-      this.handleReturn(plugin, node.ref, step, returned);
+      return;
     }
+
+    const slash = node.ref.indexOf("/");
+    if (slash === -1) {
+      throw new Error(`Invalid uses format (expected "ns/op"): "${node.ref}"`);
+    }
+    const namespace = node.ref.slice(0, slash);
+    const operation = node.ref.slice(slash + 1);
+    if (namespace === "task") {
+      throw new Error(`legacy task reference "${node.ref}"; replace with "call: ${operation}"`);
+    }
+
+    const paramText = Object.entries(node.params)
+      .map(([key, value]) => `${key}=${value}`)
+      .join("  ");
+    this.opts.logger?.step_detail(`${node.ref}${paramText ? `  ${paramText}` : ""}`);
+
+    const registry = await this.ensureRegistry();
+    const plugin = registry.get(namespace);
+    if (!plugin) throw new Error(`Unknown plugin namespace: "${namespace}"`);
+    const handler = plugin.handlers[operation];
+    if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
+
+    const params = parseStepParams(plugin, node.ref, operation, node.params);
+    if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(node.ref)) {
+      for (const key of AI_PATH_RESTRICTED.get(node.ref) ?? []) {
+        this.assertAiPathInProject(node.ref, key, params[key]);
+      }
+    }
+    const step = [...trail, node.ref].join(" > ");
+    // One context object per step, shared by the hooks and the handler as before.
+    const scope = this.events.scope(node.ref, step);
+    const pluginCtx = scope.bind(this.pluginContext());
+    const pluginInstance = plugin as any;
+    let returned: unknown;
+    try {
+      if (typeof pluginInstance.onBeforeStep === "function") {
+        await pluginInstance.onBeforeStep(operation, node.params, pluginCtx);
+      }
+      try {
+        returned = await handler(params, pluginCtx);
+      } finally {
+        if (typeof pluginInstance.onAfterStep === "function") {
+          await pluginInstance.onAfterStep(operation, node.params, pluginCtx);
+        }
+      }
+    } finally {
+      scope.settle();
+    }
+    this.handleReturn(plugin, node.ref, step, returned);
   }
 
   /**
@@ -461,22 +511,14 @@ export class Runner {
   }
 
   private async runLocalAction(actionPath: string, params: Record<string, string>): Promise<void> {
-    const actionDir = path.resolve(actionPath);
-    const actionYaml = path.join(actionDir, "action.yaml");
-    if (!existsSync(actionYaml)) throw new Error(`No action.yaml in ${actionDir}`);
+    const runFile = resolveLocalAction(actionPath);
     const env: Record<string, string> = { ...(process.env as any) };
     for (const [k, v] of Object.entries(params)) {
       env[`BOLT_INPUT_${k.toUpperCase()}`] = v;
     }
-    for (const runner of ["run.ts", "run.js", "run.py", "run.sh", "run.bat"]) {
-      const runFile = path.join(actionDir, runner);
-      if (!existsSync(runFile)) continue;
-      const result = await this.runtime.spawn([runFile], { env });
-      if (result.exitCode !== 0) {
-        throw new Error(`Local action failed (exit ${result.exitCode}): ${actionPath}`);
-      }
-      return;
+    const result = await this.runtime.spawn([runFile], { env });
+    if (result.exitCode !== 0) {
+      throw new Error(`Local action failed (exit ${result.exitCode}): ${actionPath}`);
     }
-    throw new Error(`No run script found in ${actionDir}`);
   }
 }
