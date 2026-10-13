@@ -24,10 +24,14 @@ export interface ParsedRun {
 /** Exit code for command-line usage errors (unknown flag, malformed param). */
 export const USAGE_EXIT_CODE = 2;
 
-/** Print a usage error; every line gets an `[ERROR]` prefix (multi-name messages too). */
+/**
+ * Print a usage error. `[ERROR]` prefixes only the actual error lines; indented
+ * supplementary lines (Commands:/Tasks:/Flows:/Run …) are printed as-is.
+ */
 export function printUsageError(message: string): void {
   for (const line of message.split("\n")) {
-    console.error(`[ERROR] ${line}`);
+    if (/^[ \t]/.test(line)) console.error(line);
+    else console.error(`[ERROR] ${line}`);
   }
 }
 
@@ -284,12 +288,12 @@ export function parseRunArgsOrExit(rawArgs: string[], opts: ParseRunOptions = {}
 /** Max names shown on a Tasks:/Flows: line before truncating. */
 const NAME_LIST_LIMIT = 10;
 
+/** Join names in bolt.yaml declaration order (Object key order), truncating after `limit`. */
 function nameList(names: string[], limit = NAME_LIST_LIMIT): string {
   if (names.length === 0) return "(none)";
-  const sorted = [...names].sort();
-  if (sorted.length <= limit) return sorted.join(", ");
-  const more = sorted.length - limit;
-  return `${sorted.slice(0, limit).join(", ")}, and ${more} more (see bolt list)`;
+  if (names.length <= limit) return names.join(", ");
+  const more = names.length - limit;
+  return `${names.slice(0, limit).join(", ")}, and ${more} more (see bolt list)`;
 }
 
 /**

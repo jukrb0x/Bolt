@@ -32,7 +32,7 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
 - Values in suggested commands are quoted when needed, so they copy-paste correctly: `-- plan="yes please"` suggests `-- my_plan="yes please"`.
 - `-- dry-run=false` (or `0`, `no`, `off`) says to just remove `--dry-run` to run for real.
 - `bolt run --help`, `bolt plugin new --help` and other command help now show `USAGE bolt run …` instead of the script path (for example `/$bunfs/root/bolt`).
-- Short mistypes no longer guess wildly (`bolt x` / `bolt run d` give no suggestion). Ambiguous prefixes list matches (`Did you mean "build" or "build-editor"?`). Long task lists truncate after 10 names (`and N more (see bolt list)`).
+- Short mistypes no longer guess wildly (`bolt x` / `bolt run d` give no suggestion). Adjacent letter swaps still suggest (`mrak` → `mark`, `buidl` → `build`). Ambiguous prefixes list matches (`Did you mean "build" or "build-editor"?`). Long task lists truncate after 10 names in declaration order (`and N more (see bolt list)`).
 - Common mix-ups: `bolt help` → `bolt --help`; `bolt update` / `upgrade` → `bolt self-update`; `bolt build` (when `build` is a task) → `bolt run build`. `bolt plugin` with no subcommand exits `2` with the subcommand list. A flow typo says `Unknown flow "…"`.
 
 ### Migration
@@ -60,7 +60,7 @@ Reserved names are case-sensitive: `--PLAN=x` and `-- Plan=x` are ordinary param
   missing task, `bolt plugin` with no subcommand, strict flag errors). Task failures
   still exit `1`.
 
-  - `bolt run x || …` and `if ! bolt run x` are **unchanged** (any non-zero still fails).
+  - `bolt run x || exit`, `bolt run x || …`, and `if ! bolt run x` are **unchanged** (any non-zero still fails).
   - Scripts that used `if [ $? -eq 1 ]` or PowerShell `if ($LASTEXITCODE -eq 1)` to
     mean "any failure" should use `-ne 0` / `-ne 0` instead.
   - To distinguish usage errors from task failures: `2` = usage, `1` = task failure.

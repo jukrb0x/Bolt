@@ -432,11 +432,21 @@ describe("task suggestions and usage", () => {
       'Unknown task "Greet". Did you mean "greet"? Task names are case-sensitive.',
     );
     expect(msg).toContain("Run bolt list for details.");
+    // Exact case-insensitive match wins alone before prefix/distance (Build vs build-editor).
+    const withPrefix = {
+      ...cfg,
+      tasks: { build: [{ run: "echo" }], "build-editor": [{ run: "echo" }] },
+    };
+    const buildMsg = unknownNamesMessage(withPrefix, ["Build"])!;
+    expect(buildMsg.split("\n")[0]).toBe(
+      'Unknown task "Build". Did you mean "build"? Task names are case-sensitive.',
+    );
+    expect(buildMsg.split("\n")[0]).not.toContain("build-editor");
   });
   test("missing task lists the project's tasks, or hints bolt list", () => {
     const msg = missingNameMessage("run", { kind: "loaded", cfg });
     expect(msg).toContain("Usage: bolt run <task...|flow>");
-    expect(msg).toContain(`Tasks: ${Object.keys(cfg.tasks).sort().join(", ")}`);
+    expect(msg).toContain(`Tasks: ${Object.keys(cfg.tasks).join(", ")}`);
     expect(msg).not.toContain("build start");
     expect(missingNameMessage("run", { kind: "missing" })).toContain("bolt list");
     expect(missingNameMessage("inspect", { kind: "invalid", path: "/p/bolt.yaml" })).toContain(
@@ -492,15 +502,32 @@ describe("closest threshold (P1)", () => {
     "ai",
     "version",
   ];
-  test("short inputs do not guess wildly", () => {
-    for (const input of ["x", "c", "l", "a", "i", "s"]) {
+  test("short inputs do not guess wildly (bolt x / run d locked)", () => {
+    // Locked: bolt x and bolt run d must never suggest.
+    expect(closest("x", cmds)).toBeUndefined();
+    expect(checkCommandName(["x"], { subCommands: commands })).not.toContain("Did you mean");
+    expect(closest("d", ["b", "build", "deploy"])).toBeUndefined();
+    expect(
+      unknownNamesMessage(
+        {
+          ...cfg,
+          tasks: { b: [{ run: "e" }], build: [{ run: "e" }], deploy: [{ run: "e" }] },
+          flows: {},
+        },
+        ["d"],
+      ),
+    ).not.toContain("Did you mean");
+    for (const input of ["c", "l", "a", "i", "s"]) {
       expect(closest(input, cmds)).toBeUndefined();
     }
-    expect(closest("d", ["b", "build", "deploy"])).toBeUndefined();
     expect(closest("c", ["b", "build"])).toBeUndefined();
     expect(closest("zz", ["b"])).toBeUndefined();
   });
-  test("real typos and prefixes still match", () => {
+  test("adjacent transposition (OSA) and real typos still match", () => {
+    expect(closest("mrak", ["mark", "build"])).toBe("mark");
+    expect(closest("makr", ["mark", "build"])).toBe("mark");
+    expect(closest("buidl", ["build", "mark"])).toBe("build");
+    expect(closest("biuld", ["build", "mark"])).toBe("build");
     expect(closest("rn", cmds)).toBe("run");
     expect(closest("lst", cmds)).toBe("list");
     expect(closest("ver", cmds)).toBe("version");
@@ -510,6 +537,7 @@ describe("closest threshold (P1)", () => {
       "build-editor",
     ]);
     expect(closest("bu", ["build", "build-editor", "deploy"])).toBeUndefined();
+    expect(closestMatches("Build", ["build", "build-editor"])).toEqual(["build"]);
     expect(formatDidYouMean(["build", "build-editor"])).toBe(
       ' Did you mean "build" or "build-editor"?',
     );

@@ -650,6 +650,8 @@ test("DX-1: suggest commands and tasks, clear usage, no script path (exit 2, not
     tasks: `tasks:
   mark:
     - run: echo "\${{ params.extra }}" > marker.txt
+  build:
+    - run: echo build > marker.txt
 `,
   });
   const marker = path.join(project.dir, "marker.txt");
@@ -685,7 +687,14 @@ test("DX-1: suggest commands and tasks, clear usage, no script path (exit 2, not
       [
         ["run", "zz", "mrk"],
         ['[ERROR] Unknown task "zz".', '[ERROR] Unknown task "mrk". Did you mean "mark"?'],
-        [],
+        ["[ERROR]   Tasks", "[ERROR]   Flows", "[ERROR]   Run bolt list"],
+      ],
+      [["run", "mrak"], ['Unknown task "mrak". Did you mean "mark"?'], ["case-sensitive"]],
+      [["run", "buidl"], ['Unknown task "buidl". Did you mean "build"?'], ["case-sensitive"]],
+      [
+        ["run", "Build"],
+        ['Unknown task "Build". Did you mean "build"? Task names are case-sensitive.'],
+        ["build-editor"],
       ],
     ];
     for (const [args, wanted, unwanted] of cases) {

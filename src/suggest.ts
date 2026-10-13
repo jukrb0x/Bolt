@@ -1,22 +1,33 @@
-/** Levenshtein distance between two strings. */
+/**
+ * Optimal String Alignment distance (restricted Damerau–Levenshtein).
+ * Adjacent transposition counts as 1 (unlike plain Levenshtein).
+ */
 export function editDistance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let prev = row[0];
-    row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const tmp = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = tmp;
+  const n = a.length;
+  const m = b.length;
+  const d: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+  for (let i = 0; i <= n; i++) d[i][0] = i;
+  for (let j = 0; j <= m; j++) d[0][j] = j;
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1, // deletion
+        d[i][j - 1] + 1, // insertion
+        d[i - 1][j - 1] + cost, // substitution
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); // adjacent transposition
+      }
     }
   }
-  return row[b.length];
+  return d[n][m];
 }
 
 /**
  * Whether `score` (edit distance, or 0.5 for a prefix hit) is close enough for `input`.
  * Scales with input length so 1–2 character inputs do not match almost everything
- * (e.g. `x` must not suggest `ai`). Prefix hits are always accepted.
+ * (e.g. `x` must not suggest `ai`). Prefix hits and exact matches are always accepted.
  */
 function withinThreshold(
   inputLen: number,
@@ -38,20 +49,29 @@ function withinThreshold(
 
 /**
  * Candidates close enough to `input` to be likely typos, best first.
- * Comparison is case-insensitive. A candidate that starts with the input
- * (`insp` → `inspect`, `bu` → `build` and `build-editor`) counts as a prefix hit;
- * when several share a prefix, up to three are returned (ambiguous).
- * Otherwise at most one edit-distance match within a length-scaled threshold.
+ * Comparison is case-insensitive.
+ * - A case-insensitive exact match is preferred and returned alone (before any
+ *   distance or prefix check), so `Build` → `build` even when `build-editor` exists.
+ * - Otherwise prefix hits (`insp` → `inspect`, `bu` → `build` and `build-editor`);
+ *   when several share a prefix, up to three are returned (ambiguous).
+ * - Otherwise at most one OSA-distance match within a length-scaled threshold.
  */
 export function closestMatches(input: string, candidates: Iterable<string>): string[] {
   const clean = input.toLowerCase();
   if (!clean) return [];
 
+  const list = [...candidates];
+
+  // Case-insensitive exact match must run before distance / prefix checks.
+  for (const candidate of list) {
+    if (candidate.toLowerCase() === clean) return [candidate];
+  }
+
   const prefixes: string[] = [];
   let best: string | undefined;
   let bestScore = Infinity;
 
-  for (const candidate of candidates) {
+  for (const candidate of list) {
     const lower = candidate.toLowerCase();
     if (clean.length >= 2 && lower.startsWith(clean)) {
       prefixes.push(candidate);
