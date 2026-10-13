@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "fs";
 import { tmpdir } from "os";
+import { randomBytes } from "crypto";
 import path from "path";
 import pc from "picocolors";
 import { stringify } from "yaml";
@@ -33,7 +34,7 @@ export function planMigration(configPath: string): MigrationPlan {
   const local = existsSync(localPath)
     ? (rt.parseYaml(readFileSync(localPath, "utf8")) ?? {})
     : undefined;
-  const result = migrateLegacyConfig(shared, local);
+  const result = migrateLegacyConfig(shared, local, path.dirname(sharedPath));
   return {
     ...result,
     sharedPath,
@@ -57,10 +58,10 @@ export async function validatePlan(plan: MigrationPlan) {
 }
 
 /** Write via a temp file in the same directory, then rename over the target. */
-function writeAtomic(file: string, text: string): void {
-  const tmp = `${file}.migrate-${process.pid}.tmp`;
-  writeFileSync(tmp, text);
+export function writeAtomic(file: string, text: string): void {
+  const tmp = `${file}.migrate-${randomBytes(6).toString("hex")}.tmp`;
   try {
+    writeFileSync(tmp, text, { flag: "wx" });
     renameSync(tmp, file);
   } catch (e) {
     rmSync(tmp, { force: true });

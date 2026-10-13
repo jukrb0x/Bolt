@@ -5,7 +5,8 @@ import path from "path";
 import { parse } from "yaml";
 import { checkConfig, loadConfig } from "../config";
 import { findLegacyKeys, migrateLegacyConfig } from "../legacy-config";
-import { backupPath } from "../commands/migrate";
+import { backupPath, writeAtomic } from "../commands/migrate";
+import { mkdirSync, readdirSync } from "fs";
 
 const BASE = [
   "version: 1",
@@ -203,7 +204,9 @@ test("migration keeps existing local plugin overrides and notes conflicts", () =
     ue: { engine: { path: "E:/UE" }, project: { path: "E:/Proj" }, uproject: "D:/Proj/P.uproject" },
     p4: { port: "1666" },
   });
-  expect(result.notes.join("\n")).toContain("plugins.ue.engine.path already set");
+  expect(result.notes.join("\n")).toContain(
+    'plugins.ue.engine.path: kept the existing "E:/UE"; the v2.0 value "D:/UE-old" was not written',
+  );
 });
 
 test("migration deep-merges into an existing ue plugin config, existing values win", () => {
@@ -219,7 +222,9 @@ test("migration deep-merges into an existing ue plugin config, existing values w
   expect(ue.engine).toEqual({ vcs: "git", branch: "release" });
   expect(ue.project).toEqual({ vcs: "svn", url: "svn://example/trunk" });
   expect(Object.keys(ue.targets).sort()).toEqual(["editor", "game"]);
-  expect(result.notes.join("\n")).toContain("engine.branch already set");
+  expect(result.notes.join("\n")).toContain(
+    'plugins[ue].config.engine.branch: kept the existing "release"',
+  );
 });
 
 test("migration moves only scalar project keys and notes the rest", () => {
@@ -317,4 +322,39 @@ test("a second migrate run keeps the first backup and uses .bak.1", () => {
   expect(r.status).toBe(0);
   expect(readFileSync(path.join(dir, "bolt.yaml.v2.0.bak"), "utf8")).toBe("older");
   expect(readFileSync(path.join(dir, "bolt.yaml.v2.0.bak.1"), "utf8")).toBe(V20_SHARED);
+});
+
+test("vars that replace v2.0 path references are absolute against the config dir", () => {
+  const shared = {
+    project: { name: "P" },
+    tasks: {
+      t: [
+        {
+          run: "echo ${{ project.engine_repo.path }} ${{ project.uproject }} ${{ project.project_repo.path }}",
+        },
+      ],
+    },
+  };
+  const local = { engine_path: "../UE", uproject: "D:/Proj/P.uproject", project_path: "/abs/proj" };
+  const configDir = path.resolve("/work/game");
+  const result = migrateLegacyConfig(shared, local, configDir);
+  expect((result.local as any).vars).toEqual({
+    engine_path: path.resolve(configDir, "../UE"),
+    uproject: "D:/Proj/P.uproject",
+    project_path: "/abs/proj",
+  });
+  // Plugin config keeps the written value; the ue plugin resolves it against the config dir itself.
+  expect((result.local as any).plugins.ue.engine.path).toBe("../UE");
+});
+
+test("writeAtomic uses a random temp name and cleans up when the rename fails", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-atomic-"));
+  const file = path.join(dir, "bolt.yaml");
+  writeAtomic(file, "a: 1\n");
+  expect(readFileSync(file, "utf8")).toBe("a: 1\n");
+  const blocked = path.join(dir, "blocked");
+  mkdirSync(blocked);
+  writeFileSync(path.join(blocked, "x"), "keep");
+  expect(() => writeAtomic(blocked, "b: 2\n")).toThrow();
+  expect(readdirSync(dir).filter((n) => n.includes(".migrate-"))).toEqual([]);
 });

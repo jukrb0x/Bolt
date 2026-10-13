@@ -68,16 +68,34 @@ probe_version() {
     gtimeout "$PROBE_TIMEOUT" "$1" version </dev/null 2>/dev/null
   else
     probe_out=$(mktemp)
+    # Monitor mode puts the probe in its own process group so a timeout kills its children too.
+    set -m 2>/dev/null || true
     "$1" version </dev/null >"$probe_out" 2>/dev/null &
     probe_pid=$!
+    set +m 2>/dev/null || true
     (
-      sleep "$PROBE_TIMEOUT"
-      kill -9 "$probe_pid" 2>/dev/null
+      # set -e from the script must not stop the watcher before it kills the probe.
+      set +e
+      trap 'kill "$probe_sleep" 2>/dev/null; exit 0' TERM
+      sleep "$PROBE_TIMEOUT" &
+      probe_sleep=$!
+      wait "$probe_sleep"
+      # Whole process group when monitor mode gave the probe one. Otherwise
+      # stop the probe first so it cannot print once its children die, then
+      # kill its children and it.
+      if ! kill -9 -"$probe_pid" 2>/dev/null; then
+        kill -STOP "$probe_pid" 2>/dev/null
+        pkill -9 -P "$probe_pid" 2>/dev/null
+        kill -9 "$probe_pid" 2>/dev/null
+      fi
+      exit 0
     ) >/dev/null 2>&1 &
     probe_watch=$!
     probe_status=0
-    wait "$probe_pid" || probe_status=$?
+    # The shell reports a killed job ("Killed") on wait; keep that off the terminal.
+    { wait "$probe_pid"; } 2>/dev/null || probe_status=$?
     kill "$probe_watch" 2>/dev/null || true
+    { wait "$probe_watch"; } 2>/dev/null || true
     if [ "$probe_status" -eq 0 ]; then cat "$probe_out"; fi
     rm -f "$probe_out"
     return "$probe_status"

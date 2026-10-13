@@ -16,9 +16,9 @@ bolt migrate [--dry-run] [--force]
 - Moves `project.engine`, `project.project`, and root `targets` to the `ue` plugin config in `bolt.yaml`. Adds a `ue` plugin entry if there is none.
 - Moves other `project.<key>` strings to `vars.<key>`, and prints a note to replace `${{ project.<key> }}` with `${{ vars.<key> }}`.
 - Moves `engine_path`, `project_path`, and `uproject` to `plugins.ue` in `bolt.local.yaml`, and `use_tortoise` to `plugins.svn` (adding an `svn` plugin entry to `bolt.yaml` if needed).
-- Rewrites `${{ project.engine_repo.path }}`, `${{ project.project_repo.path }}`, and `${{ project.uproject }}` in tasks and flows to `${{ vars.engine_path }}`, `${{ vars.project_path }}`, and `${{ vars.uproject }}`, and sets those vars in `bolt.local.yaml` from the v2.0 values. `${{ project.<key> }}` for a moved key becomes `${{ vars.<key> }}`. Other `${{ project.* }}` references are listed as notes.
+- Rewrites `${{ project.engine_repo.path }}`, `${{ project.project_repo.path }}`, and `${{ project.uproject }}` in tasks and flows to `${{ vars.engine_path }}`, `${{ vars.project_path }}`, and `${{ vars.uproject }}`, and sets those vars in `bolt.local.yaml` from the v2.0 values, resolved to absolute paths against the `bolt.yaml` directory as v2.0 did. `${{ project.<key> }}` for a moved key becomes `${{ vars.<key> }}`. Other `${{ project.* }}` references are listed as notes.
 - Only string, number, and boolean `project.<key>` values move to `vars`. Other values stay put and are listed as notes.
-- Values already in the target files win. Existing `plugins` overrides in `bolt.local.yaml` and existing `ue` plugin config in `bolt.yaml` are deep-merged, and every dropped value is listed as a note.
+- Values already in the target files win. Existing `plugins` overrides in `bolt.local.yaml` and existing `ue` plugin config in `bolt.yaml` are deep-merged, and each v2.0 value that was not written (because a value already existed) is listed as a note.
 - Runs `bolt check` on the converted files first. If they would not pass, nothing is written and the errors are printed (use `--force` to write anyway).
 - Copies each original to `<file>.v2.0.bak` (or `.v2.0.bak.N` if that exists), then replaces each file through a temp file and a rename.
 

@@ -52,7 +52,8 @@ test("isNewer: handles v-prefixed latest tag", () => {
 
 test("isNewer: dev-suffixed current does not suppress updates", () => {
   expect(isNewer("0.1.0-dev", "0.1.1")).toBe(true);
-  expect(isNewer("0.1.0-dev", "0.1.0")).toBe(false);
+  // Semver: the final release outranks its prerelease.
+  expect(isNewer("0.1.0-dev", "0.1.0")).toBe(true);
 });
 
 test("releaseAssetName: Intel macOS downloads bolt-mac-x64", () => {
@@ -608,58 +609,69 @@ runInstallSh("install.sh accepts a hand-edited .bolt/bin PATH line", () => {
   }
 });
 
-runInstallSh(
-  "install.sh kills a hanging bolt without timeout(1)",
-  () => {
-    const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
-    try {
-      const home = path.join(root, "home");
-      mkdirSync(home);
-      // A PATH with the tools install.sh needs but no timeout or gtimeout.
-      const tools = path.join(root, "tools");
-      mkdirSync(tools);
-      for (const t of [
-        "sh",
-        "uname",
-        "dirname",
-        "basename",
-        "mkdir",
-        "mktemp",
-        "rm",
-        "curl",
-        "awk",
-        "tr",
-        "sha256sum",
-        "cp",
-        "chmod",
-        "mv",
-        "sed",
-        "cat",
-        "grep",
-        "sleep",
-      ]) {
-        const found = Bun.which(t, { PATH: "/usr/bin:/bin" });
-        if (found) symlinkSync(found, path.join(tools, t));
+for (const shell of ["/bin/sh", "/bin/bash"]) {
+  runInstallSh(
+    `install.sh kills a hanging bolt and its child without timeout(1) (${shell})`,
+    () => {
+      const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+      try {
+        const home = path.join(root, "home");
+        mkdirSync(home);
+        // A PATH with the tools install.sh needs but no timeout or gtimeout.
+        const tools = path.join(root, "tools");
+        mkdirSync(tools);
+        for (const t of [
+          "sh",
+          "uname",
+          "dirname",
+          "basename",
+          "mkdir",
+          "mktemp",
+          "rm",
+          "curl",
+          "awk",
+          "tr",
+          "sha256sum",
+          "cp",
+          "chmod",
+          "mv",
+          "sed",
+          "cat",
+          "grep",
+          "sleep",
+          "pkill",
+        ]) {
+          const found = Bun.which(t, { PATH: "/usr/bin:/bin" });
+          if (found) symlinkSync(found, path.join(tools, t));
+        }
+        // The probed "bolt" waits on a child with a distinctive duration.
+        const seconds = 40 + (process.pid % 17) + (shell.endsWith("bash") ? 1 : 0);
+        const hang = fakeBolt(path.join(root, "hang"), `sleep ${seconds} &\nwait\necho 2.0.0`);
+        const started = Date.now();
+        const result = Bun.spawnSync([shell, path.resolve("install.sh")], {
+          env: {
+            HOME: home,
+            SHELL: "/bin/bash",
+            PATH: [path.dirname(hang), tools].join(":"),
+            BOLT_INSTALL_BASE: fakeRelease(root, "9.9.9"),
+            BOLT_INSTALL_PROBE_TIMEOUT: "1",
+          },
+        });
+        const out = result.stdout.toString() + result.stderr.toString();
+        expect(result.exitCode).toBe(0);
+        expect(Date.now() - started).toBeLessThan(20000);
+        expect(out).toContain("did not print a bolt version");
+        expect(out).not.toContain("Killed");
+        expect(readFileSync(path.join(home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
+        // Neither the probe's child nor the watcher's sleep is left running.
+        Bun.sleepSync(300);
+        const ps = Bun.spawnSync(["ps", "-eo", "args"]).stdout.toString().split("\n");
+        expect(ps.filter((l) => l.trim() === `sleep ${seconds}`)).toHaveLength(0);
+        expect(ps.filter((l) => l.trim() === "sleep 1")).toHaveLength(0);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
       }
-      const hang = fakeBolt(path.join(root, "hang"), "sleep 30\necho 2.0.0");
-      const started = Date.now();
-      const result = Bun.spawnSync(["sh", path.resolve("install.sh")], {
-        env: {
-          HOME: home,
-          SHELL: "/bin/bash",
-          PATH: [path.dirname(hang), tools].join(":"),
-          BOLT_INSTALL_BASE: fakeRelease(root, "9.9.9"),
-          BOLT_INSTALL_PROBE_TIMEOUT: "1",
-        },
-      });
-      const out = result.stdout.toString() + result.stderr.toString();
-      expect(result.exitCode).toBe(0);
-      expect(Date.now() - started).toBeLessThan(20000);
-      expect(out).toContain("did not print a bolt version");
-      expect(readFileSync(path.join(home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  },
-  30000,
-);
+    },
+    30000,
+  );
+}
