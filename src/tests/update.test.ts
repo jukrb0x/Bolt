@@ -610,7 +610,14 @@ runInstallSh("install.sh accepts a hand-edited .bolt/bin PATH line", () => {
   }
 });
 
-// session is field 6 of /proc/pid/stat: "pid (comm) state ppid pgrp session".
+// Reap only. A leaked watcher `sleep` must still be running after this.
+const SESSION_REAP_MS = 300;
+// Probe that exits first leaves the watcher sleep with almost this long to live.
+const WATCHER_SLEEP_S = 8;
+
+// Session id is field 6 of /proc/pid/stat: "pid (comm) state ppid pgrp session".
+// set -m moves a child to another process group, not another session. A child
+// that calls setsid would leave this session; install.sh does not.
 function sessionId(pid: number): number | null {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -622,22 +629,121 @@ function sessionId(pid: number): number | null {
   }
 }
 
-function sessionSnapshot(sid: number): { left: string[]; sleep1: number } {
-  const left: string[] = [];
-  let sleep1 = 0;
+function processesInSession(sid: number): { pid: number; cmd: string }[] {
+  const found: { pid: number; cmd: string }[] = [];
   for (const ent of readdirSync("/proc")) {
     if (!/^\d+$/.test(ent)) continue;
     try {
       const stat = readFileSync(`/proc/${ent}/stat`, "utf8");
       const end = stat.lastIndexOf(")");
+      if (end < 0 || Number(stat.slice(end + 2).split(" ")[3]) !== sid) continue;
       const cmd = readFileSync(`/proc/${ent}/cmdline`, "utf8").replaceAll("\0", " ").trim();
-      if (end >= 0 && Number(stat.slice(end + 2).split(" ")[3]) === sid) left.push(cmd || ent);
-      if (cmd === "sleep 1") sleep1++;
+      found.push({ pid: Number(ent), cmd: cmd || ent });
     } catch {
       continue;
     }
   }
-  return { left, sleep1 };
+  return found;
+}
+
+async function leftoversAfterReap(sid: number, exitedAt: number) {
+  let left = processesInSession(sid);
+  while (left.length > 0 && Date.now() - exitedAt < SESSION_REAP_MS) {
+    await Bun.sleep(20);
+    left = processesInSession(sid);
+  }
+  return left;
+}
+
+function countCmd(cmd: string): number {
+  let n = 0;
+  for (const ent of readdirSync("/proc")) {
+    if (!/^\d+$/.test(ent)) continue;
+    try {
+      const got = readFileSync(`/proc/${ent}/cmdline`, "utf8").replaceAll("\0", " ").trim();
+      if (got === cmd) n++;
+    } catch {
+      continue;
+    }
+  }
+  return n;
+}
+
+function stopPids(pids: number[]) {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already exited.
+    }
+  }
+}
+
+async function launchInstall(
+  shell: string,
+  root: string,
+  boltBody: string,
+  probeTimeout: string,
+  script = path.resolve("install.sh"),
+) {
+  const home = path.join(root, "home");
+  mkdirSync(home);
+  const tools = path.join(root, "tools");
+  mkdirSync(tools);
+  for (const t of [
+    "sh",
+    "uname",
+    "dirname",
+    "basename",
+    "mkdir",
+    "mktemp",
+    "rm",
+    "curl",
+    "awk",
+    "tr",
+    "sha256sum",
+    "cp",
+    "chmod",
+    "mv",
+    "sed",
+    "cat",
+    "grep",
+    "sleep",
+    "pkill",
+  ]) {
+    const found = Bun.which(t, { PATH: "/usr/bin:/bin" });
+    if (found) symlinkSync(found, path.join(tools, t));
+  }
+  const boltPath = fakeBolt(path.join(root, "hang"), boltBody);
+  const started = Date.now();
+  const proc = Bun.spawn([shell, script], {
+    detached: true,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      HOME: home,
+      SHELL: "/bin/bash",
+      PATH: [path.dirname(boltPath), tools].join(":"),
+      BOLT_INSTALL_BASE: fakeRelease(root, "9.9.9"),
+      BOLT_INSTALL_PROBE_TIMEOUT: probeTimeout,
+    },
+  });
+  const sid = proc.pid;
+  const output = Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  let ownSession = false;
+  while (Date.now() - started < 3000) {
+    if (sessionId(sid) === sid) {
+      ownSession = true;
+      break;
+    }
+    if (proc.exitCode !== null) break;
+    await Bun.sleep(5);
+  }
+  const exitCode = await proc.exited;
+  const exitedAt = Date.now();
+  const left = await leftoversAfterReap(sid, exitedAt);
+  const [stdout, stderr] = await output;
+  return { exitCode, out: stdout + stderr, ownSession, started, exitedAt, home, boltPath, left };
 }
 
 for (const shell of ["/bin/sh", "/bin/bash"]) {
@@ -652,92 +758,93 @@ for (const shell of ["/bin/sh", "/bin/bash"]) {
         stdout: "ignore",
         stderr: "ignore",
       });
+      let leaked: number[] = [];
       try {
-        const home = path.join(root, "home");
-        mkdirSync(home);
-        // A PATH with the tools install.sh needs but no timeout or gtimeout.
-        const tools = path.join(root, "tools");
-        mkdirSync(tools);
-        for (const t of [
-          "sh",
-          "uname",
-          "dirname",
-          "basename",
-          "mkdir",
-          "mktemp",
-          "rm",
-          "curl",
-          "awk",
-          "tr",
-          "sha256sum",
-          "cp",
-          "chmod",
-          "mv",
-          "sed",
-          "cat",
-          "grep",
-          "sleep",
-          "pkill",
-        ]) {
-          const found = Bun.which(t, { PATH: "/usr/bin:/bin" });
-          if (found) symlinkSync(found, path.join(tools, t));
-        }
-        // The probed "bolt" waits on a child with a distinctive duration.
         const seconds = 40 + (process.pid % 17) + (shell.endsWith("bash") ? 1 : 0);
-        const hang = fakeBolt(path.join(root, "hang"), `sleep ${seconds} &\nwait\necho 2.0.0`);
-        const started = Date.now();
-        // Own session: bash monitor mode puts the probe in another process group,
-        // but the child keeps this session id. pid is that session id.
-        const proc = Bun.spawn([shell, path.resolve("install.sh")], {
-          detached: true,
-          stdout: "pipe",
-          stderr: "pipe",
-          env: {
-            HOME: home,
-            SHELL: "/bin/bash",
-            PATH: [path.dirname(hang), tools].join(":"),
-            BOLT_INSTALL_BASE: fakeRelease(root, "9.9.9"),
-            BOLT_INSTALL_PROBE_TIMEOUT: "1",
-          },
-        });
-        const sid = proc.pid;
-        const output = Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-        let ownSession = false;
-        while (Date.now() - started < 3000) {
-          if (sessionId(sid) === sid) {
-            ownSession = true;
-            break;
-          }
-          if (proc.exitCode !== null) break;
-          Bun.sleepSync(10);
+        const res = await launchInstall(shell, root, `sleep ${seconds} &\nwait\necho 2.0.0`, "1");
+        leaked = res.left.map((p) => p.pid);
+        expect(res.ownSession).toBe(true);
+        expect(res.exitCode).toBe(0);
+        expect(Date.now() - res.started).toBeLessThan(20000);
+        expect(res.out).toContain("did not print a bolt version");
+        expect(res.out).not.toContain("Killed");
+        expect(readFileSync(path.join(res.home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
+        // Session must already be empty. The decoy wait must not extend this.
+        expect(res.left.map((p) => p.cmd)).toEqual([]);
+        const decoyDeadline = Date.now() + 5000;
+        let decoys = countCmd("sleep 1");
+        while (decoys === 0 && Date.now() < decoyDeadline) {
+          await Bun.sleep(20);
+          decoys = countCmd("sleep 1");
         }
-        const exitCode = await proc.exited;
-        const [stdout, stderr] = await output;
-        const out = stdout + stderr;
-        expect(ownSession).toBe(true);
-        expect(exitCode).toBe(0);
-        expect(Date.now() - started).toBeLessThan(20000);
-        expect(out).toContain("did not print a bolt version");
-        expect(out).not.toContain("Killed");
-        expect(readFileSync(path.join(home, ".bolt/bin/bolt"), "utf8")).toContain("9.9.9");
-        // The decoy must be visible, and this install's processes must be gone.
-        const deadline = Date.now() + 5000;
-        let snap = sessionSnapshot(sid);
-        while ((snap.left.length > 0 || snap.sleep1 === 0) && Date.now() < deadline) {
-          Bun.sleepSync(20);
-          snap = sessionSnapshot(sid);
-        }
-        expect(snap.sleep1).toBeGreaterThan(0);
-        expect(snap.left).toEqual([]);
+        expect(decoys).toBeGreaterThan(0);
       } finally {
+        stopPids(leaked);
         try {
           process.kill(-decoy.pid, "SIGKILL");
         } catch {
           // Already exited.
         }
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+    30000,
+  );
+
+  runInstallSh(
+    `install.sh kills the watcher sleep when the probe finishes first (${shell})`,
+    async () => {
+      const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+      let leaked: number[] = [];
+      try {
+        // Exits before WATCHER_SLEEP_S, so the parent TERMs the watcher while
+        // its sleep is still running. That is the path the TERM trap covers.
+        const res = await launchInstall(
+          shell,
+          root,
+          "sleep 0.3\necho 2.0.0",
+          String(WATCHER_SLEEP_S),
+        );
+        leaked = res.left.map((p) => p.pid);
+        expect(res.ownSession).toBe(true);
+        expect(res.exitCode).toBe(0);
+        expect(Date.now() - res.started).toBeLessThan(20000);
+        expect(res.out).toContain("Updating it in place");
+        expect(res.out).not.toContain("Killed");
+        expect(res.left.map((p) => p.cmd)).toEqual([]);
+      } finally {
+        stopPids(leaked);
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+    30000,
+  );
+
+  runInstallSh(
+    `leftover check catches a leaked watcher sleep (${shell})`,
+    async () => {
+      const root = mkdtempSync(path.join(tmpdir(), "bolt-install-"));
+      let leaked: number[] = [];
+      try {
+        const needle = `trap 'kill "$probe_sleep" 2>/dev/null; exit 0' TERM`;
+        const src = readFileSync(path.resolve("install.sh"), "utf8");
+        expect(src).toContain(needle);
+        const stub = path.join(root, "install.sh");
+        writeFileSync(stub, src.replace(needle, "trap 'exit 0' TERM"));
+        const res = await launchInstall(
+          shell,
+          root,
+          "sleep 0.3\necho 2.0.0",
+          String(WATCHER_SLEEP_S),
+          stub,
+        );
+        leaked = res.left.map((p) => p.pid);
+        expect(res.exitCode).toBe(0);
+        // The reap grace is 300ms. A 5s wait would let a short watcher sleep exit on its own.
+        expect(Date.now() - res.exitedAt).toBeLessThan(1000);
+        expect(res.left.map((p) => p.cmd)).toContain(`sleep ${WATCHER_SLEEP_S}`);
+      } finally {
+        stopPids(leaked);
         rmSync(root, { recursive: true, force: true });
       }
     },
