@@ -15,9 +15,8 @@ following now fail with `[ERROR] …` and exit code `2` before anything runs:
 3. **Param values starting with `--`**: `bolt run build --extra=--verbose`.
 4. **`bolt inspect --dry-run`**: `inspect` never executes, so it no longer accepts the flag.
 5. **Flags before the command**: `bolt --dry-run run deploy` used to drop the flag and **execute**. Only `-h`, `--help`, and `--version` are allowed before the command. Help wins (`bolt --help --version` shows help, exit 0); `--version` otherwise must be alone and takes no value.
-6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name (`--plan=x`, `-- plan=x`) fails with a rename hint: `"plan" is reserved by bolt … use build_plan and pass -- build_plan=x`.
-
-7. **`help` is reserved after the command**: `--help=<value>` and `help=<value>` after `--` used to be passed as a task param (so `bolt run mark --help=1` **ran the task**). They now fail with `--help takes no value. Use: bolt run --help`. Bare `--help` / `-h` still show help.
+6. **Reserved names** `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`, `confirmed-by-user` cannot be params, neither as `--name=value` nor as `name=value` after `--`. Only `--dry-run` is implemented; the others fail with `--<name> is reserved by bolt and not supported yet`. Using one as a param name fails with a rename hint: `--plan=x` prints `--plan is reserved by bolt and not supported yet. If this is a task param, rename it, e.g. in bolt.yaml use build_plan and pass -- build_plan=x.`, and `-- plan=x` prints `"plan" cannot be used as a param name (--plan is reserved by bolt and not supported yet). Rename the param, e.g. in bolt.yaml use build_plan and pass -- build_plan=x.`
+7. **`help` is also reserved after the command**, in addition to the 7 reserved names above (it is handled separately): `--help=<value>` and `help=<value>` after `--` used to be passed as a task param (so `bolt run mark --help=1` **ran the task**). Now `--help=1` fails with `--help takes no value. Use: bolt run --help. …`, and `-- help=1` fails with `"help" cannot be used as a param name (it is a bolt flag). Rename the param, e.g. in bolt.yaml use my_help and pass -- my_help=1.` Bare `--help` / `-h` still show help.
 
 ### Migration
 
@@ -35,5 +34,8 @@ following now fail with `[ERROR] …` and exit code `2` before anything runs:
   instead of on the command line.
 - A step param named like a reserved flag (for example `plan`): rename it
   (for example `build_plan`) in `bolt.yaml` and on the command line.
-- A step param named `help`: rename it (for example `my_help`) and pass `-- my_help=x`.
+- A step param named `help`: before, `bolt run x --help=foo` passed `help=foo`
+  to steps; now it exits with code `2`. Rename the param (for example `my_help`)
+  everywhere at once: the step `with:` keys and every `${{ params.help }}`
+  reference in `bolt.yaml`, and on the command line (`-- my_help=foo`).
 - Move flags placed before the command to after it: `bolt run deploy --dry-run`.
