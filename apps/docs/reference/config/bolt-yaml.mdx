@@ -15,6 +15,7 @@ Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main
 | --------------- | ------------------------------------------------- | -------- | ------- | ------------------- |
 | `version`       | `1`                                               | yes      |         |                     |
 | `project`       | `object`                                          | yes      |         |                     |
+| `project.name`  | `string`                                          | yes      |         | minLength: 1        |
 | `vars`          | `map<string, string>`                             |          | `{}`    |                     |
 | `tasks`         | `map<string, stepList>` ([stepList](#steplist))   |          | `{}`    |                     |
 | `flows`         | `map<string, flow>` ([flow](#flow))               |          | `{}`    |                     |
@@ -25,6 +26,18 @@ Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main
 Unknown top-level fields are rejected.
 
 ## Definitions
+
+### engineRepo
+
+Type: `object`
+
+| Field     | Type                   | Required | Default | Notes                                                                                                                  |
+| --------- | ---------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `path`    | `string`               | yes      |         | minLength: 1                                                                                                           |
+| `vcs`     | `"git" \| "svn"`       |          | `"git"` |                                                                                                                        |
+| `url`     | `string`               |          |         |                                                                                                                        |
+| `branch`  | `string`               |          |         |                                                                                                                        |
+| `version` | `4 \| 5 \| "4" \| "5"` |          |         | Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist. |
 
 ### flow
 
@@ -146,12 +159,13 @@ Type: `object`
 
 Unreal metadata. Valid only under plugins[].config when namespace is ue, never as a root bolt.yaml field.
 
-| Field      | Type                                            | Required | Default | Notes        |
-| ---------- | ----------------------------------------------- | -------- | ------- | ------------ |
-| `engine`   | `repo` ([repo](#repo))                          | yes      |         |              |
-| `project`  | `repo` ([repo](#repo))                          | yes      |         |              |
-| `uproject` | `string`                                        | yes      |         | minLength: 1 |
-| `targets`  | `map<string, ueTarget>` ([ueTarget](#uetarget)) |          | `{}`    |              |
+| Field           | Type                                            | Required | Default | Notes                                                                                                                                           |
+| --------------- | ----------------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine`        | `engineRepo` ([engineRepo](#enginerepo))        | yes      |         |                                                                                                                                                 |
+| `project`       | `repo` ([repo](#repo))                          | yes      |         |                                                                                                                                                 |
+| `editor_target` | `string`                                        |          |         | Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version.. pattern: ^[A-Za-z0-9_]+$ |
+| `uproject`      | `string`                                        | yes      |         | minLength: 1                                                                                                                                    |
+| `targets`       | `map<string, ueTarget>` ([ueTarget](#uetarget)) |          | `{}`    |                                                                                                                                                 |
 
 ### ueTarget
 

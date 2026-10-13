@@ -14,6 +14,7 @@ import { spawnSync } from "child_process";
 import { PluginRegistry } from "../../../src/plugin-registry";
 import { builtinPlugins } from "../../../src/plugins";
 import type { HandlerManifest } from "../../../src/plugin";
+import { commandSources, commands } from "../../../src/commands";
 
 const DOCS = path.resolve(import.meta.dir, "..");
 const REPO = path.resolve(DOCS, "../..");
@@ -46,6 +47,11 @@ function format(rel: string, text: string): string {
   );
   if (res.status !== 0) throw new Error(`oxfmt failed for ${rel}: ${res.stderr || res.error}`);
   return res.stdout;
+}
+
+/** Plain code-point order, independent of locale. */
+function byCodePoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Escape text for an MDX table cell outside code spans. */
@@ -105,18 +111,30 @@ function constraints(s: Json): string[] {
   return out;
 }
 
-function propsTable(s: Json, refLink: (name: string) => string): string {
+function propRows(s: Json, refLink: (name: string) => string, prefix: string): string[] {
   const props: Json = s.properties ?? {};
   const required = new Set<string>(s.required ?? []);
-  const rows = Object.entries(props).map(([name, p]: [string, Json]) => {
+  const rows: string[] = [];
+  for (const [key, p] of Object.entries(props) as [string, Json][]) {
+    const name = prefix + key;
     let type = code(typeOf(p));
     const refs = JSON.stringify(p).match(/#\/\$defs\/[A-Za-z0-9_]+/g) ?? [];
     const links = [...new Set(refs.map((r) => r.split("/").pop()!))].map(refLink);
     if (links.length) type += ` (${links.join(", ")})`;
     const notes = [p.description, ...constraints(p)].filter(Boolean).join(". ");
     const def = p.default !== undefined ? code(JSON.stringify(p.default)) : "";
-    return `| ${code(name)} | ${type} | ${required.has(name) ? "yes" : ""} | ${def} | ${cell(notes)} |`;
-  });
+    rows.push(
+      `| ${code(name)} | ${type} | ${required.has(key) ? "yes" : ""} | ${def} | ${cell(notes)} |`,
+    );
+    // Recurse into inline nested objects (and arrays of inline objects).
+    if (p.properties) rows.push(...propRows(p, refLink, `${name}.`));
+    else if (p.items?.properties) rows.push(...propRows(p.items, refLink, `${name}[].`));
+  }
+  return rows;
+}
+
+function propsTable(s: Json, refLink: (name: string) => string): string {
+  const rows = propRows(s, refLink, "");
   if (!rows.length) return "_No named properties._";
   return [
     "| Field | Type | Required | Default | Notes |",
@@ -141,7 +159,7 @@ function schemaPage(file: string): string {
     sections.push("Unknown top-level fields are rejected.");
   if (Object.keys(defs).length) {
     sections.push("## Definitions");
-    for (const [name, def] of Object.entries(defs).sort(([a], [b]) => a.localeCompare(b))) {
+    for (const [name, def] of Object.entries(defs).sort(([a], [b]) => byCodePoint(a, b))) {
       const parts = [`### ${name}`, `Type: ${code(typeOf({ ...def, $ref: undefined }))}`];
       if (def.description) parts.push(cell(def.description));
       if (def.properties) parts.push(propsTable(def, refLink));
@@ -206,7 +224,7 @@ function pluginPages(): string[] {
     );
     parts.push("## Handlers");
     for (const [name, h] of Object.entries(manifest.handlers).sort(([a], [b]) =>
-      a.localeCompare(b),
+      byCodePoint(a, b),
     )) {
       const lines = [`### ${ns}/${name}`];
       if (h.description) lines.push(cell(h.description));
@@ -231,23 +249,6 @@ type Resolvable<T> = T | Promise<T> | (() => T | Promise<T>);
 async function resolve<T>(v: Resolvable<T>): Promise<T> {
   return typeof v === "function" ? await (v as () => T)() : await v;
 }
-
-/** Mirrors the subCommands map in src/main.ts (main.ts runs the CLI on import). */
-const COMMAND_FILES: Record<string, string> = {
-  run: "run",
-  list: "list",
-  info: "info",
-  check: "check",
-  migrate: "migrate",
-  config: "config",
-  init: "init",
-  types: "types",
-  plugin: "plugin",
-  inspect: "inspect",
-  "self-update": "update",
-  ai: "ai",
-  version: "version",
-};
 
 async function commandSection(cmd: any, pathParts: string[], depth: number): Promise<string> {
   const meta = (await resolve(cmd.meta ?? {})) as Json;
@@ -292,8 +293,9 @@ async function commandSection(cmd: any, pathParts: string[], depth: number): Pro
 
 async function cliPages(): Promise<string[]> {
   const out: string[] = [];
-  for (const [name, file] of Object.entries(COMMAND_FILES)) {
-    const mod = await import(`../../../src/commands/${file}.ts`);
+  for (const [name, cmd] of Object.entries(commands)) {
+    const file = commandSources[name as keyof typeof commands];
+    const mod = { default: cmd as any };
     const body = await commandSection(mod.default, [name], 2);
     const rel = `reference/cli/${slug(name)}`;
     const meta = (await resolve(mod.default.meta ?? {})) as Json;
@@ -301,7 +303,7 @@ async function cliPages(): Promise<string[]> {
       rel,
       `bolt ${name}`,
       meta.description ? String(meta.description) : `Generated reference for bolt ${name}.`,
-      `Source: [\`src/commands/${file}.ts\`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/${file}.ts).\n\n${body}`,
+      `Source: [\`src/commands/${file}\`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/${file}).\n\n${body}`,
     );
     out.push(rel);
   }

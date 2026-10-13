@@ -10,6 +10,6 @@
     "gen": "bun scripts/generate.ts"
   },
   "devDependencies": {
-    "mint": "^4.2.666"
+    "mint": "4.2.666"
   }
 }

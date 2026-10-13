@@ -25,7 +25,7 @@
       "name": "bolt-docs",
       "version": "1.0.0",
       "devDependencies": {
-        "mint": "^4.2.666",
+        "mint": "4.2.666",
       },
     },
   },

@@ -11,10 +11,27 @@ Source: [`schema/v1/bolt.local.schema.json`](https://github.com/jukrb0x/Bolt/blo
 
 ## Top-level fields
 
-| Field     | Type                                           | Required | Default | Notes |
-| --------- | ---------------------------------------------- | -------- | ------- | ----- |
-| `vars`    | `map<string, string>`                          |          |         |       |
-| `plugins` | `object` ([partialUeTarget](#partialuetarget)) |          |         |       |
+| Field                       | Type                                                                 | Required | Default | Notes                                                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vars`                      | `map<string, string>`                                                |          |         |                                                                                                                                                 |
+| `plugins`                   | `object` ([partialUeTarget](#partialuetarget))                       |          |         |                                                                                                                                                 |
+| `plugins.ue`                | `object` ([partialUeTarget](#partialuetarget))                       |          |         |                                                                                                                                                 |
+| `plugins.ue.engine`         | `object`                                                             |          |         |                                                                                                                                                 |
+| `plugins.ue.engine.path`    | `string`                                                             |          |         | minLength: 1                                                                                                                                    |
+| `plugins.ue.engine.vcs`     | `"git" \| "svn"`                                                     |          | `"git"` |                                                                                                                                                 |
+| `plugins.ue.engine.url`     | `string`                                                             |          |         |                                                                                                                                                 |
+| `plugins.ue.engine.branch`  | `string`                                                             |          |         |                                                                                                                                                 |
+| `plugins.ue.engine.version` | `4 \| 5 \| "4" \| "5"`                                               |          |         | Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist.                          |
+| `plugins.ue.project`        | `object`                                                             |          |         |                                                                                                                                                 |
+| `plugins.ue.project.path`   | `string`                                                             |          |         | minLength: 1                                                                                                                                    |
+| `plugins.ue.project.vcs`    | `"git" \| "svn"`                                                     |          | `"git"` |                                                                                                                                                 |
+| `plugins.ue.project.url`    | `string`                                                             |          |         |                                                                                                                                                 |
+| `plugins.ue.project.branch` | `string`                                                             |          |         |                                                                                                                                                 |
+| `plugins.ue.editor_target`  | `string`                                                             |          |         | Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version.. pattern: ^[A-Za-z0-9_]+$ |
+| `plugins.ue.uproject`       | `string`                                                             |          |         | minLength: 1                                                                                                                                    |
+| `plugins.ue.targets`        | `map<string, partialUeTarget>` ([partialUeTarget](#partialuetarget)) |          |         |                                                                                                                                                 |
+| `plugins.svn`               | `object`                                                             |          |         |                                                                                                                                                 |
+| `plugins.svn.use_tortoise`  | `boolean`                                                            |          |         |                                                                                                                                                 |
 
 Unknown top-level fields are rejected.
 
