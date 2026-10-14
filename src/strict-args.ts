@@ -163,7 +163,6 @@ function suggest(name: string, known: string[]): string {
 }
 
 function unknownFlagError(arg: string, nameForSuggest: string, spec: StrictArgSpec): UsageError {
-  const known = knownFlagNames(spec);
   const hint = suggest(nameForSuggest, known);
   const paramsHint = spec.allowParams ? ` Params must be given as --key=value.` : "";
   return new UsageError(
@@ -262,7 +261,6 @@ function looksLikeFlag(token: string): boolean {
  * Throws UsageError; never writes or runs handlers.
  */
 export function parseStrictArgs(rawArgs: string[], spec: StrictArgSpec): StrictParseResult {
-  const known = knownFlagNames(spec);
   const positionals: string[] = [];
   const params: Record<string, string> = {};
   const booleans: Record<string, boolean> = {};

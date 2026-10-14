@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from "fs";
+import { mkdtempSync, writeFileSync, existsSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
 import { commands } from "../commands";
