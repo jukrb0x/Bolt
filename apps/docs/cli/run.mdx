@@ -48,7 +48,8 @@ bolt run build_editor --config=debuggame # aliases: dbggame, DebugGame
 ### Strict argument parsing
 
 `bolt run` rejects anything it does not understand, with exit code `2`, before
-any step runs:
+any step runs. Shared rules for every command are in [CLI Reference](/cli#invalid-flags).
+Run-specific rules:
 
 - Unknown flags, long or short (`--dryrun`, `-x`, `-xyz`). A close match is suggested.
 - A value on a boolean flag (`--dry-run=false`).

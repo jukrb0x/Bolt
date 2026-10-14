@@ -57,12 +57,29 @@ bolt run build --target=client
 bolt run build --config=debug
 ```
 
+## Invalid flags
+
+Every command rejects unknown flags and undeclared reserved names with exit code `2`
+before anything runs. The error lists that command's supported flags and hints
+`bolt <cmd> --help`. Did-you-mean suggestions use only that command's own flags.
+Reserved names (`json`, `agent`, `execute`, `plan`, `confirmed-by-user`, and the
+unimplemented forms of `dry-run` / `simulate` on commands that do not declare them)
+fail with `--<name> is reserved by bolt and not supported yet`. Exceptions that are
+declared on purpose: `bolt version --json`, `bolt migrate --dry-run`,
+`bolt run --dry-run` / `--simulate`.
+
+Only `bolt run` and `bolt inspect` accept `--key=value` task params and a `--`
+passthrough. Other commands reject arguments after `--` (with a "Bolt flags go before
+`--`" hint when the token looks like a flag).
+
 ## Exit Codes
 
-| Code | Meaning                                                      |
-| ---- | ------------------------------------------------------------ |
-| 0    | Success                                                      |
-| 1    | Error (config not found, validation failed, execution error) |
+| Code | Meaning |
+| ---- | ------- |
+| 0 | Success |
+| 1 | Task failure while running |
+| 2 | Usage error (unknown flag/command/task, reserved flag) |
+| 3 | Config error (`bolt.yaml` missing/invalid, or `--dry-run` config problems) |
 
 ## Configuration Discovery
 

@@ -306,7 +306,7 @@ async function cliPages(): Promise<string[]> {
       rel,
       `bolt ${name}`,
       meta.description ? String(meta.description) : `Generated reference for bolt ${name}.`,
-      `Source: [\`src/commands/${file}\`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/${file}).\n\n${body}`,
+      `Source: [\`src/commands/${file}\`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/${file}).\n\n${body}\n\nUnknown or reserved flags exit \`2\` before the command runs. See [Invalid flags](/cli#invalid-flags).`,
     );
     out.push(rel);
   }

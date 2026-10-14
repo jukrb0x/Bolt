@@ -5,6 +5,22 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Breaking: all commands reject unknown and reserved flags (BOLT-CLI-1)
+
+`bolt list`, `info`, `check`, `migrate`, `config`, `init`, `types`, `plugin new`,
+`plugin list`, `self-update`, `ai`, and `version` used to ignore flags they do not
+support. They now fail with exit code `2` before doing anything, using the same message
+shape as `bolt run` (including `Did you mean …?` scoped to that command's flags, plus a
+`Flags:` / `--help` hint). Reserved names (`json`, `agent`, `execute`, `plan`,
+`confirmed-by-user`) fail with `--<name> is reserved by bolt and not supported yet`
+unless the command declares them (`bolt version --json` still works; `migrate --dry-run`
+still previews). **Migrate:** remove unsupported flags from scripts. Run
+`bolt <command> --help` for valid flags. `bolt ai --json` no longer writes
+`.bolt/ai-context.md` (it exits `2`); use `bolt ai` or `bolt ai --stdout`.
+
+The skill (`skills/boltstack/SKILL.md`) now states this global rejection explicitly under
+the run flags section; older skill text mixed run-only param rules with a broader wording.
+
 ### Breaking: strict `bolt run` / `bolt inspect` arguments
 
 Bolt no longer silently ignores arguments it does not understand. All of the
