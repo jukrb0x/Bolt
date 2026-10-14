@@ -5,6 +5,32 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Capability selection (BOLT-EXT-2)
+
+Singleton capability tags resolve to one handler. The map lives at the top level of `bolt.yaml` and `bolt.local.yaml`:
+
+```yaml
+capabilities:
+  vcs.sync: git/pull   # namespace/handler
+```
+
+`bolt.local.yaml` wins per key. `capabilities: {}` is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`) in the map are ignored with one warning.
+
+`bolt inspect` and `bolt run --dry-run` print the choice as `vcs.sync: git/pull (bolt.yaml)`, `(bolt.local.yaml)`, or `(auto: only match)` when exactly one built handler provides the tag. A step may name the tag: `uses: vcs.sync`.
+
+Exit code `3` (not `2`):
+
+- `CAPABILITY_AMBIGUOUS` — more than one built handler provides the tag and the map does not choose.
+- `CAPABILITY_MISSING` — no built handler provides the tag.
+- `SELECTION_INVALID` — the chosen ref is not a handler for that tag.
+- An unknown capability key, or a handler ref Bolt does not know, names the file (`bolt.yaml` or `bolt.local.yaml`), the key, and a "did you mean" hint.
+
+A selection that names a built handler succeeds even when another plugin that might provide the same tag is not built. When the preview cannot see that plugin's tags and nothing in the map names a built handler, the preview says it is incomplete. That note does not use `CAPABILITY_AMBIGUOUS`, `CAPABILITY_MISSING`, or `SELECTION_INVALID`.
+
+`capabilitySelectionHash` is the digest `plan_hash` will include as `capability_selection` when BOLT-AI-2 lands. This release does not hash plans and does not add a second hash field.
+
+**Migrate:** `uses: git/pull` and `uses: svn/update` are unchanged. Built-in `git/pull` and `svn/update` both provide `vcs.sync`; `git/info` and `svn/info` both provide `vcs.info`. A step written as `uses: vcs.sync` (or `uses: vcs.info`) must set that key, or it exits `3`. No Unreal project is required. With only one of those handlers available, Bolt selects it without a `capabilities:` key.
+
 ### Breaking: `bolt ai` reads `bolt.plugin.json` (no plugin execution) (BOLT-AI-3)
 
 `bolt ai` and `bolt ai --stdout` no longer call `buildRegistry`, compile plugins, or `import` project/user
@@ -208,5 +234,5 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 
 ### Plugin API v2: Deferred (not in BOLT-EXT-1)
 
-- **Top-level `capabilities:` selection map** in `bolt.yaml` / `bolt.local.yaml`, singleton routing (`CAPABILITY_AMBIGUOUS` / `CAPABILITY_MISSING`), and the `capability_selection` input to `plan_hash` are **not** shipped here. They are delivered by task **BOLT-EXT-2**. This release adds capability tags and `PluginRegistry.findByCapability()` only. No public release that advertises capability routing should go out before BOLT-EXT-2 lands.
+- **Top-level `capabilities:` selection** is BOLT-EXT-2 (see above). EXT-1 added tags and `PluginRegistry.findByCapability()` only. `capabilitySelectionHash` is the `capability_selection` input `plan_hash` will use when BOLT-AI-2 lands. This changelog entry does not hash plans.
 - **Structured JSONL run log** (ai-mcp §5.3.7) is **not** shipped here. It is delivered by task **BOLT-AI-2**. Until then, `ctx.emit` events go to the existing text log `.bolt/logs/bolt_<timestamp>.log` (and the terminal / `RunnerOptions.onEvent`). There is no `--json=ndjson` and no event field in a `bolt.run/v1` envelope.

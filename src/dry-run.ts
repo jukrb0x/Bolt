@@ -7,7 +7,13 @@ import { builtinPlugins } from "./plugins";
 import { parseStepParams } from "./runner";
 import { LOCAL_RUNNERS } from "./local-runners";
 import { shellQuote } from "./suggest";
-import type { PlanNode, RunPlan } from "./run-plan";
+import { capabilityUsesInPlan, type PlanNode, type RunPlan } from "./run-plan";
+import {
+  assessCapabilities,
+  formatCapabilityIssue,
+  isCapabilityRef,
+  type CapabilityReport,
+} from "./capability-selection";
 
 /**
  * Static `--dry-run` preview (BOLT-P0-1).
@@ -80,6 +86,19 @@ export function renderDryRun(cfg: BoltConfig, plan: RunPlan, opts: DryRunOptions
     lines.push(`${pad}  ! ${text}`);
   };
 
+  const selection: CapabilityReport = assessCapabilities(cfg, opts.configDir, {
+    requested: capabilityUsesInPlan(plan),
+    home: opts.home,
+    builtins,
+    catalog: true,
+  });
+  for (const warning of selection.warnings) lines.push(warning);
+  for (const line of selection.lines) lines.push(line);
+  for (const issue of selection.errors) problem("", formatCapabilityIssue(issue));
+  if (selection.warnings.length > 0 || selection.lines.length > 0 || selection.errors.length > 0) {
+    lines.push("");
+  }
+
   const walk = (nodes: PlanNode[], depth: number) => {
     const pad = "  ".repeat(depth);
     for (const node of nodes) {
@@ -96,6 +115,12 @@ export function renderDryRun(cfg: BoltConfig, plan: RunPlan, opts: DryRunOptions
 
       const params = paramText(node.params);
       lines.push(`${pad}would run uses: ${node.ref}${params ? `  ${params}` : ""}`);
+
+      if (isCapabilityRef(node.ref)) {
+        const hit = selection.resolved.find((item) => item.capability === node.ref);
+        if (hit) lines.push(`${pad}  -> ${hit.capability}: ${hit.ref} (${hit.source})`);
+        continue;
+      }
 
       if (node.ref.startsWith("./") || node.ref.startsWith("../")) {
         const dir = path.resolve(cwd, node.ref);

@@ -19,6 +19,8 @@ export default defineCommand({
 
     const result = await checkConfig(configPath);
 
+    for (const warning of result.warnings) console.log(pc.yellow(warning));
+
     if (result.ok) {
       console.log(pc.green("✓ bolt.yaml is valid"));
       return;

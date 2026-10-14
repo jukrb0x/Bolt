@@ -13,6 +13,11 @@
 #   on_complete: true
 #   providers: []
 #
+# Optional: pick one handler for a singleton capability. bolt.local.yaml wins
+# per key. Fan-out tags (doctor, diagnose, detect, notify) are ignored.
+# capabilities:
+#   vcs.sync: git/pull
+#
 # Optional: load a project plugin by path. A pathless entry only carries config
 # for a builtin (the registry does not import it).
 # plugins:

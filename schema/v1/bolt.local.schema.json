@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "bolt.local.yaml",
-  "description": "Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.<namespace> is deep-merged over the config of the bolt.yaml plugin with that namespace before validation.",
+  "description": "Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.<namespace> is deep-merged over the config of the bolt.yaml plugin with that namespace before validation. capabilities overrides bolt.yaml capabilities per key; an empty object is the same as omitting the key.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -9,6 +9,14 @@
       "type": "object",
       "additionalProperties": {
         "type": "string"
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "Per-key override of bolt.yaml capabilities. An empty object is the same as omitting the key.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
       }
     },
     "plugins": {

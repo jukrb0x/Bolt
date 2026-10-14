@@ -1,4 +1,5 @@
 import type { BoltConfig } from "./config";
+import { isCapabilityRef } from "./capability-selection";
 import { interpolate } from "./interpolate";
 
 export type PlanNode =
@@ -39,6 +40,7 @@ export function formatPlanErrors(errors: PlanError[]): string {
  */
 export function usesRefError(ref: string): string | undefined {
   if (ref.startsWith("./") || ref.startsWith("../")) return undefined;
+  if (isCapabilityRef(ref)) return undefined;
   const slash = ref.indexOf("/");
   if (slash <= 0 || slash === ref.length - 1) {
     return `Invalid uses format (expected "ns/op" or "./local-action"): "${ref}"`;
@@ -47,6 +49,19 @@ export function usesRefError(ref: string): string | undefined {
     return `legacy task reference "${ref}"; replace with "call: ${ref.slice(slash + 1)}"`;
   }
   return undefined;
+}
+
+/** Capability tags named by `uses:` in an already resolved plan. */
+export function capabilityUsesInPlan(plan: RunPlan): string[] {
+  const out: string[] = [];
+  const walk = (nodes: PlanNode[]) => {
+    for (const node of nodes) {
+      if (node.kind === "call") walk(node.nodes);
+      else if (node.kind === "uses" && isCapabilityRef(node.ref)) out.push(node.ref);
+    }
+  };
+  for (const task of plan.tasks) walk(task.nodes);
+  return [...new Set(out)];
 }
 
 export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResult {

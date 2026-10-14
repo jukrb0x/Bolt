@@ -5,7 +5,7 @@ description: "Generated field reference for bolt.local.yaml (schema/v1/bolt.loca
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
-Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.&#60;namespace&#62; is deep-merged over the config of the bolt.yaml plugin with that namespace before validation.
+Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.&#60;namespace&#62; is deep-merged over the config of the bolt.yaml plugin with that namespace before validation. capabilities overrides bolt.yaml capabilities per key; an empty object is the same as omitting the key.
 
 Source: [`schema/v1/bolt.local.schema.json`](https://github.com/jukrb0x/Bolt/blob/main/schema/v1/bolt.local.schema.json). Draft: `http://json-schema.org/draft-07/schema#`.
 
@@ -14,6 +14,7 @@ Source: [`schema/v1/bolt.local.schema.json`](https://github.com/jukrb0x/Bolt/blo
 | Field                       | Type                                                                 | Required | Default | Notes                                                                                                                                           |
 | --------------------------- | -------------------------------------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vars`                      | `map<string, string>`                                                |          |         |                                                                                                                                                 |
+| `capabilities`              | `map<string, string>`                                                |          |         | Per-key override of bolt.yaml capabilities. An empty object is the same as omitting the key.                                                    |
 | `plugins`                   | `object` ([partialUeTarget](#partialuetarget))                       |          |         |                                                                                                                                                 |
 | `plugins.ue`                | `object` ([partialUeTarget](#partialuetarget))                       |          |         |                                                                                                                                                 |
 | `plugins.ue.engine`         | `object`                                                             |          |         |                                                                                                                                                 |

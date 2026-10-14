@@ -3,6 +3,12 @@ import { findConfig } from "../discover";
 import { loadConfig, type BoltConfig } from "../config";
 import { Runner, wasReported } from "../runner";
 import { AI_FORBIDDEN_EXIT_CODE, BoltStepError } from "../handler-result";
+import {
+  assessCapabilities,
+  CapabilitySelectionError,
+  formatCapabilityErrors,
+} from "../capability-selection";
+import { capabilityUsesInPlan } from "../run-plan";
 import { Logger } from "../logger";
 import { Notifier } from "../notify";
 import path from "path";
@@ -248,6 +254,16 @@ export default defineCommand({
     }
 
     const configDir = path.dirname(configPath);
+    const selection = assessCapabilities(cfg, configDir, {
+      requested: capabilityUsesInPlan(planned.plan),
+      catalog: dryRun,
+    });
+    if (!dryRun && selection.errors.length > 0) {
+      printUsageError(
+        `${formatCapabilityErrors(selection)}\n  Fix bolt.yaml or bolt.local.yaml, then run bolt check.`,
+      );
+      process.exit(CONFIG_EXIT_CODE);
+    }
 
     if (dryRun) {
       // Pure static preview: no Runner, no logger file, no plugin registry, no notifier.
@@ -266,6 +282,7 @@ export default defineCommand({
     const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
     const logger = new Logger({ logFile });
 
+    for (const warning of selection.warnings) logger.warn(warning);
     logger.info(`bolt ${VERSION}`);
     logger.info(`Config: ${configPath}`);
     logger.info(`${isFlow ? "Flow" : "Tasks"}: ${names.join(" ")}${simulate ? " (simulate)" : ""}`);
@@ -296,7 +313,11 @@ export default defineCommand({
       if (logFile) logger.info(`Log: ${logFile}`);
       await logger.close();
       process.exit(
-        e instanceof BoltStepError && e.code === "AI_FORBIDDEN" ? AI_FORBIDDEN_EXIT_CODE : 1,
+        e instanceof BoltStepError && e.code === "AI_FORBIDDEN"
+          ? AI_FORBIDDEN_EXIT_CODE
+          : e instanceof CapabilitySelectionError
+            ? CONFIG_EXIT_CODE
+            : 1,
       );
     }
   },

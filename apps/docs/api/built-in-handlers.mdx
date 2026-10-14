@@ -302,6 +302,8 @@ Both are plugin API v2 plugins. Generated pages list every handler: [git](/refer
 
 `git/info` and `svn/info` return their fields as result data (`commit`, `branch`; `url`, `revision`, `last_changed_rev`). `ue/info` still prints engine and project info for paths outside the project.
 
+`git/pull` and `svn/update` both provide the singleton tag `vcs.sync`. `git/info` and `svn/info` both provide `vcs.info`. With only one of those handlers built, Bolt selects it and previews `(auto: only match)`. With both, set `capabilities.vcs.sync` or `capabilities.vcs.info` in `bolt.yaml` (or override one key in `bolt.local.yaml`), or a step written as `uses: vcs.sync` exits `3` with `CAPABILITY_AMBIGUOUS`. `uses: git/pull` does not need the map. No Unreal project is required for that choice.
+
 ## See Also
 
 - [Plugin API](/api/plugin-api) - Creating custom handlers

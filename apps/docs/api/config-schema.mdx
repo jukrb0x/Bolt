@@ -6,7 +6,7 @@ description: "Complete reference for Bolt's configuration. Field names and defau
 Complete reference for Bolt's configuration. Field names and defaults below mirror the Zod schema in `src/config.ts`. Unreal metadata is validated by the `ue` plugin, not by the core schema.
 
 - **`bolt.yaml`** — required. Starts with `version: 1`. `project` is a name. Tasks, flows, and plugin entries live here.
-- **`bolt.local.yaml`** — optional. `vars` and per-namespace `plugins` overrides. A missing file is fine. JSON Schema: `schema/v1/bolt.local.schema.json`.
+- **`bolt.local.yaml`** — optional. `vars`, per-namespace `plugins` overrides, and per-key `capabilities` overrides. A missing file is fine. JSON Schema: `schema/v1/bolt.local.schema.json`.
 
 ## bolt.yaml
 
@@ -20,6 +20,7 @@ Top-level keys:
 | `flows`         | map    | no       | `{}`    | Named, ordered sets of tasks                         |
 | `vars`          | map    | no       | `{}`    | Shared string variables                              |
 | `plugins`       | array  | no       | `[]`    | Plugin entries, including builtin metadata           |
+| `capabilities`  | map    | no       | `{}`    | Singleton capability tag → `namespace/handler`       |
 | `timeout_hours` | number | no       | —       | Abort the run if it exceeds this duration (positive) |
 | `notifications` | object | no       | —       | Build-event notifications                            |
 
@@ -177,6 +178,22 @@ timeout_hours: 6
 
 Optional positive number. When set, a flow aborts if elapsed time reaches this many hours before the next task starts.
 
+## capabilities
+
+Optional map from a singleton capability tag to one handler ref. `bolt.local.yaml` wins per key. An empty map is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`) are ignored with one warning.
+
+```yaml
+capabilities:
+  vcs.sync: git/pull
+  vcs.info: git/info
+```
+
+| Field  | Type   | Required | Description                                      |
+| ------ | ------ | -------- | ------------------------------------------------ |
+| `<tag>` | string | yes      | Handler ref, for example `git/pull` or `svn/update` |
+
+A tag with one built handler is selected automatically (`auto: only match` in `bolt inspect` and `bolt run --dry-run`). Unknown keys and refs that do not provide the tag fail `bolt check` with exit code `3`, naming the file, the key, and a "did you mean" hint. See [git/ and svn/](./built-in-handlers.md#git-and-svn--version-control).
+
 ## notifications
 
 ```yaml
@@ -213,7 +230,7 @@ A run emits one start notification. Multi-task runs show the top-level task list
 
 ## bolt.local.yaml (optional)
 
-A missing file is fine. Invalid YAML or any key other than `vars` and `plugins` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error. A target override may set only some fields (for example just `config`); the merged target is validated.
+A missing file is fine. Invalid YAML or any key other than `vars`, `plugins`, and `capabilities` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error. A target override may set only some fields (for example just `config`); the merged target is validated. `capabilities` overrides the same tags in `bolt.yaml` one key at a time. `capabilities: {}` does not clear the committed map.
 
 ```yaml
 vars:
@@ -227,10 +244,11 @@ plugins:
     use_tortoise: true
 ```
 
-| Field     | Type                       | Required | Description                                         |
-| --------- | -------------------------- | -------- | --------------------------------------------------- |
-| `vars`    | map (string→string)        | no       | Per-machine variable overrides                      |
-| `plugins` | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace |
+| Field          | Type                       | Required | Description                                              |
+| -------------- | -------------------------- | -------- | -------------------------------------------------------- |
+| `vars`         | map (string→string)        | no       | Per-machine variable overrides                           |
+| `plugins`      | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace      |
+| `capabilities` | map (tag→handler ref)      | no       | Per-key override of `bolt.yaml` `capabilities`           |
 
 v2.0 keys (`engine_path`, `project_path`, `uproject`, `use_tortoise`) are rejected. Run `bolt migrate` to convert them.
 

@@ -117,4 +117,29 @@ Hand-written context mocks keep compiling because `emit` is optional.
 
 Regenerate the AI context with `bolt ai`. The plugin manifest format changed (`bolt version --json` reports `manifest_format: 2`), capability tags now appear in the catalog, and the built-in `git` and `svn` handlers changed their `ai` permissions.
 
-Core can look handlers up with `PluginRegistry.findByCapability()`. Choosing among several providers for a singleton tag (for example `vcs.sync`) via a top-level `capabilities:` map in `bolt.yaml` / `bolt.local.yaml` is **BOLT-EXT-2**, not part of plugin API v2 itself.
+Core looks handlers up with `PluginRegistry.findByCapability()`. Choosing among several providers for a singleton tag is the top-level `capabilities:` map (BOLT-EXT-2), not part of plugin API v2 itself.
+
+## 10. Choosing a singleton provider
+
+`doctor`, `diagnose`, `detect`, and `notify` are fan-out: every matching handler runs, and a `capabilities:` entry for those tags is ignored with one warning. The other core tags (`vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store`) and plugin tags are singletons.
+
+```yaml
+# bolt.yaml — commit this
+capabilities:
+  vcs.sync: git/pull
+  vcs.info: git/info
+```
+
+```yaml
+# bolt.local.yaml — gitignored, optional. This key wins; other keys stay as in bolt.yaml.
+capabilities:
+  vcs.sync: svn/update
+```
+
+`capabilities: {}` is the same as leaving the key out. When only one built handler provides a tag, Bolt selects it and previews `(auto: only match)`. `bolt inspect` and `bolt run --dry-run` also show `(bolt.yaml)` or `(bolt.local.yaml)` for an explicit key. A task step can name the tag: `uses: vcs.sync`.
+
+Several built handlers and no choice exits `3` with `CAPABILITY_AMBIGUOUS`. No handler exits `3` with `CAPABILITY_MISSING`. A ref that does not provide the tag exits `3` with `SELECTION_INVALID`. An unknown key or a bad ref exits `3` and names the file, the key, and a "did you mean" hint. Exit `2` is only for CLI usage errors.
+
+Built-in `git/pull` and `svn/update` both provide `vcs.sync`. A project that keeps `uses: git/pull` does not need this map. No Unreal project is required to choose between git and svn.
+
+`capabilitySelectionHash` is the digest `plan_hash` will take as `capability_selection` when BOLT-AI-2 lands. This release does not change `plan_hash`.

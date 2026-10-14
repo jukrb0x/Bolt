@@ -18,9 +18,13 @@ Validates your configuration against Bolt's schema:
 - **`bolt.yaml`** — file existence, YAML syntax, `version: 1`, and the core schema
   (project name, tasks, flows, plugins). `ue` and `svn` plugin metadata is checked
   when those entries are present.
-- **`bolt.local.yaml`** — only if the file exists. It may contain `vars` and
-  `plugins` (per-namespace overrides). `bolt.yaml` is validated after those
-  overrides are merged. A missing file is not an error.
+- **`bolt.local.yaml`** — only if the file exists. It may contain `vars`,
+  `plugins` (per-namespace overrides), and `capabilities` (per-key overrides of
+  the same map in `bolt.yaml`). `bolt.yaml` is validated after those overrides
+  are merged. A missing file is not an error. An unknown capability key, a
+  handler ref that does not provide that tag, `CAPABILITY_AMBIGUOUS`,
+  `CAPABILITY_MISSING`, and `SELECTION_INVALID` are config errors (exit code
+  `3`). Fan-out tags in `capabilities:` print one warning and are ignored.
 
 When either file still uses bolt v2.0 keys (no `version`, root `targets`,
 `project.engine`/`project.project`, or local `engine_path`, `project_path`,

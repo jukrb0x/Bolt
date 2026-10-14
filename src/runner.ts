@@ -2,6 +2,11 @@ import { safePath } from "./plugins/path-guard";
 import type { BoltConfig } from "./config";
 import { Logger } from "./logger";
 import { buildRegistry, type PluginRegistry } from "./plugin-registry";
+import {
+  assessCapabilities,
+  CapabilitySelectionError,
+  isCapabilityRef,
+} from "./capability-selection";
 import { normalizeTextualBooleans, type BoltPlugin, type BoltPluginContext } from "./plugin";
 import { createRuntime, type Runtime } from "./runtime";
 import type { SpawnOptions } from "./runtime/types";
@@ -368,8 +373,8 @@ export class Runner {
       return;
     }
 
-    this.opts.onStep?.(node.ref);
     if (node.ref.startsWith("./") || node.ref.startsWith("../")) {
+      this.opts.onStep?.(node.ref);
       const paramText = Object.entries(node.params)
         .map(([key, value]) => `${key}=${value}`)
         .join("  ");
@@ -385,20 +390,23 @@ export class Runner {
       return;
     }
 
-    const slash = node.ref.indexOf("/");
+    const ref = isCapabilityRef(node.ref) ? this.bindCapability(node.ref) : node.ref;
+    this.opts.onStep?.(ref);
+    const slash = ref.indexOf("/");
     if (slash === -1) {
-      throw new Error(`Invalid uses format (expected "ns/op"): "${node.ref}"`);
+      throw new Error(`Invalid uses format (expected "ns/op"): "${ref}"`);
     }
-    const namespace = node.ref.slice(0, slash);
-    const operation = node.ref.slice(slash + 1);
+    const namespace = ref.slice(0, slash);
+    const operation = ref.slice(slash + 1);
     if (namespace === "task") {
-      throw new Error(`legacy task reference "${node.ref}"; replace with "call: ${operation}"`);
+      throw new Error(`legacy task reference "${ref}"; replace with "call: ${operation}"`);
     }
 
     const paramText = Object.entries(node.params)
       .map(([key, value]) => `${key}=${value}`)
       .join("  ");
-    this.opts.logger?.step_detail(`${node.ref}${paramText ? `  ${paramText}` : ""}`);
+    const label = node.ref === ref ? ref : `${node.ref} -> ${ref}`;
+    this.opts.logger?.step_detail(`${label}${paramText ? `  ${paramText}` : ""}`);
 
     const registry = await this.ensureRegistry();
     const plugin = registry.get(namespace);
@@ -406,15 +414,15 @@ export class Runner {
     const handler = plugin.handlers[operation];
     if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
 
-    const params = parseStepParams(plugin, node.ref, operation, node.params);
-    if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(node.ref)) {
-      for (const key of AI_PATH_RESTRICTED.get(node.ref) ?? []) {
-        this.assertAiPathInProject(node.ref, key, params[key]);
+    const params = parseStepParams(plugin, ref, operation, node.params);
+    if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(ref)) {
+      for (const key of AI_PATH_RESTRICTED.get(ref) ?? []) {
+        this.assertAiPathInProject(ref, key, params[key]);
       }
     }
-    const step = [...trail, node.ref].join(" > ");
+    const step = [...trail, ref].join(" > ");
     // One context object per step, shared by the hooks and the handler as before.
-    const scope = this.events.scope(node.ref, step);
+    const scope = this.events.scope(ref, step);
     const pluginCtx = scope.bind(this.pluginContext());
     const pluginInstance = plugin as any;
     let returned: unknown;
@@ -432,7 +440,24 @@ export class Runner {
     } finally {
       scope.settle();
     }
-    this.handleReturn(plugin, node.ref, step, returned);
+    this.handleReturn(plugin, ref, step, returned);
+  }
+
+  /** Bind `uses: <capability>` to the selected handler before plugins are loaded. */
+  private bindCapability(ref: string): string {
+    const report = assessCapabilities(this.cfg, this.opts.configDir ?? process.cwd(), {
+      requested: [ref],
+    });
+    const hit = report.resolved.find((item) => item.capability === ref);
+    if (!hit) {
+      const issue = report.errors.find((item) => item.capability === ref) ?? report.errors[0];
+      throw new CapabilitySelectionError(
+        issue
+          ? `${issue.path}: ${issue.message}`
+          : `CAPABILITY_MISSING: no handler provides "${ref}".`,
+      );
+    }
+    return hit.ref;
   }
 
   /**

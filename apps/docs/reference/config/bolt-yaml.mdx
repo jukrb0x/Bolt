@@ -11,17 +11,18 @@ Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main
 
 ## Top-level fields
 
-| Field           | Type                                              | Required | Default | Notes               |
-| --------------- | ------------------------------------------------- | -------- | ------- | ------------------- |
-| `version`       | `1`                                               | yes      |         |                     |
-| `project`       | `object`                                          | yes      |         |                     |
-| `project.name`  | `string`                                          | yes      |         | minLength: 1        |
-| `vars`          | `map<string, string>`                             |          | `{}`    |                     |
-| `tasks`         | `map<string, stepList>` ([stepList](#steplist))   |          | `{}`    |                     |
-| `flows`         | `map<string, flow>` ([flow](#flow))               |          | `{}`    |                     |
-| `plugins`       | `plugin[]` ([plugin](#plugin))                    |          | `[]`    |                     |
-| `timeout_hours` | `number`                                          |          |         | exclusiveMinimum: 0 |
-| `notifications` | `notifications` ([notifications](#notifications)) |          |         |                     |
+| Field           | Type                                              | Required | Default | Notes                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`       | `1`                                               | yes      |         |                                                                                                                                                                                        |
+| `project`       | `object`                                          | yes      |         |                                                                                                                                                                                        |
+| `project.name`  | `string`                                          | yes      |         | minLength: 1                                                                                                                                                                           |
+| `vars`          | `map<string, string>`                             |          | `{}`    |                                                                                                                                                                                        |
+| `tasks`         | `map<string, stepList>` ([stepList](#steplist))   |          | `{}`    |                                                                                                                                                                                        |
+| `flows`         | `map<string, flow>` ([flow](#flow))               |          | `{}`    |                                                                                                                                                                                        |
+| `plugins`       | `plugin[]` ([plugin](#plugin))                    |          | `[]`    |                                                                                                                                                                                        |
+| `capabilities`  | `map<string, string>`                             |          | `{}`    | Singleton capability tag to handler ref (namespace/handler). bolt.local.yaml wins per key. An empty object is the same as omitting the key. Fan-out tags are ignored with one warning. |
+| `timeout_hours` | `number`                                          |          |         | exclusiveMinimum: 0                                                                                                                                                                    |
+| `notifications` | `notifications` ([notifications](#notifications)) |          |         |                                                                                                                                                                                        |
 
 Unknown top-level fields are rejected.
 

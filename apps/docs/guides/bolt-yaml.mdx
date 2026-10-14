@@ -10,7 +10,7 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 | File              | Committed?    | Contains                                                | Why                                                                         |
 | ----------------- | ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.         |
-| `bolt.local.yaml` | No (optional) | `vars` and `plugins` overrides                          | Per-machine vars and plugin config (machine paths). A missing file is fine. |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, and `capabilities` overrides        | Per-machine vars, plugin config, and singleton capability choices. A missing file is fine. |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -101,12 +101,24 @@ flows:
 #       chat_id: "-1001234567890"
 ```
 
+## capabilities
+
+Optional. Picks one handler for a singleton capability tag. `bolt.local.yaml` wins per key. `{}` is the same as omitting the map. See [Config Schema](/api/config-schema#capabilities).
+
+```yaml
+capabilities:
+  vcs.sync: git/pull
+```
+
+A step can then say `uses: vcs.sync`. `uses: git/pull` does not consult the map.
+
 ## bolt.local.yaml — annotated walkthrough
 
-Optional and gitignored. A missing file is fine. It may hold two keys:
+Optional and gitignored. A missing file is fine. It may hold three keys:
 
 - `vars` shallow-override the same keys in `bolt.yaml` `vars`.
 - `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace, before validation. Objects merge key by key; arrays and scalars replace. The namespace must be declared under `plugins` in `bolt.yaml`.
+- `capabilities.<tag>` replaces that one key from `bolt.yaml`. Other tags stay. `capabilities: {}` does not clear them.
 
 Use `plugins` for per-machine paths so they stay out of the committed `bolt.yaml`:
 

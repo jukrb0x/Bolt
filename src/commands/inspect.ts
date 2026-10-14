@@ -2,7 +2,14 @@ import { defineCommand } from "citty";
 import { loadProjectConfigOrExit } from "../project-config";
 import { CONFIG_EXIT_CODE } from "../exit-codes";
 import { formatPlanNodes } from "../inspect-utils";
-import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
+import { assessCapabilities, formatCapabilityErrors } from "../capability-selection";
+import {
+  capabilityUsesInPlan,
+  formatPlanErrors,
+  resolveRunPlan,
+  type PlanRequest,
+} from "../run-plan";
+import path from "path";
 import {
   missingNameMessage,
   parseRunArgsOrExit,
@@ -44,6 +51,20 @@ export default defineCommand({
     if (!result.ok) {
       printUsageError(
         `${formatPlanErrors(result.errors)}\n  Fix bolt.yaml, then run bolt inspect again.`,
+      );
+      process.exit(CONFIG_EXIT_CODE);
+    }
+
+    const report = assessCapabilities(cfg, path.dirname(configPath), {
+      requested: capabilityUsesInPlan(result.plan),
+      catalog: true,
+    });
+    for (const warning of report.warnings) console.log(warning);
+    for (const line of report.lines) console.log(line);
+    if (report.warnings.length > 0 || report.lines.length > 0) console.log();
+    if (report.errors.length > 0) {
+      printUsageError(
+        `${formatCapabilityErrors(report)}\n  Fix bolt.yaml or bolt.local.yaml, then run bolt inspect again.`,
       );
       process.exit(CONFIG_EXIT_CODE);
     }

@@ -156,6 +156,8 @@ Unknown bare tags are rejected with a "did you mean" hint. The areas `doctor`, `
 
 A plugin that uses `capability` without `apiVersion: 2` fails when it is defined (function plugins) or registered (class plugins), with the fix in the message.
 
+Singleton tags are chosen with the top-level `capabilities:` map (`bolt.local.yaml` wins per key). Fan-out tags ignore that map. See [Choosing a singleton provider](/guides/migrating-to-plugin-api-2#10-choosing-a-singleton-provider).
+
 ## Class plugins
 
 ```typescript

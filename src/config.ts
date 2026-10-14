@@ -5,6 +5,12 @@ import { createRuntime, type Runtime } from "./runtime";
 import { svnMetadataErrors } from "./plugins/svn";
 import { tasksReferenceUe, ueMetadataErrors } from "./plugins/ue";
 import { findLegacyKeys, unknownProjectRefs } from "./legacy-config";
+import {
+  assessCapabilities,
+  capabilityUsesInTasks,
+  mergeCapabilityMaps,
+  type SelectionFile,
+} from "./capability-selection";
 
 /** bolt.yaml schema version. Unknown versions are rejected; there is no migrator. */
 export const CONFIG_VERSION = 1;
@@ -94,10 +100,14 @@ export interface Project {
  * `plugins` maps a namespace declared in bolt.yaml to config that is deep-merged
  * over that plugin's config before validation, e.g. `plugins: { ue: { engine: { path: D:/UE } } }`.
  */
+/** Singleton capability → `namespace/handler`. `{}` is the same as omitting the key. */
+const CapabilitySelectionSchema = z.record(z.string().min(1)).optional();
+
 const LocalConfigSchema = z
   .object({
     vars: z.record(z.string()).optional(),
     plugins: z.record(z.record(z.unknown())).optional(),
+    capabilities: CapabilitySelectionSchema,
   })
   .strict();
 export type LocalConfig = z.infer<typeof LocalConfigSchema>;
@@ -139,6 +149,7 @@ const BoltConfigSchema = z
     tasks: z.record(TaskSchema).default({}),
     flows: z.record(FlowSchema).default({}),
     plugins: z.array(PluginEntrySchema).default([]),
+    capabilities: CapabilitySelectionSchema,
     timeout_hours: z.number().positive().optional(),
     notifications: NotificationsSchema.optional(),
   })
@@ -152,6 +163,13 @@ export interface BoltConfig {
   tasks: TasksMap;
   flows: Record<string, Flow>;
   plugins: PluginEntry[];
+  /**
+   * Merged singleton selection. `bolt.local.yaml` wins per key. Empty when omitted.
+   * Not required on hand-built configs; `loadConfig` always sets it.
+   */
+  capabilities?: Record<string, string>;
+  /** Which file supplied each key in `capabilities`. */
+  capabilitySources?: Partial<Record<string, SelectionFile>>;
   /**
    * Directory containing the bolt.yaml this config was loaded from.
    * Set by loadConfig. Not a bolt.yaml field. Relative plugin paths resolve against it.
@@ -309,6 +327,10 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     throw new Error(`bolt.yaml invalid (${detail})${legacy}`);
   }
   const shared = sharedResult.data;
+  const { map: capabilities, sources: capabilitySources } = mergeCapabilityMaps(
+    shared.capabilities,
+    local.capabilities,
+  );
 
   return {
     version: CONFIG_VERSION,
@@ -317,6 +339,8 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     tasks: shared.tasks,
     flows: shared.flows,
     plugins: shared.plugins,
+    capabilities,
+    capabilitySources,
     configDir,
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
@@ -354,6 +378,8 @@ export function pluginMetadataErrors(parsed: unknown): Array<{ path: string; mes
 export interface ConfigCheckResultWithLegacy extends ConfigCheckResult {
   /** v2.0 keys found in bolt.yaml or bolt.local.yaml. Empty for a version 1 config. */
   legacy: ReturnType<typeof findLegacyKeys>;
+  /** Fan-out keys in `capabilities:` (ignored, not an error). */
+  warnings: string[];
 }
 
 export async function checkConfig(
@@ -371,7 +397,7 @@ export async function checkConfig(
       e?.code === "EACCES" || e?.code === "EPERM"
         ? `Permission denied reading ${filepath}. Check the file permissions (it must be readable by the current user).`
         : e.message;
-    return { ok: false, errors: [{ path: "<file>", message }], legacy: [] };
+    return { ok: false, errors: [{ path: "<file>", message }], legacy: [], warnings: [] };
   }
   let parsed: unknown;
   try {
@@ -381,6 +407,7 @@ export async function checkConfig(
       ok: false,
       errors: [{ path: "<yaml>", message: `YAML parse error: ${e.message}` }],
       legacy: [],
+      warnings: [],
     };
   }
 
@@ -389,6 +416,7 @@ export async function checkConfig(
   const localPath = path.join(configDir, LOCAL_FILENAME);
   let localParsed: unknown = undefined;
   let localOverrides: Record<string, Record<string, unknown>> | undefined;
+  let localCapabilities: Record<string, string> | undefined;
   if (existsSync(localPath)) {
     try {
       localParsed = rt.parseYaml(readFileSync(localPath, "utf8")) ?? {};
@@ -402,6 +430,7 @@ export async function checkConfig(
         );
       } else {
         localOverrides = localResult.data.plugins;
+        localCapabilities = localResult.data.capabilities;
       }
     } catch (e: any) {
       errors.push({ path: LOCAL_FILENAME, message: `YAML parse error: ${e.message}` });
@@ -432,6 +461,25 @@ export async function checkConfig(
     });
   }
 
+  let warnings: string[] = [];
+  if (errors.length === 0 && result.success) {
+    const { map, sources } = mergeCapabilityMaps(result.data.capabilities, localCapabilities);
+    const report = assessCapabilities(
+      {
+        capabilities: map,
+        capabilitySources: sources,
+        plugins: result.data.plugins,
+        tasks: result.data.tasks,
+      },
+      configDir,
+      { requested: capabilityUsesInTasks(result.data.tasks) },
+    );
+    warnings = report.warnings;
+    for (const issue of report.errors) {
+      errors.push({ path: issue.path, message: issue.message });
+    }
+  }
+
   const legacy = findLegacyKeys(parsed, localParsed);
-  return { ok: errors.length === 0, errors, legacy };
+  return { ok: errors.length === 0, errors, legacy, warnings };
 }

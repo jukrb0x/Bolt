@@ -156,6 +156,13 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       default: [],
       items: { $ref: "#/$defs/plugin" },
     },
+    capabilities: {
+      type: "object",
+      description:
+        "Singleton capability tag to handler ref (namespace/handler). bolt.local.yaml wins per key. An empty object is the same as omitting the key. Fan-out tags are ignored with one warning.",
+      additionalProperties: { type: "string", minLength: 1 },
+      default: {},
+    },
     timeout_hours: { type: "number", exclusiveMinimum: 0 },
     notifications: { $ref: "#/$defs/notifications" },
   },
@@ -272,13 +279,19 @@ const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
   $schema: "http://json-schema.org/draft-07/schema#",
   title: "bolt.local.yaml",
   description:
-    "Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.<namespace> is deep-merged over the config of the bolt.yaml plugin with that namespace before validation.",
+    "Per-machine overrides (gitignored). vars override bolt.yaml vars. plugins.<namespace> is deep-merged over the config of the bolt.yaml plugin with that namespace before validation. capabilities overrides bolt.yaml capabilities per key; an empty object is the same as omitting the key.",
   type: "object",
   additionalProperties: false,
   properties: {
     vars: {
       type: "object",
       additionalProperties: { type: "string" },
+    },
+    capabilities: {
+      type: "object",
+      description:
+        "Per-key override of bolt.yaml capabilities. An empty object is the same as omitting the key.",
+      additionalProperties: { type: "string", minLength: 1 },
     },
     plugins: {
       type: "object",

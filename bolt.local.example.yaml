@@ -4,6 +4,8 @@
 # `vars` override bolt.yaml vars. `plugins.<namespace>` is deep-merged over
 # the config of the bolt.yaml plugin with that namespace, so machine paths
 # stay out of the committed bolt.yaml.
+# `capabilities.<tag>` overrides that one key from bolt.yaml ({} is the same
+# as omitting the key). Example: vcs.sync: svn/update
 
 # vars:
 #   region: eu
