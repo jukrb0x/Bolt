@@ -57,12 +57,37 @@ bolt run build --target=client
 bolt run build --config=debug
 ```
 
+## Invalid flags
+
+Every command rejects flags it does not understand with exit code `2` before anything
+runs. There are two error shapes:
+
+- **Unknown flag** (including undeclared `--dry-run` / `--simulate` on commands that do
+  not declare them, e.g. `bolt list --dry-run`): `Unknown flag "--…" for "bolt <cmd>".`
+  May include `Did you mean …?` (suggestions use only that command's own flags). A
+  second indented line lists `Flags: …` (or `This command takes no flags`) and hints
+  `Run bolt <cmd> --help for details.`
+- **Reserved, not implemented** (`--json`, `--agent`, `--execute`, `--plan`,
+  `--confirmed-by-user` when the command does not declare them, e.g. `bolt list --json`):
+  `--<name> is reserved by bolt and not supported yet. Remove it from the command.`
+  No `Flags:` list and no did-you-mean.
+
+Declared on purpose and accepted: `bolt version --json`, `bolt migrate --dry-run`,
+`bolt run --dry-run` / `--simulate`. On `bolt inspect`, undeclared `--dry-run` /
+`--simulate` still say `Unknown flag` with the inspect-is-already-a-preview note.
+
+Only `bolt run` and `bolt inspect` accept `--key=value` task params and a `--`
+passthrough. Other commands reject arguments after `--` (with a "Bolt flags go before
+`--`" hint when the token looks like a flag).
+
 ## Exit Codes
 
-| Code | Meaning                                                      |
-| ---- | ------------------------------------------------------------ |
-| 0    | Success                                                      |
-| 1    | Error (config not found, validation failed, execution error) |
+| Code | Meaning                                                                    |
+| ---- | -------------------------------------------------------------------------- |
+| 0    | Success                                                                    |
+| 1    | Task failure while running                                                 |
+| 2    | Usage error (unknown flag/command/task, reserved flag)                     |
+| 3    | Config error (`bolt.yaml` missing/invalid, or `--dry-run` config problems) |
 
 ## Configuration Discovery
 
