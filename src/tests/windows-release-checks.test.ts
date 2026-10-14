@@ -34,7 +34,9 @@ test("live Windows checks query the triggering tag", () => {
   }
 
   const install = readFileSync(workflows[0], "utf8");
-  expect(install).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$");
+  // The tag check is scripts/self-update-tag.ps1; self-update-tag.test.ts runs the block.
+  expect(install).toContain('Join-Path $env:GITHUB_WORKSPACE "scripts/self-update-tag.ps1"');
+  expect(install).not.toContain("-notmatch '^v");
   expect(install).toContain(
     '$env:BOLT_INSTALL_BASE = "https://github.com/jukrb0x/Bolt/releases/download/$tag"',
   );

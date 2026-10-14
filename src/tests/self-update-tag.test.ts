@@ -102,11 +102,8 @@ test("the script uses a case-sensitive match", () => {
 });
 
 // The block the workflow runs, taken from the yml so the two cannot drift.
-function workflowTagCheck(): string {
-  const yml = readFileSync(
-    path.join(import.meta.dir, "../../.github/workflows/verify-windows-self-update.yml"),
-    "utf8",
-  );
+function workflowTagCheck(workflow = "verify-windows-self-update.yml"): string {
+  const yml = readFileSync(path.join(import.meta.dir, "../../.github/workflows", workflow), "utf8");
   const lines = yml.split("\n");
   const begin = lines.findIndex((line) => line.trim() === "# BEGIN tag-check");
   const end = lines.findIndex((line) => line.trim() === "# END tag-check");
@@ -114,11 +111,11 @@ function workflowTagCheck(): string {
   return lines.slice(begin + 1, end).join("\n");
 }
 
-function runWorkflowCheck(tag: string, workspace: string) {
+function runWorkflowCheck(tag: string, workspace: string, workflow?: string) {
   const body = [
     '$ErrorActionPreference = "Stop"',
     "$tag = $env:TEST_TAG",
-    workflowTagCheck(),
+    workflowTagCheck(workflow),
     'Write-Host "after-tag-check mode=$mode"',
   ].join("\n");
   const result = Bun.spawnSync([pwsh!, "-NoProfile", "-NonInteractive", "-Command", body], {
@@ -160,4 +157,36 @@ ptest("the workflow block explains a ref without the script", () => {
   expect(r.out).toContain(
     "scripts/self-update-tag.ps1 not found in the checked-out ref refs/tags/v2.0.0",
   );
+});
+
+// verify-windows-install.yml runs the same script; it only needs validity.
+const install = "verify-windows-install.yml";
+
+ptest("the install workflow block stops on an invalid tag", () => {
+  for (const tag of ["V1.2.3", "v1.2.3\n", "v01.2.3"]) {
+    const r = runWorkflowCheck(tag, repoRoot, install);
+    expect(r.exitCode).not.toBe(0);
+    expect(r.out).not.toContain("after-tag-check");
+    expect(r.out).toContain(`Tag validation failed for '${tag}' (exit 1)`);
+  }
+});
+
+ptest("the install workflow block lets valid tags through", () => {
+  for (const tag of ["v1.2.3", "v1.2.3-rc.1"]) {
+    const r = runWorkflowCheck(tag, repoRoot, install);
+    expect(r.exitCode).toBe(0);
+    expect(r.out).toContain("after-tag-check");
+  }
+});
+
+ptest("the install workflow block explains a ref without the script", () => {
+  const r = runWorkflowCheck("v1.2.3", path.join(repoRoot, "src"), install);
+  expect(r.exitCode).not.toBe(0);
+  expect(r.out).toContain("scripts/self-update-tag.ps1 not found in the checked-out ref");
+});
+
+test("the install workflow no longer uses a loose -notmatch tag check", () => {
+  const yml = readFileSync(path.join(repoRoot, ".github/workflows", install), "utf8");
+  expect(yml).not.toMatch(/\$tag -notmatch/);
+  expect(yml).toContain("sparse-checkout: scripts");
 });

@@ -27,6 +27,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     steps:
+      # Only for scripts/self-update-tag.ps1. The binary comes from the published release.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
       - name: Install from the published release
         shell: pwsh
         env:
@@ -34,10 +38,20 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $tag = [string]$env:RELEASE_TAG
-          # Same shape the Release workflow stamps. A hyphen marks a prerelease.
-          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
-            throw "release tag '$tag' is not a public version"
+          # Same shape the Release workflow stamps. Rejects an uppercase V and a trailing newline.
+          # src/tests/self-update-tag.test.ts runs this block under pwsh.
+          # BEGIN tag-check
+          $tagScript = Join-Path $env:GITHUB_WORKSPACE "scripts/self-update-tag.ps1"
+          if (-not (Test-Path -LiteralPath $tagScript)) {
+            throw "scripts/self-update-tag.ps1 not found in the checked-out ref $env:GITHUB_REF ($env:GITHUB_SHA). This ref predates the script; re-run with workflow_dispatch on main or a newer tag."
           }
+          # The script exits 1 on an invalid tag. Stop does not turn an exit code into an error.
+          # Install only needs validity; the prerelease/stable mode it prints is not used.
+          $null = & $tagScript -Tag $tag
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tag validation failed for '$tag' (exit $LASTEXITCODE); see the error above."
+          }
+          # END tag-check
           $release = Invoke-RestMethod -Headers @{
             Authorization = "Bearer ${{ github.token }}"
             Accept        = "application/vnd.github+json"
