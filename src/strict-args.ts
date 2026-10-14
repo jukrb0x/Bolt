@@ -286,7 +286,31 @@ export function parseStrictArgs(rawArgs: string[], spec: StrictArgSpec): StrictP
         }
         throw new UsageError(msg);
       }
-      for (const rest of rawArgs.slice(i + 1)) {
+      const before = rawArgs.slice(0, i);
+      const after = rawArgs.slice(i + 1);
+      for (const rest of after) {
+        // Bare bolt flags after -- are not params. Accepted flags: say they go
+        // before --. Reserved / inspect-disallowed: lead with reserved/Remove.
+        if (rest.startsWith("--") && !rest.includes("=")) {
+          const name = rest.slice(2);
+          const known = new Set([...paramFlags, "help", ...RESERVED_FLAGS]);
+          if (known.has(name) || isReserved(name)) {
+            if (!paramFlags.includes(name)) {
+              if (name === "help") {
+                throw new UsageError(
+                  `Malformed param "${rest}": Use: bolt ${spec.command} --help.`,
+                );
+              }
+              throw reservedError(name, spec);
+            }
+            const paramsOnly = after.filter((a) => a !== rest).map(shellQuote);
+            const fixed = ["bolt", spec.command, ...before.map(shellQuote), rest];
+            if (paramsOnly.length) fixed.push("--", ...paramsOnly);
+            throw new UsageError(
+              `Malformed param "${rest}": bolt flags must come before "--". Try: ${fixed.join(" ")}`,
+            );
+          }
+        }
         const [k, v] = parseParam(rest, rest);
         if (isReserved(k) || k === "help") {
           throw reservedParamError(k, v, {

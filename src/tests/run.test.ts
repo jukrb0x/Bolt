@@ -92,9 +92,29 @@ describe("parseRunArgs strictness (BOLT-FIX-3)", () => {
     expect(parsed.names).toEqual(["build"]);
     expect(parsed.dryRun).toBe(true);
     expect(parsed.params).toEqual({ extra: "--verbose", a: "b=c" });
-    expect(usage(["build", "--", "--execute"])).toContain("Malformed param");
-    expect(usage(["build", "--", "--dry-run"])).toContain("Malformed param");
+    expect(usage(["build", "--", "--execute"])).toBe(
+      "--execute is reserved by bolt and not supported yet. Remove it from the command.",
+    );
+    expect(usage(["build", "--", "--dry-run"])).toBe(
+      'Malformed param "--dry-run": bolt flags must come before "--". Try: bolt run build --dry-run',
+    );
     expect(usage(["build", "--", "start"])).toContain("Malformed param");
+  });
+
+  test("a bolt flag after -- says flags go before it; reserved leads with Remove", () => {
+    expect(usage(["shell", "--", "target=x", "--dry-run"])).toBe(
+      'Malformed param "--dry-run": bolt flags must come before "--". Try: bolt run shell --dry-run -- target=x',
+    );
+    expect(usage(["build", "--", "--simulate"])).toBe(
+      'Malformed param "--simulate": bolt flags must come before "--". Try: bolt run build --simulate',
+    );
+    expect(usage(["build", "--", "--help"])).toBe(
+      'Malformed param "--help": Use: bolt run --help.',
+    );
+    expect(usage(["build", "--", "--verbose"])).not.toContain("bolt flags");
+    expect(usage(["build", "--", "--dry-run"], { flags: [], command: "inspect" })).toBe(
+      'Unknown flag "--dry-run" for "bolt inspect": bolt inspect never executes, it is already a side-effect-free preview. Remove --dry-run.',
+    );
   });
 
   test("a bare -- with nothing after it is allowed", () => {
