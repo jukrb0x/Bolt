@@ -52,3 +52,6 @@ docs/superpowers/
 
 bolt.yaml
 bolt.local.yaml
+
+# Test action scratch directories
+.bolt-test-action-*/
