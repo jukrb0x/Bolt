@@ -128,10 +128,8 @@ export function knownFlagNames(spec: StrictArgSpec): string[] {
 /** Display list of supported flags for error hints. */
 export function formatSupportedFlags(spec: StrictArgSpec): string {
   const parts: string[] = [];
-  const seen = new Set<string>();
   for (const name of spec.booleans) {
     parts.push(`--${name}`);
-    seen.add(name);
     for (const [alias, primary] of spec.booleanLookup) {
       if (primary === name && alias !== name && alias.length === 1) parts.push(`-${alias}`);
       else if (primary === name && alias !== name) parts.push(`--${alias}`);
@@ -269,7 +267,7 @@ export function parseStrictArgs(rawArgs: string[], spec: StrictArgSpec): StrictP
   const params: Record<string, string> = {};
   const booleans: Record<string, boolean> = {};
   const strings: Record<string, string> = {};
-  const paramFlags = spec.allowParams ? spec.booleans : spec.booleans;
+  const paramFlags = spec.booleans;
 
   for (let i = 0; i < rawArgs.length; i++) {
     const arg = rawArgs[i];

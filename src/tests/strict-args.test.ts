@@ -68,6 +68,9 @@ describe("specFromCittyArgs", () => {
 });
 
 describe("parseStrictArgs citty parity", () => {
+  // Semantic parity with citty (forms citty accepts), not object-equality against citty's
+  // internal parse result — BOLT-CLI-1 design §5 / Atlas P2-3.
+
   const init = specFromCittyArgs("init", { force: { type: "boolean", alias: "f" } });
   const config = specFromCittyArgs("config", { editor: { type: "string", alias: "e" } });
   const version = specFromCittyArgs("version", { json: { type: "boolean" } });

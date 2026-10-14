@@ -77,6 +77,8 @@ if (leaf) {
   const command = leaf.path.join(" ");
   const args = (leaf.def.args ?? {}) as Record<string, { type?: string; alias?: string | string[] }>;
   const spec = specFromCittyArgs(command, args, { allowParams: leafAllowsParams(leaf.path) });
+  // Validate only; discard the result. citty still parses for most commands; run/inspect
+  // re-parse via parseRunArgsOrExit so values stay in one place.
   parseStrictArgsOrExit(leaf.rest, spec);
 }
 
