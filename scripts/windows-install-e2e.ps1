@@ -61,6 +61,7 @@ $Failed = $true
 $HostExe = (Get-Process -Id $PID).Path
 Write-Host "PowerShell $($PSVersionTable.PSVersion) at $HostExe"
 $ScratchRoot = Join-Path $env:USERPROFILE "bolt-e2e-cases"
+$QuickRoot = Join-Path $env:USERPROFILE "bolt-e2e-quickstart"
 $EnvKeyPath = "Environment"
 $MachineKeyPath = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 
@@ -160,6 +161,64 @@ function Get-FreshPath {
   return "$machine;$user"
 }
 
+# The compiled binary runs `run:` in Bun's shell, not in cmd.exe or the parent
+# PowerShell, so the init template's echo is the same string under either.
+# Still run it from this host and from cmd.exe, and fail if the hello line differs.
+function Get-HelloLine([string]$Text) {
+  foreach ($line in ($Text -split "`r?`n")) {
+    $trim = $line.Trim()
+    if ($trim -match '^hello from ') { return $trim }
+  }
+  return ""
+}
+
+function Invoke-BoltQuickstart([string]$Label, [string]$ShellKind) {
+  $dir = Join-Path $QuickRoot $Label
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $boltDir = Split-Path -Parent $Dest
+  $savedPath = $env:Path
+  $env:Path = "$boltDir;" + (Get-FreshPath)
+  $found = (Get-Command bolt -ErrorAction Stop).Path
+  if ($found.TrimEnd("\").ToLower() -ne $Dest.TrimEnd("\").ToLower()) {
+    throw "$Label is running $found, expected $Dest"
+  }
+  $savedEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    if ($ShellKind -eq "cmd") {
+      $cmd = "$env:SystemRoot\System32\cmd.exe"
+      $arg = "cd /d `"$dir`" && bolt init && bolt run demo --dry-run && bolt run demo"
+      $text = Strip-Ansi ((& $cmd /d /c $arg | Out-String))
+      $code = $LASTEXITCODE
+      if ($code -ne 0) { throw "$Label cmd quickstart exited $code`n$text" }
+      if ($text -notmatch "would run:") { throw "$Label cmd dry-run did not preview the step`n$text" }
+      if (-not (Test-Path -LiteralPath (Join-Path $dir "bolt.yaml"))) { throw "$Label cmd bolt init wrote no bolt.yaml" }
+    } else {
+      Push-Location $dir
+      try {
+        $initOut = (& bolt init | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "$Label bolt init exited $LASTEXITCODE`n$initOut" }
+        if (-not (Test-Path -LiteralPath (Join-Path $dir "bolt.yaml"))) { throw "$Label bolt init wrote no bolt.yaml" }
+        $dry = Strip-Ansi ((& bolt run demo --dry-run | Out-String))
+        if ($LASTEXITCODE -ne 0) { throw "$Label dry-run exited $LASTEXITCODE`n$dry" }
+        if ($dry -notmatch "would run:" -or $dry -notmatch "hello from") {
+          throw "$Label dry-run missing the hello preview`n$dry"
+        }
+        $ran = Strip-Ansi ((& bolt run demo | Out-String))
+        if ($LASTEXITCODE -ne 0) { throw "$Label bolt run demo exited $LASTEXITCODE`n$ran" }
+        $text = $ran
+      } finally { Pop-Location }
+    }
+    $hello = Get-HelloLine $text
+    if (-not $hello) { throw "$Label output has no 'hello from' line`n$text" }
+    Write-Host "$Label quickstart: $hello"
+    return $hello
+  } finally {
+    $ErrorActionPreference = $savedEap
+    $env:Path = $savedPath
+  }
+}
+
 try {
   if (Test-Path -LiteralPath $DestDir) { Remove-Item -LiteralPath $DestDir -Recurse -Force }
   if (Test-Path -LiteralPath $ReceiptPath) { Remove-Item -LiteralPath $ReceiptPath -Force }
@@ -241,6 +300,13 @@ try {
 
   $env:Path = Get-FreshPath
   Invoke-Probe "2.0.0"
+  if (Test-Path -LiteralPath $QuickRoot) { Remove-Item -LiteralPath $QuickRoot -Recurse -Force }
+  $hostHello = Invoke-BoltQuickstart "host" "powershell"
+  $cmdHello = Invoke-BoltQuickstart "cmd" "cmd"
+  if ($hostHello -cne $cmdHello) {
+    throw "init template run: output differs between PowerShell $($PSVersionTable.PSVersion) ('$hostHello') and cmd.exe ('$cmdHello')"
+  }
+  Write-Host "run: output matches under PowerShell $($PSVersionTable.PSVersion) and cmd.exe: $hostHello"
   if (Test-Path -LiteralPath $Old) { throw "bolt.exe.old existed before self-update" }
 
   # The github.com redirect path. The output must not mention a GitHub API fallback.
@@ -408,7 +474,7 @@ try {
 } finally {
   Set-RawPath ([Microsoft.Win32.Registry]::CurrentUser) $EnvKeyPath $SavedUserPath
   Set-RawPath ([Microsoft.Win32.Registry]::LocalMachine) $MachineKeyPath $SavedMachinePath
-  foreach ($dir in @($LegacyDir, (Split-Path -Parent $CustomDir), $ScratchRoot)) {
+  foreach ($dir in @($LegacyDir, (Split-Path -Parent $CustomDir), $ScratchRoot, $QuickRoot)) {
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
   }
   if ($Server -and -not $Server.HasExited) {

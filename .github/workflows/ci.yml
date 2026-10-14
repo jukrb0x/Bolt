@@ -122,6 +122,54 @@ jobs:
         shell: pwsh
         run: ${{ matrix.host }}.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-e2e.ps1
 
+  # README quickstart with the binary install.sh or install.ps1 just wrote.
+  # Served local artifacts, not the public latest release: a pull request is
+  # not published, and the live install workflows run only after Release.
+  # macos-13 was removed in December 2025. macos-15-intel is the x64 image.
+  quickstart:
+    name: quickstart ${{ matrix.os }}
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    needs: binaries
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            self_update: true
+          - os: macos-14
+            self_update: false
+          - os: macos-15-intel
+            self_update: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bolt-binaries
+          path: build
+
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.self_update
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        if: matrix.self_update
+        run: bun install --frozen-lockfile
+
+      - name: Install and run the README quickstart
+        shell: bash
+        env:
+          BOLT_QUICKSTART_SELF_UPDATE: ${{ matrix.self_update && '1' || '0' }}
+        run: bash scripts/unix-quickstart-e2e.sh
+
   # Pull requests and main. Tag pushes are built by the Release workflow.
   binaries:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
