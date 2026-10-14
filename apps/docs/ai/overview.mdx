@@ -13,8 +13,8 @@ the same permissions and allowlists you already use for shell commands apply to 
 <Warning>
   **Status.** Most of this page describes a reviewed design for agent support, pending maintainer
   sign-off. It is not in the current release. Today's binary has the `ai` handler flag, `bolt ai`,
-  and a first skill. It does not have `--json`, agent mode, `bolt status`, or `--execute`. Sections
-  below say which is which.
+  and a first skill. It does not have `--json` (except `bolt version --json`), agent mode, `bolt status`, or `--execute`. Sections
+  below marked **Planned** are not implemented yet.
 </Warning>
 
 ## Available today
@@ -52,7 +52,15 @@ reports the capabilities.
 
 ## Planned: skills that call the CLI with `--json`
 
-### The loop
+<Info>
+  **Planned.** Nothing in this section is implemented in the current release. `--json` (on every command except `bolt version`), `--agent`, `--execute`, `--plan`, and `--confirmed-by-user` are reserved flags that fail with exit code `2`, and there is no `bolt status` command.
+</Info>
+
+### The loop (Planned)
+
+<Info>
+  **Planned.** Only the first half of step 1 works today: `bolt version --json` prints `version`, `plugin_api`, `manifest_format`, and `capabilities`. Steps 2 to 5 (`bolt status`, `--agent`, `--json` on other commands, `plan_hash`, `--execute`, `--plan`, `--confirmed-by-user`) are not implemented.
+</Info>
 
 An agent following the Bolt skill works in five steps:
 
@@ -82,7 +90,11 @@ An agent following the Bolt skill works in five steps:
   </Step>
 </Steps>
 
-### JSON output
+### JSON output (Planned)
+
+<Info>
+  **Planned.** The shared envelope, per-command schemas, and `«env:NAME»` / `«local:NAME»` redaction are not implemented. `bolt version --json` prints its own flat object, not this envelope.
+</Info>
 
 With `--json`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
 envelope:
@@ -109,14 +121,22 @@ envelope:
 
 Planned `--json` support: `version`, `list`, `info`, `check`, `inspect`, `status` (new), `run`, and `ai`.
 
-### Which plans an agent may run
+### Which plans an agent may run (Planned)
+
+<Info>
+  **Planned.** Effective agent mode per plan and the `bolt.local.yaml` switch are not implemented. Today the `ai` flag only controls what `bolt ai` writes to `.bolt/ai-context.md`.
+</Info>
 
 Each plan gets an effective agent mode derived from its steps, and the strictest step wins. Shell
 (`run:`) steps, local actions, and handlers from non-built-in plugins always require your confirmation.
 You will be able to turn off agent execution on a machine in `bolt.local.yaml`. The exact rules and
 built-in handler defaults are still being finalized.
 
-### Safety model
+### Safety model (Planned)
+
+<Info>
+  **Planned.** The guarantees below describe the planned design. In the current release `bolt run --dry-run` still loads plugins and calls handlers, and no `static-dry-run` capability exists.
+</Info>
 
 Bolt's checks guard against a cooperative agent that makes mistakes: a wrong task name, a plan that
 changed between preview and execution, or a forgotten confirmation. Once shipped, previews and the read-only
