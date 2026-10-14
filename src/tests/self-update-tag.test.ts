@@ -107,11 +107,13 @@ for (const [tag, shown] of [
 ] as const) {
   ptest(`control characters in ${JSON.stringify(tag)} are escaped on one line`, () => {
     const r = run(tag);
+    // Windows pwsh ends stderr with CRLF; normalize before asserting one line / no raw CR.
+    const stderr = r.stderr.replace(/\r\n/g, "\n");
     expect(r.exitCode).not.toBe(0);
-    expect(r.stderr).toContain(`Tag '${shown}' is invalid`);
-    expect(r.stderr.trimEnd().split("\n")).toHaveLength(1);
-    expect(r.stderr).not.toContain("\r");
-    expect(r.stderr).not.toContain("\u001b");
+    expect(stderr).toContain(`Tag '${shown}' is invalid`);
+    expect(stderr.trimEnd().split("\n")).toHaveLength(1);
+    expect(stderr).not.toContain("\r");
+    expect(stderr).not.toContain("\u001b");
   });
 }
 
