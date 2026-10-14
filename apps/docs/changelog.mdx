@@ -19,8 +19,8 @@ plugin from `bolt plugin new`, which writes the file). Missing, invalid, or stal
 projects keep the same context hash as before.
 
 `bolt plugin build <ns>` is the only refresh path that executes plugin code — never auto-allow it. Do not
-auto-allow default `bolt ai` (writes a file). Re-adding `bolt ai --stdout` to agent auto-allow lists waits
-until after this change is released.
+auto-allow default `bolt ai` (writes a file). Agents may auto-allow `bolt ai --stdout` (print-only; no
+project writes).
 
 ### Breaking: all commands reject unknown and reserved flags (BOLT-CLI-1)
 

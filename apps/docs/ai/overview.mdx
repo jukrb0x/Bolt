@@ -34,8 +34,8 @@ the plugin catalog. `bolt.local.yaml` is not an input. Use `bolt ai --stdout` to
 writing the file. Both forms assemble the catalog from built-ins (in-process) plus each project/user/path
 plugin's `bolt.plugin.json` — they do not import or execute project/user plugin code and do not write
 `.bolt/.cache/`. Missing or stale manifests exit `3`; refresh with `bolt plugin build <ns>`. Default `bolt ai`
-still writes `.bolt/ai-context.md`. Until the allowlist is updated after this ships, do not auto-allow any
-`bolt ai` form.
+still writes `.bolt/ai-context.md` and must not be auto-allowed. `bolt ai --stdout` is print-only and may be
+auto-allowed.
 
 ### The current skill
 
@@ -76,10 +76,10 @@ Bolt will not be able to stop an agent that ignores the skill. It will not be ab
 `--confirmed-by-user` reflects a real yes, and it does not sandbox plugin code. The real boundary is your
 agent client's command allowlist:
 
-- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, and only the prefix
+- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt ai --stdout`, and only the prefix
   `bolt run --dry-run`. Add `bolt status` once it exists (Planned).
 - Never auto-allow any other `bolt run`, `bolt plugin build`, `bolt self-update`, `bolt init`,
-  `bolt migrate`, or any `bolt ai` (including `--stdout`). `bolt ai --json` exits `2` and writes nothing.
+  `bolt migrate`, or default `bolt ai` (it writes `.bolt/ai-context.md`). `bolt ai --json` exits `2` and writes nothing.
   Never auto-allow `bolt run --simulate` (it runs plugin code). `bolt plugin build` executes plugin code
   to refresh `bolt.plugin.json` and must stay off the allowlist.
 - On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or
