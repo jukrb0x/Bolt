@@ -163,6 +163,7 @@ function suggest(name: string, known: string[]): string {
 }
 
 function unknownFlagError(arg: string, nameForSuggest: string, spec: StrictArgSpec): UsageError {
+  const known = knownFlagNames(spec);
   const hint = suggest(nameForSuggest, known);
   const paramsHint = spec.allowParams ? ` Params must be given as --key=value.` : "";
   return new UsageError(
