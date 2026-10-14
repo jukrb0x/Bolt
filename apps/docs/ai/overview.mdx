@@ -31,7 +31,8 @@ Every plugin handler declares whether agents may use it. Plugin authors set this
 plugins and handlers an agent may use. Handlers that agents may not use are left out, and handlers that need
 your confirmation are marked as such. The file header carries a context hash computed from `bolt.yaml` and
 the plugin catalog. `bolt.local.yaml` is not an input. Use `bolt ai --stdout` to print it instead of
-writing the file.
+writing the file. Both forms load project plugins and run their top-level code, and a first run writes
+plugin build caches under `.bolt/.cache/`.
 
 ### The current skill
 
@@ -43,8 +44,8 @@ tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
   `bolt run --dry-run` is a static preview. It reads `bolt.yaml`, resolves the plan, and prints each step
   as `would run …`. It does not load project or user plugins, call hooks or handlers, start processes, or
   write files. `bolt run --simulate` is different: it loads plugins and runs their hooks and handlers with
-  `ctx.dryRun = true`, and may have side effects. Only let an agent run `--simulate` after you approve it. The
-  two flags cannot be combined. See [bolt run](/cli/run).
+  `ctx.dryRun = true`, and may have side effects. Bolt does not prompt before `--simulate` runs, so the agent
+  must ask you first; only let it run `--simulate` after you approve it. The two flags cannot be combined. See [bolt run](/cli/run).
 
   Only `bolt run` and `bolt inspect` reject flags. On those two commands, unknown flags fail with exit
   code `2` before anything runs, and `--json`, `--agent`, `--execute`, `--plan`, and
@@ -69,11 +70,12 @@ Bolt will not be able to stop an agent that ignores the skill. It will not be ab
 `--confirmed-by-user` reflects a real yes, and it does not sandbox plugin code. The real boundary is your
 agent client's command allowlist:
 
-- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt ai --stdout`,
-  and only the prefix `bolt run --dry-run`. Add `bolt status` once it exists (Planned).
+- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, and only the prefix
+  `bolt run --dry-run`. Add `bolt status` once it exists (Planned).
 - Never auto-allow any other `bolt run`, `bolt plugin build`, `bolt self-update`, `bolt init`,
-  `bolt migrate`, or `bolt ai` without `--stdout`. `bolt ai --json` is not read-only: `--json` is ignored
-  and the file is written. Never auto-allow `bolt run --simulate`.
+  `bolt migrate`, or any `bolt ai`. `bolt ai --json` is not read-only: `--json` is ignored and the file is
+  written. Never auto-allow `bolt run --simulate` or `bolt ai --stdout`: both run plugin code from the
+  repository.
 - On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or
   `bolt.exe` in the repository cannot take its place.
 - Planned: once `bolt version --json` lists the `static-dry-run` capability, check for it before
