@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import {
   commitFromLsRemote,
+  ghVersionError,
   parseApiRelease,
   parseApiReleaseList,
   parseAssetNames,
@@ -684,4 +685,17 @@ test("a draft on the second page is completed from the slurped list", () => {
       (args) => args.includes(`repos/${REPO}/releases/42`) && args.includes("draft=false"),
     ),
   ).toBe(true);
+});
+
+test("gh older than 2.48 fails early with the version found", () => {
+  expect(
+    ghVersionError(
+      "gh version 2.47.1 (2024-04-01)\nhttps://github.com/cli/cli/releases/tag/v2.47.1\n",
+    ),
+  ).toContain("requires gh 2.48 or later, found 2.47.1");
+  expect(ghVersionError("gh version 1.99.0 (2021-01-01)")).toContain("found 1.99.0");
+  expect(ghVersionError("")).toContain("requires gh 2.48 or later, found an unrecognized version");
+  expect(ghVersionError("gh version 2.48.0 (2024-04-17)")).toBeNull();
+  expect(ghVersionError("gh version 2.60.1 (2024-10-24)")).toBeNull();
+  expect(ghVersionError("gh version 3.0.0 (2030-01-01)")).toBeNull();
 });

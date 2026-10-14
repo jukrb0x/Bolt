@@ -457,6 +457,27 @@ function multipleReleaseMessage(repo: string, tag: string, releases: ReleaseView
   return lines.join("\n");
 }
 
+/** `gh api --paginate --slurp` arrived in gh 2.48. */
+export const MIN_GH_VERSION = [2, 48] as const;
+
+/**
+ * Check `gh --version` output. Returns an error message, or null when gh is new enough.
+ */
+export function ghVersionError(output: string): string | null {
+  const match = /gh version (\d+)\.(\d+)(?:\.(\d+))?/.exec(output);
+  const [major, minor] = MIN_GH_VERSION;
+  const need = `scripts/publish-release.ts requires gh ${major}.${minor} or later`;
+  if (!match) {
+    const found = output.trim().split("\n")[0] || "no output from `gh --version`";
+    return `${need}, found an unrecognized version (${found}). Install a current gh from https://cli.github.com/.`;
+  }
+  const foundMajor = Number(match[1]);
+  const foundMinor = Number(match[2]);
+  if (foundMajor > major || (foundMajor === major && foundMinor >= minor)) return null;
+  const found = `${match[1]}.${match[2]}${match[3] ? `.${match[3]}` : ""}`;
+  return `${need}, found ${found}. It uses \`gh api --paginate --slurp\`; upgrade gh from https://cli.github.com/.`;
+}
+
 export function runPublish(options: RunOptions): number {
   const log = options.log ?? ((line: string) => console.log(line));
   const error = options.error ?? ((line: string) => console.error(line));
@@ -707,6 +728,18 @@ export function runPublish(options: RunOptions): number {
 }
 
 if (import.meta.main) {
+  let ghVersionOutput = "";
+  try {
+    const ghVersion = Bun.spawnSync(["gh", "--version"], { stdout: "pipe", stderr: "pipe" });
+    if (ghVersion.exitCode === 0) ghVersionOutput = new TextDecoder().decode(ghVersion.stdout);
+  } catch {
+    // gh is not on PATH; ghVersionError reports it.
+  }
+  const versionError = ghVersionError(ghVersionOutput);
+  if (versionError) {
+    console.error(`::error::${versionError}`);
+    process.exit(1);
+  }
   const code = runPublish({
     argv: process.argv.slice(2),
     exec: (command, args) => {

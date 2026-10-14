@@ -41,7 +41,7 @@ Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. 
 
 `bun run release:dry` prints these steps and does not tag or upload.
 
-`scripts/publish-release.ts` calls `gh api --paginate --slurp`, which needs gh 2.48 or later. GitHub-hosted runners already ship a newer gh.
+`scripts/publish-release.ts` calls `gh api --paginate --slurp`, which needs gh 2.48 or later. The script checks `gh --version` first and fails with "requires gh 2.48 or later, found X" on an older gh. GitHub-hosted runners already ship a newer gh.
 
 ## When a re-run fails
 

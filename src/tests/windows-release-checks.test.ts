@@ -30,11 +30,11 @@ test("live Windows checks query the triggering tag", () => {
     const text = readFileSync(path, "utf8");
     expect(text).toContain("github.event.workflow_run.head_branch || inputs.tag");
     expect(text).toContain("/releases/tags/");
-    expect(text).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$");
     expect(text).not.toMatch(/api\.github\.com\/repos\/jukrb0x\/Bolt\/releases\/latest/);
   }
 
   const install = readFileSync(workflows[0], "utf8");
+  expect(install).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$");
   expect(install).toContain(
     '$env:BOLT_INSTALL_BASE = "https://github.com/jukrb0x/Bolt/releases/download/$tag"',
   );
@@ -47,21 +47,12 @@ test("live Windows checks query the triggering tag", () => {
   expect(update).toContain("releases/latest");
 });
 
-// v2.1.0 releaseApiUrl. --force does not select a path; only --version does.
-function v210ReleasePath(base: string, version: string | undefined): string {
-  const trimmed = base.replace(/\/+$/, "");
-  if (!version) return `${trimmed}/latest`;
-  const tag = version.startsWith("v") ? version : `v${version}`;
-  return `${trimmed}/tags/${encodeURIComponent(tag)}`;
-}
-
-function replayStatus(requestPath: string, allowed: readonly string[]): 200 | 404 {
-  return allowed.includes(requestPath) ? 200 : 404;
-}
-
 test("self-update passes --force only for a prerelease tag", () => {
   const update = readFileSync(workflows[1], "utf8");
-  const at = update.indexOf('if ($tag.Contains("-"))');
+  // scripts/self-update-tag.ps1 decides the mode; self-update-tag.test.ts runs it.
+  expect(update).toContain('scripts/self-update-tag.ps1") -Tag $tag');
+  expect(update).toContain("sparse-checkout: scripts");
+  const at = update.indexOf('if ($mode -ceq "prerelease")');
   expect(at).toBeGreaterThan(-1);
   const branch = update.slice(at);
   const pre = branch.slice(0, branch.indexOf("} else {"));
@@ -71,28 +62,12 @@ test("self-update passes --force only for a prerelease tag", () => {
   expect(stable).toContain('Write-Host "self-update mode: stable"');
   expect(stable).toMatch(/& bolt self-update\n/);
   expect(stable).not.toContain("--force");
-  expect("v2.2.0-rc.1".includes("-")).toBe(true);
-  expect("v2.1.6".includes("-")).toBe(false);
 });
 
-test("the replay returns 200 only for the path v2.1.0 requests on this run", () => {
-  const base = "/repos/jukrb0x/Bolt/releases";
-  // `bolt self-update` and `bolt self-update --force` both omit --version.
-  const thisRun = v210ReleasePath(base, undefined);
-  expect(thisRun).toBe("/repos/jukrb0x/Bolt/releases/latest");
-  const prereleaseVersion = v210ReleasePath(base, "2.2.0-rc.1");
-  const stableVersion = v210ReleasePath(base, "v2.1.6");
-  expect(prereleaseVersion).toBe("/repos/jukrb0x/Bolt/releases/tags/v2.2.0-rc.1");
-  expect(stableVersion).toBe("/repos/jukrb0x/Bolt/releases/tags/v2.1.6");
-
-  const allowed = [thisRun];
-  expect(replayStatus(thisRun, allowed)).toBe(200);
-  expect(replayStatus(prereleaseVersion, allowed)).toBe(404);
-  expect(replayStatus(stableVersion, allowed)).toBe(404);
-  expect(replayStatus(`${base}/latest/`, allowed)).toBe(404);
-  expect(replayStatus("/latest", allowed)).toBe(404);
-  expect(replayStatus("/", allowed)).toBe(404);
-
+// v2.1.0 releaseApiUrl: with no --version it requests {base}/latest, and --force
+// does not change that. The replay serves only that path and 404s the rest.
+test("the replay serves only the path v2.1.0 requests on this run", () => {
+  const thisRun = "/repos/jukrb0x/Bolt/releases/latest";
   const update = readFileSync(workflows[1], "utf8");
   expect(update).toContain(`$allowedPath = "${thisRun}"`);
   expect(update).toContain("if ($path -cne $AllowedPath)");
