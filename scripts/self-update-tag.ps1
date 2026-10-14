@@ -24,8 +24,27 @@ function Fail([string]$Message) {
   exit 1
 }
 
+# Show control characters as escapes (\n, \r, \t, \x1B) so the error stays on one
+# line and a stray trailing newline from the caller is visible.
+function Format-Tag([string]$Value) {
+  $sb = [System.Text.StringBuilder]::new()
+  foreach ($ch in $Value.ToCharArray()) {
+    switch ([int]$ch) {
+      10 { [void]$sb.Append('\n') }
+      13 { [void]$sb.Append('\r') }
+      9 { [void]$sb.Append('\t') }
+      0 { [void]$sb.Append('\0') }
+      default {
+        if ([char]::IsControl($ch)) { [void]$sb.Append(('\x{0:X2}' -f [int]$ch)) }
+        else { [void]$sb.Append($ch) }
+      }
+    }
+  }
+  $sb.ToString()
+}
+
 if ($Tag -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?\z') {
-  Fail "Tag '$Tag' is invalid: release tags must start with a lowercase 'v' followed by MAJOR.MINOR.PATCH and an optional -prerelease suffix of dot-separated identifiers, with no leading zeros, like v1.2.3 or v1.2.3-rc.1."
+  Fail "Tag '$(Format-Tag $Tag)' is invalid: release tags must start with a lowercase 'v' followed by MAJOR.MINOR.PATCH and an optional -prerelease suffix of dot-separated identifiers, with no leading zeros, like v1.2.3 or v1.2.3-rc.1."
 }
 if ($Tag -ceq "v2.1.0") {
   Fail "Tag 'v2.1.0' is invalid here: it is the starting version, so self-update would not replace the binary. Run this check with a newer release tag."

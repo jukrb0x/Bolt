@@ -58,6 +58,11 @@ for (const tag of ["v1.2.3-rc.1", "v1.2.3-beta.2", "v1.2.3-rc", "v1.2.3-RC.1", "
   });
 }
 
+// Mirrors Format-Tag in the script for the test inputs.
+function escapeTag(tag: string): string {
+  return tag.replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+}
+
 const rejected = [
   "V1.2.3",
   "V1.2.3-rc.1",
@@ -82,9 +87,26 @@ for (const tag of rejected) {
     expect(r.stdout).toBe("");
     // One plain line on stderr, not pwsh's wrapped error view.
     expect(r.stderr).not.toContain("| ");
-    expect(r.stderr).toContain(`Tag '${tag}' is invalid`);
+    expect(r.stderr).toContain(`Tag '${escapeTag(tag)}' is invalid`);
     expect(r.stderr).toContain("must start with a lowercase 'v'");
     expect(r.stderr).toContain("like v1.2.3 or v1.2.3-rc.1");
+  });
+}
+
+for (const [tag, shown] of [
+  ["v1.2.3\n", "v1.2.3\\n"],
+  ["v1.2.3\r\n", "v1.2.3\\r\\n"],
+  ["v1.2\n.3", "v1.2\\n.3"],
+  ["v1.2.3\t", "v1.2.3\\t"],
+  ["v1.2.3\u001b[31m", "v1.2.3\\x1B[31m"],
+] as const) {
+  ptest(`control characters in ${JSON.stringify(tag)} are escaped on one line`, () => {
+    const r = run(tag);
+    expect(r.exitCode).not.toBe(0);
+    expect(r.stderr).toContain(`Tag '${shown}' is invalid`);
+    expect(r.stderr.trimEnd().split("\n")).toHaveLength(1);
+    expect(r.stderr).not.toContain("\r");
+    expect(r.stderr).not.toContain("\u001b");
   });
 }
 
