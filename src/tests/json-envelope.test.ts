@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "fs";
+import { chmodSync, mkdtempSync, writeFileSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
 import { VERSION } from "../version";
@@ -254,7 +254,10 @@ describe("CLI --json", () => {
       const checkData = checkBody.data as { valid: boolean };
       expect(checkData.valid).toBe(false);
       for (const item of checkBody.errors as unknown[]) assertIssue(item);
-      expect((checkBody.errors as Array<{ code: string }>)[0].code).toBe("CONFIG_INVALID");
+      const invalid = checkBody.errors[0] as { code: string; message: string; hint?: string };
+      expect(invalid.code).toBe("CONFIG_INVALID");
+      expect(invalid.message).toContain(":");
+      expect("hint" in invalid).toBe(false);
 
       writeFileSync(path.join(dir, "bolt.yaml"), YAML);
       const missing = await bolt(["inspect", "--json"], dir);
@@ -269,13 +272,54 @@ describe("CLI --json", () => {
       expect(unknown.code).toBe(2);
       const unknownBody = parseStdout(unknown.out);
       expect(unknownBody.ok).toBe(unknown.code === 0);
-      expect((unknownBody.errors as Array<{ code: string }>)[0].code).toBe("USAGE");
+      expect((unknownBody.errors as Array<{ code: string }>)[0].code).toBe("UNKNOWN_NAME");
+
+      writeFileSync(
+        path.join(dir, "bolt.yaml"),
+        "version: 1\nproject:\n  name: Demo\ntasks:\n  loop:\n    - call: loop\n",
+      );
+      const cycle = await bolt(["inspect", "loop", "--json"], dir);
+      expect(cycle.code).toBe(3);
+      const cycleErr = (
+        parseStdout(cycle.out).errors as Array<{
+          code: string;
+          message: string;
+          hint?: string;
+        }>
+      )[0];
+      expect(cycleErr.code).toBe("PLAN_INVALID");
+      expect(cycleErr.message).toContain("Task call cycle");
+      expect(cycleErr.hint).toBe("Fix bolt.yaml, then run bolt inspect again.");
+      expect(cycleErr.message.startsWith(`${cycleErr.hint}:`)).toBe(false);
 
       const list = await bolt(["list", "--json"], dir);
       expect(list.code).toBe(0);
       expect(list.out).not.toContain("TASKS");
       expect(list.out).not.toContain("bolt.yaml:");
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("check, list, and info use CONFIG_UNREADABLE when bolt.yaml cannot be read", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-json-unreadable-"));
+    const file = path.join(dir, "bolt.yaml");
+    writeFileSync(file, YAML);
+    chmodSync(file, 0o000);
+    try {
+      for (const cmd of ["check", "list", "info"] as const) {
+        const run = await bolt([cmd, "--json"], dir);
+        expect(run.code).toBe(3);
+        const body = parseStdout(run.out);
+        expect(body.ok).toBe(false);
+        const err = (body.errors as Array<{ code: string; message: string; hint?: string }>)[0];
+        expect(err.code).toBe("CONFIG_UNREADABLE");
+        expect(err.message).toContain("Permission denied");
+        expect(err.hint ?? "").not.toBe("<file>");
+        expect(err.hint ?? "").not.toContain(file);
+      }
+    } finally {
+      chmodSync(file, 0o644);
       rmSync(dir, { recursive: true, force: true });
     }
   });

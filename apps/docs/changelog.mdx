@@ -23,7 +23,7 @@ description: "User-visible changes and migration notes."
 
 - Schema names: `bolt.list/v1`, `bolt.info/v1`, `bolt.check/v1`, `bolt.inspect/v1`.
 - `config` is `null` when no `bolt.yaml` is found. The field is present. When `bolt.yaml` exists and `bolt.local.yaml` does not, `config.local` is `null`.
-- `warnings` and `errors` items are `{ "code", "message", "hint"? }`.
+- `warnings` and `errors` items are `{ "code", "message", "hint"? }`. `hint`, when present, is a copyable Fix command. A file path stays in `message`. An unknown task or flow name uses `UNKNOWN_NAME` (exit 2). An unreadable `bolt.yaml` is `CONFIG_UNREADABLE` on `check`, `list`, and `info`.
 - `ok` is true exactly when the process exits 0.
 
 `bolt version --json` is unchanged: a flat object with `version`, `plugin_api`, `manifest_format`, and `capabilities`.

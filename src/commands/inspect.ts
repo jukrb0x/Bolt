@@ -137,7 +137,7 @@ async function runInspectJson(rawArgs: string[]): Promise<never> {
       exitCode: USAGE_EXIT_CODE,
       config: configRef(configPath),
       data: null,
-      errors: [issueFromCliMessage("USAGE", unknown)],
+      errors: [issueFromCliMessage("UNKNOWN_NAME", unknown)],
     });
   }
 
@@ -152,7 +152,13 @@ async function runInspectJson(rawArgs: string[]): Promise<never> {
       exitCode: CONFIG_EXIT_CODE,
       config: configRef(configPath),
       data: null,
-      errors: result.errors.map((error) => issue("PLAN_INVALID", error.message, error.path)),
+      errors: result.errors.map((error) =>
+        issue(
+          "PLAN_INVALID",
+          error.path ? `${error.path}: ${error.message}` : error.message,
+          "Fix bolt.yaml, then run bolt inspect again.",
+        ),
+      ),
     });
   }
 
@@ -174,7 +180,11 @@ async function runInspectJson(rawArgs: string[]): Promise<never> {
     },
     warnings: report.warnings.map((message) => issue("CAPABILITY_WARNING", message)),
     errors: report.errors.map((error) =>
-      issue(error.code ?? "CAPABILITY_ERROR", error.message, error.path),
+      issue(
+        error.code ?? "CAPABILITY_ERROR",
+        error.path ? `${error.path}: ${error.message}` : error.message,
+        "Fix bolt.yaml or bolt.local.yaml, then run bolt inspect again.",
+      ),
     ),
   });
 }

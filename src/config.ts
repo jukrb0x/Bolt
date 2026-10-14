@@ -387,17 +387,28 @@ export async function checkConfig(
   runtime?: Runtime,
 ): Promise<ConfigCheckResultWithLegacy> {
   const rt = runtime ?? createRuntime();
-  const errors: Array<{ path: string; message: string }> = [];
+  const errors: Array<{ path: string; message: string; code?: string }> = [];
 
   let raw: string;
   try {
     raw = readFileSync(filepath, "utf8");
   } catch (e: any) {
-    const message =
-      e?.code === "EACCES" || e?.code === "EPERM"
-        ? `Permission denied reading ${filepath}. Check the file permissions (it must be readable by the current user).`
-        : e.message;
-    return { ok: false, errors: [{ path: "<file>", message }], legacy: [], warnings: [] };
+    const denied = e?.code === "EACCES" || e?.code === "EPERM";
+    const message = denied
+      ? `Permission denied reading ${filepath}. Check the file permissions (it must be readable by the current user).`
+      : e.message;
+    return {
+      ok: false,
+      errors: [
+        {
+          path: "<file>",
+          message,
+          ...(denied ? { code: "CONFIG_UNREADABLE" } : {}),
+        },
+      ],
+      legacy: [],
+      warnings: [],
+    };
   }
   let parsed: unknown;
   try {

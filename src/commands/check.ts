@@ -51,7 +51,10 @@ export default defineCommand({
         },
         warnings: result.warnings.map((message) => issue("CONFIG_WARNING", message)),
         errors: result.errors.map((error) =>
-          issue(error.code ?? "CONFIG_INVALID", error.message, error.path),
+          issue(
+            error.code ?? "CONFIG_INVALID",
+            error.path ? `${error.path}: ${error.message}` : error.message,
+          ),
         ),
       });
     }
