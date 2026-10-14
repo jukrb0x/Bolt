@@ -12,7 +12,22 @@ import { CONFIG_EXIT_CODE, USAGE_EXIT_CODE } from "../exit-codes";
 import { loadProjectConfigOrExit } from "../project-config";
 import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
 import { DRY_RUN_HEADER, dryRunFooter, renderDryRun } from "../dry-run";
-import { closestFlagMatches, closestMatches, formatDidYouMean, shellQuote } from "../suggest";
+import { closestMatches, formatDidYouMean } from "../suggest";
+import {
+  printUsageError,
+  parseStrictArgs,
+  parseStrictArgsOrExit,
+  specFromCittyArgs,
+  type StrictArgSpec,
+} from "../strict-args";
+export {
+  UsageError,
+  printUsageError,
+  renamedParam,
+  reservedParamError,
+  RESERVED_FLAGS,
+} from "../strict-args";
+export type { ReservedParamContext } from "../strict-args";
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -30,26 +45,6 @@ export interface ParsedRun {
 
 export { CONFIG_EXIT_CODE, USAGE_EXIT_CODE };
 
-/**
- * Print a usage error. `[ERROR]` prefixes only the actual error lines; indented
- * supplementary lines (Commands:/Tasks:/Flows:/Run …) are printed as-is.
- */
-export function printUsageError(message: string): void {
-  for (const line of message.split("\n")) {
-    if (/^[ \t]/.test(line)) console.error(line);
-    else console.error(`[ERROR] ${line}`);
-  }
-}
-
-/** A command-line usage error. Callers print the message and exit with USAGE_EXIT_CODE. */
-export class UsageError extends Error {
-  readonly code = "USAGE";
-  constructor(message: string) {
-    super(message);
-    this.name = "UsageError";
-  }
-}
-
 export interface ParseRunOptions {
   /** Boolean flags this command accepts (without the leading `--`). Default: `["dry-run", "simulate"]`. */
   flags?: string[];
@@ -57,246 +52,39 @@ export interface ParseRunOptions {
   command?: string;
 }
 
-/**
- * Flag names reserved by Bolt (design §3, 0.4). They are never accepted as user params,
- * neither as `--name[=v]` nor as `name=v` after `--`. Only `dry-run` and `simulate` are implemented today.
- */
-export const RESERVED_FLAGS = [
-  "dry-run",
-  "simulate",
-  "json",
-  "agent",
-  "execute",
-  "plan",
-  "confirmed-by-user",
-] as const;
-
-const IMPLEMENTED_FLAGS = new Set<string>(["dry-run", "simulate"]);
-
-function isReserved(name: string): boolean {
-  return (RESERVED_FLAGS as readonly string[]).includes(name);
-}
-
-const INSPECT_PREVIEW = "bolt inspect never executes, it is already a side-effect-free preview";
-
-function reservedError(name: string, command: string, known: string[]): UsageError {
-  if (IMPLEMENTED_FLAGS.has(name)) {
-    if (command === "inspect") {
-      return new UsageError(
-        `Unknown flag "--${name}" for "bolt inspect": ${INSPECT_PREVIEW}. Remove --${name}.`,
-      );
-    }
-    return new UsageError(`Unknown flag "--${name}" for "bolt ${command}".${suggest(name, known)}`);
-  }
-  return new UsageError(
-    `--${name} is reserved by bolt and not supported yet. Remove it from the command.`,
-  );
-}
-
-const FALSY = new Set(["false", "0", "no", "off", ""]);
-
-/**
- * The rename suggested for a param that clashes with a reserved name: `plan` -> `my_plan`,
- * `dry-run` -> `my_dry_run`, `help` -> `my_help`. One neutral form for every name.
- */
-export function renamedParam(name: string): string {
-  return `my_${name.replace(/-/g, "_")}`;
-}
-
-export interface ReservedParamContext {
-  /** Command name used in messages (`run`, `inspect`). */
-  command: string;
-  /** Boolean flags the current command accepts. */
-  flags: string[];
-  /** True for `-- name=value`, false for `--name=value`. */
-  afterSeparator: boolean;
-}
-
-/**
- * A reserved name given with a value: `--plan=x`, `--help=1`, or `-- plan=x` / `-- help=x`.
- * The message says what is wrong and how to fix it, including a rename example in case
- * the user meant a task param.
- */
-export function reservedParamError(
-  name: string,
-  value: string,
-  ctx: ReservedParamContext,
-): UsageError {
-  const rename = renamedParam(name);
-  const pass = `-- ${rename}=${shellQuote(value)}`;
-  const renameHint = `rename it, e.g. in bolt.yaml use ${rename} and pass ${pass}.`;
-
-  if (name === "help" && ctx.afterSeparator) {
-    return new UsageError(
-      `"help" cannot be used as a param name (it is a bolt flag). ` +
-        `Rename the param, e.g. in bolt.yaml use ${rename} and pass ${pass}.`,
-    );
-  }
-  if (name === "help") {
-    return new UsageError(
-      `--help takes no value. Use: bolt ${ctx.command} --help. ` +
-        `If this is a task param, ${renameHint}`,
-    );
-  }
-
-  if (IMPLEMENTED_FLAGS.has(name) && ctx.flags.includes(name) && FALSY.has(value.toLowerCase())) {
-    return new UsageError(
-      `"${name}=${value}" is not a param: --${name} is a bolt flag and takes no value. ` +
-        `To run for real, just remove --${name}. If this is a task param, ${renameHint}`,
-    );
-  }
-
-  let flagHint = "";
-  if (IMPLEMENTED_FLAGS.has(name)) {
-    if (ctx.flags.includes(name)) {
-      flagHint = ` To preview the run instead, pass --${name} without a value before "--".`;
-    } else if (ctx.command === "inspect") {
-      flagHint = ` No --${name} is needed: ${INSPECT_PREVIEW}.`;
-    }
-  }
-
-  if (!ctx.afterSeparator && !IMPLEMENTED_FLAGS.has(name)) {
-    return new UsageError(
-      `--${name} is reserved by bolt and not supported yet. If this is a task param, ${renameHint}`,
-    );
-  }
-  const reservation = IMPLEMENTED_FLAGS.has(name)
-    ? `it is a bolt flag`
-    : `--${name} is reserved by bolt and not supported yet`;
-  return new UsageError(
-    `"${name}" cannot be used as a param name (${reservation}). ` +
-      `Rename the param, e.g. in bolt.yaml use ${rename} and pass ${pass}.${flagHint}`,
-  );
-}
-
-/** Flags citty handles itself before `run()` is called. */
-const HELP_FLAGS = new Set(["--help", "-h"]);
-
-function suggest(name: string, known: string[]): string {
-  const bare = name.replace(/^-+/, "");
-  const matches = closestFlagMatches(bare, known).map((m) => `--${m}`);
-  return formatDidYouMean(matches);
-}
-
-function parseParam(text: string, origin: string): [string, string] {
-  const eq = text.indexOf("=");
-  const key = eq === -1 ? "" : text.slice(0, eq);
-  if (eq === -1 || key === "" || key.startsWith("-")) {
-    throw new UsageError(`Malformed param "${origin}". Params must look like key=value.`);
-  }
-  return [key, text.slice(eq + 1)];
+function runSpec(opts: ParseRunOptions = {}): StrictArgSpec {
+  const command = opts.command ?? "run";
+  const flags = opts.flags ?? ["dry-run", "simulate"];
+  const args: Record<string, { type: string }> = {};
+  for (const f of flags) args[f] = { type: "boolean" };
+  return specFromCittyArgs(command, args, { allowParams: true });
 }
 
 /**
  * Parse raw argv into positional names + `--k=v` params + known boolean flags.
- * Names are collected in typed order (that order IS execution order — spec D3).
- * `--k=v` flags apply to the whole invocation (spec D4). No `:variant`, no shared-param fill.
- *
- * Strict: unknown flags (long or short), values on boolean flags, and param values
- * starting with `--` throw a UsageError. Everything after a bare `--` is parsed only as
- * `key=value` params, so values there may start with `--` (e.g. `-- extra=--verbose`).
+ * Thin wrapper over shared `parseStrictArgs` (BOLT-CLI-1).
  */
 export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
-  const flags = opts.flags ?? ["dry-run", "simulate"];
-  const command = opts.command ?? "run";
-  const known = [...flags, "help"];
-  const names: string[] = [];
-  const params: Record<string, string> = {};
-  let dryRun = false;
-  let simulate = false;
-
-  for (let i = 0; i < rawArgs.length; i++) {
-    const arg = rawArgs[i];
-
-    if (arg === "--") {
-      for (const rest of rawArgs.slice(i + 1)) {
-        const [k, v] = parseParam(rest, rest);
-        if (isReserved(k) || k === "help") {
-          throw reservedParamError(k, v, { command, flags, afterSeparator: true });
-        }
-        params[k] = v;
-      }
-      break;
-    }
-    if (HELP_FLAGS.has(arg)) continue;
-
-    if (arg.startsWith("--")) {
-      const inner = arg.slice(2);
-      const eq = inner.indexOf("=");
-      const name = eq === -1 ? inner : inner.slice(0, eq);
-      if (flags.includes(name)) {
-        if (eq !== -1) {
-          const value = inner.slice(eq + 1);
-          const fix =
-            IMPLEMENTED_FLAGS.has(name) && FALSY.has(value.toLowerCase())
-              ? ` To run for real, just remove --${name}.`
-              : ` Use --${name} on its own.`;
-          throw new UsageError(`Flag "--${name}" does not take a value.${fix}`);
-        }
-        if (name === "dry-run") dryRun = true;
-        if (name === "simulate") simulate = true;
-        continue;
-      }
-      if (name === "help" && eq !== -1) {
-        throw reservedParamError(name, inner.slice(eq + 1), {
-          command,
-          flags,
-          afterSeparator: false,
-        });
-      }
-      if (isReserved(name)) {
-        if (eq !== -1 && !IMPLEMENTED_FLAGS.has(name)) {
-          throw reservedParamError(name, inner.slice(eq + 1), {
-            command,
-            flags,
-            afterSeparator: false,
-          });
-        }
-        throw reservedError(name, command, known);
-      }
-      if (eq === -1) {
-        throw new UsageError(
-          `Unknown flag "${arg}" for "bolt ${command}".${suggest(name, known)} ` +
-            `Params must be given as --key=value.`,
-        );
-      }
-      const [k, v] = parseParam(inner, arg);
-      if (v.startsWith("--")) {
-        throw new UsageError(
-          `Param value for "--${k}" may not start with "--". ` +
-            `Pass it after a "--" separator instead: bolt ${command} ... -- ${k}=${shellQuote(v)}`,
-        );
-      }
-      params[k] = v;
-      continue;
-    }
-
-    if (arg.startsWith("-") && arg.length > 1) {
-      throw new UsageError(`Unknown flag "${arg}" for "bolt ${command}".${suggest(arg, known)}`);
-    }
-    names.push(arg);
-  }
-
-  if (dryRun && simulate) {
-    throw new UsageError(
-      `--dry-run and --simulate cannot be combined. Use --dry-run for a static preview ` +
-        `(nothing runs), or --simulate to run plugins in dry-run mode.`,
-    );
-  }
-  return { names, params, dryRun, simulate };
+  const spec = runSpec(opts);
+  const result = parseStrictArgs(rawArgs, spec);
+  return {
+    names: result.positionals,
+    params: result.params,
+    dryRun: result.booleans["dry-run"] === true,
+    simulate: result.booleans.simulate === true,
+  };
 }
 
 /** Parse argv for a command, printing usage errors and exiting with USAGE_EXIT_CODE. */
 export function parseRunArgsOrExit(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
-  try {
-    return parseRunArgs(rawArgs, opts);
-  } catch (e) {
-    if (e instanceof UsageError) {
-      printUsageError(e.message);
-      process.exit(USAGE_EXIT_CODE);
-    }
-    throw e;
-  }
+  const spec = runSpec(opts);
+  const result = parseStrictArgsOrExit(rawArgs, spec);
+  return {
+    names: result.positionals,
+    params: result.params,
+    dryRun: result.booleans["dry-run"] === true,
+    simulate: result.booleans.simulate === true,
+  };
 }
 
 /** Max names shown on a Tasks:/Flows: line before truncating. */

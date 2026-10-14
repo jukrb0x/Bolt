@@ -5,6 +5,12 @@ import { commands } from "./commands";
 import { VERSION } from "./version";
 import { checkCommandName, checkGlobalArgs } from "./global-args";
 import { loadUsageConfig, printUsageError, USAGE_EXIT_CODE } from "./commands/run";
+import {
+  leafAllowsParams,
+  parseStrictArgsOrExit,
+  resolveLeafCommand,
+  specFromCittyArgs,
+} from "./strict-args";
 
 if (process.platform === "win32") cleanupInstalledBolt(process.execPath);
 
@@ -63,6 +69,15 @@ const commandError = checkCommandName(argv, main, projectNames);
 if (commandError) {
   printUsageError(commandError);
   process.exit(USAGE_EXIT_CODE);
+}
+
+// BOLT-CLI-1: every leaf command rejects unknown and reserved flags before citty runs.
+const leaf = resolveLeafCommand(argv, main);
+if (leaf) {
+  const command = leaf.path.join(" ");
+  const args = (leaf.def.args ?? {}) as Record<string, { type?: string; alias?: string | string[] }>;
+  const spec = specFromCittyArgs(command, args, { allowParams: leafAllowsParams(leaf.path) });
+  parseStrictArgsOrExit(leaf.rest, spec);
 }
 
 runMain(main, { showUsage });
