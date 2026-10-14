@@ -38,11 +38,11 @@ export type SelectionSource = SelectionFile | "auto: only match";
 export type CapabilityFailureCode =
   | "CAPABILITY_AMBIGUOUS"
   | "CAPABILITY_MISSING"
-  | "SELECTION_INVALID";
+  | "CAPABILITY_SELECTION_INVALID";
 
 export interface CapabilityIssue {
   capability: string;
-  /** `bolt.yaml: capabilities.vcs.sync` or `capabilities.vcs.sync` when no file owns the key. */
+  /** Absolute config path when known: `/abs/bolt.yaml: capabilities.vcs.sync`. */
   path: string;
   message: string;
   code?: CapabilityFailureCode;
@@ -163,9 +163,16 @@ export function capabilityUsesInTasks(tasks: CapabilityConfigView["tasks"]): str
   return [...new Set(out)];
 }
 
-function selectionPath(key: string, source: SelectionFile | undefined): string {
+function selectionPath(
+  key: string,
+  source: SelectionFile | undefined,
+  configDir: string | undefined,
+): string {
   const tail = `capabilities.${key}`;
-  return source ? `${source}: ${tail}` : tail;
+  const file = source ?? (configDir ? "bolt.yaml" : undefined);
+  if (!file) return tail;
+  const located = configDir ? path.resolve(configDir, file) : file;
+  return `${located}: ${tail}`;
 }
 
 function remember(built: BuiltHandler[], plugin: BoltPlugin): void {
@@ -310,16 +317,28 @@ function fanOutWarning(keys: string[]): string | undefined {
   return `capabilities: fan-out ${names} ${verb} ignored. ${FAN_OUT_NOTE}`;
 }
 
-function incompleteMessage(key: string, unbuilt: UnbuiltPlugin[]): string {
-  const where = unbuilt.map((item) => item.where).join(", ");
-  const verb = unbuilt.length === 1 ? "is" : "are";
-  return `preview incomplete because ${where} ${verb} not built, so Bolt will not guess a handler for "${key}".`;
+function incompleteMessage(unbuilt: UnbuiltPlugin[]): string {
+  const hints = unbuilt.map(
+    (item) => `plugin "${item.namespace}" not built (Run: bolt plugin build ${item.namespace})`,
+  );
+  return `capability unknown — ${hints.join("; ")}`;
+}
+
+function ambiguousMessage(key: string, matches: string[]): string {
+  const candidate = matches[0];
+  return `CAPABILITY_AMBIGUOUS: matches ${quoteList(matches)}. Add to bolt.yaml (or bolt.local.yaml): capabilities: { ${key}: ${candidate} }`;
+}
+
+function missingMessage(key: string): string {
+  return `CAPABILITY_MISSING: no handler provides "${key}". Enable a provider by tagging a handler with "${key}", then run bolt plugin build <namespace> for that plugin.`;
 }
 
 export interface ResolveSelectionInput {
   map: Record<string, string>;
   sources?: Partial<Record<string, SelectionFile>>;
   index: CapabilityIndex;
+  /** Directory of bolt.yaml. Issue paths use this when it is known. */
+  configDir?: string;
   /** Capability `uses:` refs in the plan or, for `bolt check`, in every task. */
   requested?: string[];
   /** List singleton tags that have exactly one built handler. */
@@ -359,6 +378,7 @@ export function resolveCapabilitySelection(input: ResolveSelectionInput): Capabi
       registry,
       tags,
       unbuilt,
+      configDir: input.configDir,
     });
     if (outcome.kind === "resolved") resolved.push(outcome.resolved);
     else if (outcome.kind === "error") errors.push(outcome.issue);
@@ -394,12 +414,13 @@ function resolveOne(args: {
   registry: PluginRegistry;
   tags: string[];
   unbuilt: UnbuiltPlugin[];
+  configDir: string | undefined;
 }):
   | { kind: "resolved"; resolved: ResolvedCapability }
   | { kind: "error"; issue: CapabilityIssue }
   | { kind: "skip" } {
-  const { key, source, inMap, ref, requested, registry, tags, unbuilt } = args;
-  const pathFor = selectionPath(key, source);
+  const { key, source, inMap, ref, requested, registry, tags, unbuilt, configDir } = args;
+  const pathFor = selectionPath(key, source, configDir);
   if (capabilityKind(key) === "fan-out") {
     if (!requested) return { kind: "skip" };
     return {
@@ -428,7 +449,7 @@ function resolveOne(args: {
     if (unbuilt.length > 0) {
       return {
         kind: "error",
-        issue: { capability: key, path: pathFor, message: incompleteMessage(key, unbuilt) },
+        issue: { capability: key, path: pathFor, message: incompleteMessage(unbuilt) },
       };
     }
     return {
@@ -437,7 +458,7 @@ function resolveOne(args: {
         capability: key,
         path: pathFor,
         code: "CAPABILITY_MISSING",
-        message: `CAPABILITY_MISSING: no handler provides "${key}".`,
+        message: missingMessage(key),
       },
     };
   }
@@ -450,8 +471,8 @@ function resolveOne(args: {
         issue: {
           capability: key,
           path: pathFor,
-          code: "SELECTION_INVALID",
-          message: `SELECTION_INVALID: "${ref}" is not a handler ref (expected "namespace/handler").${refHint(ref, matches)}`,
+          code: "CAPABILITY_SELECTION_INVALID",
+          message: `CAPABILITY_SELECTION_INVALID: "${ref}" is not a handler ref (expected "namespace/handler").${refHint(ref, matches)}`,
         },
       };
     }
@@ -462,10 +483,11 @@ function resolveOne(args: {
       };
     }
     const namespace = ref.slice(0, ref.indexOf("/"));
-    if (unbuilt.some((item) => item.namespace === namespace)) {
+    const blocked = unbuilt.filter((item) => item.namespace === namespace);
+    if (blocked.length > 0) {
       return {
         kind: "error",
-        issue: { capability: key, path: pathFor, message: incompleteMessage(key, unbuilt) },
+        issue: { capability: key, path: pathFor, message: incompleteMessage(blocked) },
       };
     }
     return {
@@ -473,17 +495,24 @@ function resolveOne(args: {
       issue: {
         capability: key,
         path: pathFor,
-        code: "SELECTION_INVALID",
-        message: `SELECTION_INVALID: "${ref}" does not provide "${key}".${refHint(ref, matches)}`,
+        code: "CAPABILITY_SELECTION_INVALID",
+        message: `CAPABILITY_SELECTION_INVALID: "${ref}" does not provide "${key}".${refHint(ref, matches)}`,
       },
     };
   }
 
+  // No selection. A unique built match wins even when some other plugin is unbuilt.
+  if (matches.length === 1) {
+    return {
+      kind: "resolved",
+      resolved: { capability: key, ref: matches[0], source: "auto: only match" },
+    };
+  }
   if (unbuilt.length > 0) {
     if (!requested && !inMap) return { kind: "skip" };
     return {
       kind: "error",
-      issue: { capability: key, path: pathFor, message: incompleteMessage(key, unbuilt) },
+      issue: { capability: key, path: pathFor, message: incompleteMessage(unbuilt) },
     };
   }
   if (matches.length === 0) {
@@ -493,14 +522,8 @@ function resolveOne(args: {
         capability: key,
         path: pathFor,
         code: "CAPABILITY_MISSING",
-        message: `CAPABILITY_MISSING: no handler provides "${key}".`,
+        message: missingMessage(key),
       },
-    };
-  }
-  if (matches.length === 1) {
-    return {
-      kind: "resolved",
-      resolved: { capability: key, ref: matches[0], source: "auto: only match" },
     };
   }
   if (!requested && !inMap) return { kind: "skip" };
@@ -510,7 +533,7 @@ function resolveOne(args: {
       capability: key,
       path: pathFor,
       code: "CAPABILITY_AMBIGUOUS",
-      message: `CAPABILITY_AMBIGUOUS: matches ${quoteList(matches)}. Set capabilities.${key} in bolt.yaml or bolt.local.yaml.`,
+      message: ambiguousMessage(key, matches),
     },
   };
 }
@@ -530,6 +553,7 @@ export function assessCapabilities(
     map: cfg.capabilities ?? {},
     sources: cfg.capabilitySources,
     index,
+    configDir,
     requested: opts.requested,
     catalog: opts.catalog,
   });

@@ -34,7 +34,7 @@ test("unknown key, bad ref, ambiguous, and missing are exit 3", async () => {
 
     const badRun = await bolt(bad, ["check"]);
     expect(badRun.exitCode).toBe(3);
-    expect(badRun.output).toContain("SELECTION_INVALID");
+    expect(badRun.output).toContain("CAPABILITY_SELECTION_INVALID");
     expect(badRun.output).toContain("bolt.yaml: capabilities.vcs.sync");
     expect(badRun.output).toContain('Did you mean "git/pull"?');
 
@@ -126,12 +126,36 @@ test("11. selection of a built handler succeeds when a sibling plugin is not bui
     expect(inspected.output).toContain("vcs.sync: git/pull (bolt.yaml)");
     expect(inspected.output).not.toContain("CAPABILITY_AMBIGUOUS");
     expect(inspected.output).not.toContain("CAPABILITY_MISSING");
-    expect(inspected.output).not.toContain("SELECTION_INVALID");
+    expect(inspected.output).not.toContain("CAPABILITY_SELECTION_INVALID");
 
     const dry = await bolt(dir, ["run", "sync", "--dry-run"]);
     expect(dry.exitCode).toBe(0);
     expect(dry.output).toContain("vcs.sync: git/pull (bolt.yaml)");
     expect(dry.output).not.toContain("CAPABILITY_AMBIGUOUS");
+  } finally {
+    dispose(dir);
+  }
+});
+
+test("selection of an unbuilt plugin is incomplete with a build hint", async () => {
+  const dir = writeProject(
+    "capabilities:\n  vcs.sync: p4/sync\ntasks:\n  sync:\n    - uses: vcs.sync\n",
+  );
+  const unbuilt = path.join(dir, ".bolt", "plugins", "p4");
+  mkdirSync(unbuilt, { recursive: true });
+  writeFileSync(
+    path.join(unbuilt, "index.ts"),
+    "export default { namespace: 'p4', handlers: {} };\n",
+  );
+  try {
+    const inspected = await bolt(dir, ["inspect", "sync"]);
+    expect(inspected.exitCode).toBe(3);
+    expect(inspected.output).toContain('plugin "p4" not built');
+    expect(inspected.output).toContain("Run: bolt plugin build p4");
+    expect(inspected.output).toContain(`${path.join(dir, "bolt.yaml")}: capabilities.vcs.sync`);
+    expect(inspected.output).not.toContain("CAPABILITY_AMBIGUOUS");
+    expect(inspected.output).not.toContain("CAPABILITY_MISSING");
+    expect(inspected.output).not.toContain("CAPABILITY_SELECTION_INVALID");
   } finally {
     dispose(dir);
   }

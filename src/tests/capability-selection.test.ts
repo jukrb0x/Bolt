@@ -76,14 +76,14 @@ test("3. unknown capability key exits as a config error with path, key, and did-
   const result = await checkConfig(path.join(dir, "bolt.yaml"));
   expect(result.ok).toBe(false);
   const hit = result.errors.find((error) => error.path.includes("vcs.syn"));
-  expect(hit?.path).toBe("bolt.yaml: capabilities.vcs.syn");
+  expect(hit?.path).toBe(`${path.resolve(dir, "bolt.yaml")}: capabilities.vcs.syn`);
   expect(hit?.message).toContain('unknown capability "vcs.syn"');
   expect(hit?.message).toContain('Did you mean "vcs.sync"?');
   expect(hit?.message).not.toContain("CAPABILITY_AMBIGUOUS");
-  expect(hit?.message).not.toContain("SELECTION_INVALID");
+  expect(hit?.message).not.toContain("CAPABILITY_SELECTION_INVALID");
 });
 
-test("4. a bad handler ref is SELECTION_INVALID with path, key, and did-you-mean", async () => {
+test("4. a bad handler ref is CAPABILITY_SELECTION_INVALID with path, key, and did-you-mean", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "bolt-cap-ref-"));
   writeFileSync(
     path.join(dir, "bolt.yaml"),
@@ -92,8 +92,8 @@ test("4. a bad handler ref is SELECTION_INVALID with path, key, and did-you-mean
   const result = await checkConfig(path.join(dir, "bolt.yaml"));
   expect(result.ok).toBe(false);
   const hit = result.errors.find((error) => error.path.includes("vcs.sync"));
-  expect(hit?.path).toBe("bolt.yaml: capabilities.vcs.sync");
-  expect(hit?.message.startsWith("SELECTION_INVALID:")).toBe(true);
+  expect(hit?.path).toBe(`${path.resolve(dir, "bolt.yaml")}: capabilities.vcs.sync`);
+  expect(hit?.message.startsWith("CAPABILITY_SELECTION_INVALID:")).toBe(true);
   expect(hit?.message).toContain('"git/pul"');
   expect(hit?.message).toContain('Did you mean "git/pull"?');
 });
@@ -107,9 +107,12 @@ test("5. two built providers and no selection is CAPABILITY_AMBIGUOUS (exit 3 sh
   });
   expect(report.errors).toHaveLength(1);
   expect(report.errors[0].code).toBe("CAPABILITY_AMBIGUOUS");
-  expect(report.errors[0].path).toBe("capabilities.vcs.sync");
+  expect(report.errors[0].path).toBe(`${path.resolve(dir, "bolt.yaml")}: capabilities.vcs.sync`);
   expect(report.errors[0].message).toContain("git/pull");
   expect(report.errors[0].message).toContain("svn/update");
+  expect(report.errors[0].message).toContain(
+    "Add to bolt.yaml (or bolt.local.yaml): capabilities: { vcs.sync:",
+  );
 });
 
 test("6. a singleton with no handler is CAPABILITY_MISSING", () => {
@@ -121,6 +124,7 @@ test("6. a singleton with no handler is CAPABILITY_MISSING", () => {
   });
   expect(report.errors.map((error) => error.code)).toEqual(["CAPABILITY_MISSING"]);
   expect(report.errors[0].message).toContain('no handler provides "vcs.revision"');
+  expect(report.errors[0].message).toContain("Enable a provider");
 });
 
 test("7. capabilitySelectionHash matches the canonical golden digest", () => {
@@ -220,11 +224,46 @@ test("11. a selection that hits a built handler ignores an unbuilt sibling", () 
   });
   expect(open.errors).toHaveLength(1);
   expect(open.errors[0].code).toBeUndefined();
-  expect(open.errors[0].message).toContain("preview incomplete");
-  expect(open.errors[0].message).toContain("project plugin .bolt/plugins/p4");
+  expect(open.errors[0].message).toContain('plugin "p4" not built');
+  expect(open.errors[0].message).toContain("Run: bolt plugin build p4");
   expect(open.errors[0].message).not.toContain("CAPABILITY_AMBIGUOUS");
   expect(open.errors[0].message).not.toContain("CAPABILITY_MISSING");
-  expect(open.errors[0].message).not.toContain("SELECTION_INVALID");
+  expect(open.errors[0].message).not.toContain("CAPABILITY_SELECTION_INVALID");
+});
+
+test("no selection and one built match stays auto when another plugin is unbuilt", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-cap-unique-"));
+  const index = loadCapabilityIndex({ plugins: [] }, dir, { home: dir, builtins: { git } });
+  index.unbuilt.push({ namespace: "p4", where: "project plugin .bolt/plugins/p4" });
+  const report = resolveCapabilitySelection({
+    map: {},
+    index,
+    requested: ["vcs.sync"],
+  });
+  expect(report.errors).toEqual([]);
+  expect(report.lines).toEqual(["vcs.sync: git/pull (auto: only match)"]);
+});
+
+test("a selection that names an unbuilt plugin is incomplete with a build hint", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "bolt-cap-sel-unbuilt-"));
+  const index = loadCapabilityIndex({ plugins: [] }, dir, { home: dir, builtins: { git } });
+  index.unbuilt.push({ namespace: "p4", where: "project plugin .bolt/plugins/p4" });
+  const report = resolveCapabilitySelection({
+    map: { "vcs.sync": "p4/sync" },
+    sources: { "vcs.sync": "bolt.yaml" },
+    index,
+    configDir: dir,
+    requested: ["vcs.sync"],
+  });
+  expect(report.errors).toHaveLength(1);
+  expect(report.errors[0].code).toBeUndefined();
+  expect(report.errors[0].path).toBe(`${path.resolve(dir, "bolt.yaml")}: capabilities.vcs.sync`);
+  expect(report.errors[0].message).toContain('plugin "p4" not built');
+  expect(report.errors[0].message).toContain("Run: bolt plugin build p4");
+  expect(report.errors[0].message).not.toContain("CAPABILITY_AMBIGUOUS");
+  expect(report.errors[0].message).not.toContain("CAPABILITY_MISSING");
+  expect(report.errors[0].message).not.toContain("CAPABILITY_SELECTION_INVALID");
+  expect(report.resolved).toEqual([]);
 });
 
 test("uses: vcs.sync runs the selected built-in handler", async () => {

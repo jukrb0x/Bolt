@@ -20,12 +20,14 @@ capabilities:
 
 Exit code `3` (not `2`):
 
-- `CAPABILITY_AMBIGUOUS` — more than one built handler provides the tag and the map does not choose.
-- `CAPABILITY_MISSING` — no built handler provides the tag.
-- `SELECTION_INVALID` — the chosen ref is not a handler for that tag.
-- An unknown capability key, or a handler ref Bolt does not know, names the file (`bolt.yaml` or `bolt.local.yaml`), the key, and a "did you mean" hint.
+- `CAPABILITY_AMBIGUOUS` — more than one built handler provides the tag and the map does not choose. The message includes a `capabilities:` snippet with one candidate.
+- `CAPABILITY_MISSING` — no built handler provides the tag, and the message says how to enable a provider.
+- `CAPABILITY_SELECTION_INVALID` — the chosen ref is not a handler for that tag.
+- An unknown capability key, or a handler ref Bolt does not know, names the absolute config path, the key, and a "did you mean" hint.
 
-A selection that names a built handler succeeds even when another plugin that might provide the same tag is not built. When the preview cannot see that plugin's tags and nothing in the map names a built handler, the preview says it is incomplete. That note does not use `CAPABILITY_AMBIGUOUS`, `CAPABILITY_MISSING`, or `SELECTION_INVALID`.
+Resolve-time (design §6 #11): a selection that names a built handler succeeds on `bolt inspect` and `bolt run --dry-run` even when another plugin that might provide the same tag is not built. A unique built match is still `(auto: only match)` when some other plugin is unbuilt. When the selection names a plugin that is not built, or no selection is set and an unbuilt plugin blocks a unique built match, the preview is incomplete: `capability unknown — plugin "<ns>" not built (Run: bolt plugin build <ns>)`. That note does not use `CAPABILITY_AMBIGUOUS`, `CAPABILITY_MISSING`, or `CAPABILITY_SELECTION_INVALID`.
+
+Load-time: a real `bolt run` still compiles every project and user plugin in `buildRegistry`. A sibling that fails to compile can fail the whole run even when the selection already points at a built handler. "Not built" (missing or stale `bolt.plugin.json`) is not a compile failure. Skipping or soft-failing an unselected sibling is a follow-up (EXT-2.1 / BOLT-AI-2). This release does not change the loader.
 
 `capabilitySelectionHash` is the digest `plan_hash` will include as `capability_selection` when BOLT-AI-2 lands. This release does not hash plans and does not add a second hash field.
 

@@ -138,7 +138,7 @@ capabilities:
 
 `capabilities: {}` is the same as leaving the key out. When only one built handler provides a tag, Bolt selects it and previews `(auto: only match)`. `bolt inspect` and `bolt run --dry-run` also show `(bolt.yaml)` or `(bolt.local.yaml)` for an explicit key. A task step can name the tag: `uses: vcs.sync`.
 
-Several built handlers and no choice exits `3` with `CAPABILITY_AMBIGUOUS`. No handler exits `3` with `CAPABILITY_MISSING`. A ref that does not provide the tag exits `3` with `SELECTION_INVALID`. An unknown key or a bad ref exits `3` and names the file, the key, and a "did you mean" hint. Exit `2` is only for CLI usage errors.
+Several built handlers and no choice exits `3` with `CAPABILITY_AMBIGUOUS`. No handler exits `3` with `CAPABILITY_MISSING`. A ref that does not provide the tag exits `3` with `CAPABILITY_SELECTION_INVALID`. An unknown key or a bad ref exits `3` and names the file, the key, and a "did you mean" hint. Exit `2` is only for CLI usage errors. A selection that names a plugin which is not built asks you to run `bolt plugin build <namespace>` and does not use those three codes. `bolt inspect` and `bolt run --dry-run` resolve a built selection even when a sibling plugin is not built. `bolt run` still compiles every plugin, so a sibling that fails to compile can still fail the run.
 
 Built-in `git/pull` and `svn/update` both provide `vcs.sync`. A project that keeps `uses: git/pull` does not need this map. No Unreal project is required to choose between git and svn.
 
