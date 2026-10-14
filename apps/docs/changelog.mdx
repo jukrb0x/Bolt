@@ -205,3 +205,8 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 ### Plugin API v2: types
 
 - `BoltPluginHandler`, `HandlerDef.fn`, and `defineHandler` now return `Promise<void | HandlerResult>`. `PLUGIN_API_VERSION` is `2`; use `SUPPORTED_PLUGIN_API_VERSIONS` for the accepted set.
+
+### Plugin API v2: Deferred (not in BOLT-EXT-1)
+
+- **Top-level `capabilities:` selection map** in `bolt.yaml` / `bolt.local.yaml`, singleton routing (`CAPABILITY_AMBIGUOUS` / `CAPABILITY_MISSING`), and the `capability_selection` input to `plan_hash` are **not** shipped here. They are delivered by task **BOLT-EXT-2**. This release adds capability tags and `PluginRegistry.findByCapability()` only. No public release that advertises capability routing should go out before BOLT-EXT-2 lands.
+- **Structured JSONL run log** (ai-mcp §5.3.7) is **not** shipped here. It is delivered by task **BOLT-AI-2**. Until then, `ctx.emit` events go to the existing text log `.bolt/logs/bolt_<timestamp>.log` (and the terminal / `RunnerOptions.onEvent`). There is no `--json=ndjson` and no event field in a `bolt.run/v1` envelope.

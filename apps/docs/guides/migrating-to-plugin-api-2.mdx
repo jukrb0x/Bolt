@@ -116,3 +116,5 @@ Hand-written context mocks keep compiling because `emit` is optional.
 ## 9. After upgrading bolt
 
 Regenerate the AI context with `bolt ai`. The plugin manifest format changed (`bolt version --json` reports `manifest_format: 2`), capability tags now appear in the catalog, and the built-in `git` and `svn` handlers changed their `ai` permissions.
+
+Core can look handlers up with `PluginRegistry.findByCapability()`. Choosing among several providers for a singleton tag (for example `vcs.sync`) via a top-level `capabilities:` map in `bolt.yaml` / `bolt.local.yaml` is **BOLT-EXT-2**, not part of plugin API v2 itself.
