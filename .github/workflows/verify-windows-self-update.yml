@@ -94,6 +94,7 @@ jobs:
 
           $tag = [string]$env:RELEASE_TAG
           # Same shape the Release workflow stamps. Rejects v2.1.0 and an uppercase V.
+          # No -AllowBaseline: self-update must not target the starting binary.
           # src/tests/self-update-tag.test.ts runs this block under pwsh.
           # BEGIN tag-check
           $tagScript = Join-Path $env:GITHUB_WORKSPACE "scripts/self-update-tag.ps1"
@@ -103,10 +104,13 @@ jobs:
           # The script exits 1 on an invalid tag. Stop does not turn an exit code into an error.
           $mode = & $tagScript -Tag $tag
           if ($LASTEXITCODE -ne 0) {
-            throw "Tag validation failed for '$tag' (exit $LASTEXITCODE); see the error above."
+            # Escape like Format-Tag so a multiline $tag does not split the throw.
+            $shown = $tag -creplace "`n",'\n' -creplace "`r",'\r' -creplace "`t",'\t'
+            throw "Tag validation failed for '$shown' (exit $LASTEXITCODE); see the error above."
           }
           if ($mode -cne "prerelease" -and $mode -cne "stable") {
-            throw "Tag validation for '$tag' printed '$mode', expected 'prerelease' or 'stable'."
+            $shown = $tag -creplace "`n",'\n' -creplace "`r",'\r' -creplace "`t",'\t'
+            throw "Tag validation for '$shown' printed '$mode', expected 'prerelease' or 'stable'."
           }
           # END tag-check
           $resp = Invoke-WebRequest -UseBasicParsing -Headers @{

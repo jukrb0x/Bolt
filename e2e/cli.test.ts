@@ -684,7 +684,7 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       [["run", "mark", "-x"], 'Unknown flag "-x"'],
       [["run", "mark", "--dry-run=false"], "does not take a value"],
       [["run", "mark", "--extra=--dry-run"], "-- extra=--dry-run"],
-      [["run", "mark", "--", "--execute"], "Malformed param"],
+      [["run", "mark", "--", "--execute"], "--execute is reserved by bolt and not supported yet"],
       [["inspect", "mark", "--bogus"], 'Unknown flag "--bogus" for "bolt inspect"'],
       [["--dry-run", "run", "mark"], 'Unknown global flag "--dry-run"'],
       [["--verison"], 'Did you mean "--version"?'],

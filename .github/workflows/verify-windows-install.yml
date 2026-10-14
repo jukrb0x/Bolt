@@ -39,6 +39,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $tag = [string]$env:RELEASE_TAG
           # Same shape the Release workflow stamps. Rejects an uppercase V and a trailing newline.
+          # -AllowBaseline: v2.1.0 is a valid install target (self-update still rejects it).
           # src/tests/self-update-tag.test.ts runs this block under pwsh.
           # BEGIN tag-check
           $tagScript = Join-Path $env:GITHUB_WORKSPACE "scripts/self-update-tag.ps1"
@@ -47,9 +48,11 @@ jobs:
           }
           # The script exits 1 on an invalid tag. Stop does not turn an exit code into an error.
           # Install only needs validity; the prerelease/stable mode it prints is not used.
-          $null = & $tagScript -Tag $tag
+          $null = & $tagScript -Tag $tag -AllowBaseline
           if ($LASTEXITCODE -ne 0) {
-            throw "Tag validation failed for '$tag' (exit $LASTEXITCODE); see the error above."
+            # Escape like Format-Tag so a multiline $tag does not split the throw.
+            $shown = $tag -creplace "`n",'\n' -creplace "`r",'\r' -creplace "`t",'\t'
+            throw "Tag validation failed for '$shown' (exit $LASTEXITCODE); see the error above."
           }
           # END tag-check
           $release = Invoke-RestMethod -Headers @{

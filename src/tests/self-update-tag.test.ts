@@ -2,8 +2,9 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-// Runs scripts/self-update-tag.ps1, the tag check and --force decision that
-// verify-windows-self-update.yml calls, under real pwsh.
+// Runs scripts/self-update-tag.ps1, the tag check (and --force decision for
+// self-update) that verify-windows-self-update.yml and verify-windows-install.yml
+// call, under real pwsh.
 const script = path.join(import.meta.dir, "../../scripts/self-update-tag.ps1");
 const pwsh = Bun.which("pwsh");
 
@@ -21,14 +22,18 @@ if (!pwsh && process.env.CI) {
 
 // The tag goes through an environment variable, as RELEASE_TAG does in the workflow.
 // pwsh -File drops a trailing newline from an argument, which would hide "v1.2.3\n".
-function run(tag: string): { exitCode: number; stdout: string; stderr: string } {
+function run(
+  tag: string,
+  opts: { allowBaseline?: boolean } = {},
+): { exitCode: number; stdout: string; stderr: string } {
+  const switchArg = opts.allowBaseline ? " -AllowBaseline" : "";
   const result = Bun.spawnSync(
     [
       pwsh!,
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `& '${script}' -Tag $env:TEST_TAG; exit $LASTEXITCODE`,
+      `& '${script}' -Tag $env:TEST_TAG${switchArg}; exit $LASTEXITCODE`,
     ],
     { stdout: "pipe", stderr: "pipe", env: { ...process.env, TEST_TAG: tag } },
   );
@@ -116,6 +121,13 @@ ptest("v2.1.0 is rejected because self-update would not replace it", () => {
   expect(r.stderr).toContain("self-update would not replace the binary");
 });
 
+ptest("v2.1.0 is accepted with -AllowBaseline (install path)", () => {
+  const r = run("v2.1.0", { allowBaseline: true });
+  expect(r.exitCode).toBe(0);
+  expect(r.stdout).toBe("stable");
+  expect(r.stderr).not.toContain("self-update would not replace");
+});
+
 test("the script uses a case-sensitive match", () => {
   const text = readFileSync(script, "utf8");
   expect(text).toContain("-cnotmatch '^v(0|[1-9]");
@@ -189,16 +201,38 @@ ptest("the install workflow block stops on an invalid tag", () => {
     const r = runWorkflowCheck(tag, repoRoot, install);
     expect(r.exitCode).not.toBe(0);
     expect(r.out).not.toContain("after-tag-check");
-    expect(r.out).toContain(`Tag validation failed for '${tag}' (exit 1)`);
+    expect(r.out).toContain(`Tag validation failed for '${escapeTag(tag)}' (exit 1)`);
   }
 });
 
 ptest("the install workflow block lets valid tags through", () => {
-  for (const tag of ["v1.2.3", "v1.2.3-rc.1"]) {
+  for (const tag of ["v1.2.3", "v1.2.3-rc.1", "v2.1.0"]) {
     const r = runWorkflowCheck(tag, repoRoot, install);
     expect(r.exitCode).toBe(0);
     expect(r.out).toContain("after-tag-check");
+    expect(r.out).not.toContain("self-update would not replace");
   }
+});
+
+ptest("the self-update workflow block rejects v2.1.0", () => {
+  const r = runWorkflowCheck("v2.1.0", repoRoot);
+  expect(r.exitCode).not.toBe(0);
+  expect(r.out).not.toContain("after-tag-check");
+  expect(r.out).toContain("self-update would not replace the binary");
+});
+
+test("the install workflow block passes -AllowBaseline", () => {
+  const yml = readFileSync(path.join(repoRoot, ".github/workflows", install), "utf8");
+  const begin = yml.indexOf("# BEGIN tag-check");
+  const end = yml.indexOf("# END tag-check");
+  const block = yml.slice(begin, end);
+  expect(block).toContain("-AllowBaseline");
+  const su = readFileSync(
+    path.join(repoRoot, ".github/workflows/verify-windows-self-update.yml"),
+    "utf8",
+  );
+  const suBlock = su.slice(su.indexOf("# BEGIN tag-check"), su.indexOf("# END tag-check"));
+  expect(suBlock).not.toContain("-AllowBaseline");
 });
 
 ptest("the install workflow block explains a ref without the script", () => {

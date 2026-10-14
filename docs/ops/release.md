@@ -45,7 +45,9 @@ Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. 
 
 ## Windows self-update check
 
-After a successful Release run, `.github/workflows/verify-windows-self-update.yml` installs the published v2.1.0 binary and runs `bolt self-update` to the new tag. `scripts/self-update-tag.ps1` validates the tag: it must start with a lowercase `v`, have no leading zeros, and use an optional prerelease suffix of dot-separated identifiers, like `v1.2.3` or `v1.2.3-rc.1`. A prerelease tag runs `bolt self-update --force`; a stable tag runs `bolt self-update`.
+After a successful Release run, `.github/workflows/verify-windows-self-update.yml` installs the published v2.1.0 binary and runs `bolt self-update` to the new tag. `scripts/self-update-tag.ps1` validates the tag: it must start with a lowercase `v`, have no leading zeros, and use an optional prerelease suffix of dot-separated identifiers, like `v1.2.3` or `v1.2.3-rc.1`. A prerelease tag runs `bolt self-update --force`; a stable tag runs `bolt self-update`. Self-update rejects `v2.1.0` (the starting binary would not be replaced).
+
+`.github/workflows/verify-windows-install.yml` uses the same script for tag shape validation. It passes `-AllowBaseline`, so `v2.1.0` is accepted: install verifies that release's published assets rather than self-updating from the baseline.
 
 The job checks out the workflow's ref to get that script. If the script is missing there, the job fails with "scripts/self-update-tag.ps1 not found in the checked-out ref". That ref predates the script; re-run with `workflow_dispatch` on main or a newer tag.
 

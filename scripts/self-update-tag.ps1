@@ -1,5 +1,6 @@
-# Validate the release tag for the Windows self-update check and pick the mode.
-# Called by .github/workflows/verify-windows-self-update.yml and run by
+# Validate a release tag for the Windows install and self-update checks, and pick
+# the self-update mode. Called by .github/workflows/verify-windows-self-update.yml
+# and .github/workflows/verify-windows-install.yml; run by
 # src/tests/self-update-tag.test.ts under pwsh.
 #
 # Writes "prerelease" or "stable" to the pipeline. An invalid tag writes the reason
@@ -9,13 +10,18 @@
 # the workflow passes --force for a prerelease. A stable tag takes the real
 # compare-and-upgrade path, with no --force.
 #
+# -AllowBaseline: install only. Self-update rejects v2.1.0 (the starting binary
+# would not be replaced). Install verifies that tag's published assets, so it
+# passes -AllowBaseline and accepts v2.1.0.
+#
 # -cnotmatch is case-sensitive: "V1.2.3" is rejected. As in SemVer, numbers have
 # no leading zeros and the prerelease suffix is dot-separated, non-empty
 # [0-9A-Za-z-] identifiers (upper- and lowercase). \z, not $, so a trailing
 # newline is rejected.
 param(
   [AllowEmptyString()]
-  [string]$Tag
+  [string]$Tag,
+  [switch]$AllowBaseline
 )
 $ErrorActionPreference = "Stop"
 
@@ -46,7 +52,7 @@ function Format-Tag([string]$Value) {
 if ($Tag -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?\z') {
   Fail "Tag '$(Format-Tag $Tag)' is invalid: release tags must start with a lowercase 'v' followed by MAJOR.MINOR.PATCH and an optional -prerelease suffix of dot-separated identifiers, with no leading zeros, like v1.2.3 or v1.2.3-rc.1."
 }
-if ($Tag -ceq "v2.1.0") {
+if ($Tag -ceq "v2.1.0" -and -not $AllowBaseline) {
   Fail "Tag 'v2.1.0' is invalid here: it is the starting version, so self-update would not replace the binary. Run this check with a newer release tag."
 }
 if ($Tag.Contains("-")) { "prerelease" } else { "stable" }
