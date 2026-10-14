@@ -55,20 +55,27 @@ export function pinnedBunVersion(pkg: { packageManager?: string }): string | und
   return m?.[1];
 }
 
-/** Warn locally (or throw when CI is set) if the running Bun differs from the pinned version. */
-export function checkBunVersion(
-  actual: string,
-  pinned: string | undefined,
-  env: Record<string, string | undefined>,
-): void {
-  if (!pinned || actual === pinned) return;
-  const msg = `Bun ${actual} is running but package.json pins bun@${pinned}. Run \`bun upgrade --version ${pinned}\`.`;
-  if (env.CI) throw new Error(msg);
-  console.warn(`\n\u26a0\ufe0f  WARNING: ${msg} Tests may fail.\n`);
+/**
+ * Error message when the running Bun differs from the pinned version, or null when it matches.
+ * Tests fail on a mismatch, locally and in CI, so results never depend on an unpinned runtime.
+ */
+export function bunVersionError(actual: string, pinned: string | undefined): string | null {
+  if (!pinned)
+    return 'package.json has no packageManager "bun@<version>" pin; tests cannot check the Bun version.';
+  if (actual === pinned) return null;
+  return `Bolt tests: requires Bun ${pinned}, found ${actual}. package.json pins it in "packageManager"; run \`bun upgrade --version ${pinned}\` (or install that version) and retry.`;
+}
+
+/** Stop the test run before any test file loads when the Bun version is wrong. */
+export function checkBunVersion(actual: string, pinned: string | undefined): void {
+  const msg = bunVersionError(actual, pinned);
+  if (msg) {
+    console.error(`\n${msg}\n`);
+    process.exit(1);
+  }
 }
 
 checkBunVersion(
   Bun.version,
   pinnedBunVersion(JSON.parse(readFileSync(join(import.meta.dir, "../../package.json"), "utf8"))),
-  process.env,
 );
