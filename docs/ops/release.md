@@ -43,6 +43,12 @@ Smoke runs `bolt version` and `bolt --version`, then loads a TypeScript plugin. 
 
 `scripts/publish-release.ts` calls `gh api --paginate --slurp`, which needs gh 2.48 or later. The script checks `gh --version` first and fails with "requires gh 2.48 or later, found X" on an older gh. GitHub-hosted runners already ship a newer gh.
 
+## Windows self-update check
+
+After a successful Release run, `.github/workflows/verify-windows-self-update.yml` installs the published v2.1.0 binary and runs `bolt self-update` to the new tag. `scripts/self-update-tag.ps1` validates the tag: it must start with a lowercase `v`, have no leading zeros, and use an optional prerelease suffix of dot-separated identifiers, like `v1.2.3` or `v1.2.3-rc.1`. A prerelease tag runs `bolt self-update --force`; a stable tag runs `bolt self-update`.
+
+The job checks out the workflow's ref to get that script. If the script is missing there, the job fails with "scripts/self-update-tag.ps1 not found in the checked-out ref". That ref predates the script; re-run with `workflow_dispatch` on main or a newer tag.
+
 ## When a re-run fails
 
 The publish job leaves a release untouched when it refuses it. Deleting a release by id keeps the tag. Re-run the failed workflow with `gh run rerun <run-id>`.

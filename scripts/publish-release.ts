@@ -461,17 +461,21 @@ function multipleReleaseMessage(repo: string, tag: string, releases: ReleaseView
 export const MIN_GH_VERSION = [2, 48] as const;
 
 /**
- * Check `gh --version` output. `null` means gh was not found on PATH.
+ * Check the result of `gh --version`. `null` means gh was not found on PATH.
  * Returns an error message, or null when gh is new enough.
  */
-export function ghVersionError(output: string | null): string | null {
+export function ghVersionError(result: ExecResult | null): string | null {
   const [major, minor] = MIN_GH_VERSION;
   const need = `scripts/publish-release.ts requires gh ${major}.${minor} or later`;
   const fix = "Install or upgrade it from https://cli.github.com/";
-  if (output === null) return `${need}, but gh was not found on PATH. ${fix}`;
-  const match = /gh version (\d+)\.(\d+)(?:\.(\d+))?/.exec(output);
+  if (result === null) return `${need}, but gh was not found on PATH. ${fix}`;
+  if (result.exitCode !== 0) {
+    const detail = (result.stderr || result.stdout).trim() || "no output";
+    return `${need}, but gh --version failed (exit ${result.exitCode}): ${detail}. ${fix}`;
+  }
+  const match = /gh version (\d+)\.(\d+)(?:\.(\d+))?/.exec(result.stdout);
   if (!match) {
-    const found = output.trim().split("\n")[0] || "no output";
+    const found = result.stdout.trim().split("\n")[0] || "no output";
     return `${need}, but \`gh --version\` printed an unrecognized version (${found}). ${fix}`;
   }
   const foundMajor = Number(match[1]);
@@ -731,15 +735,18 @@ export function runPublish(options: RunOptions): number {
 }
 
 if (import.meta.main) {
-  let ghVersionOutput: string | null = null;
+  let ghVersion: ExecResult | null = null;
   try {
-    const ghVersion = Bun.spawnSync(["gh", "--version"], { stdout: "pipe", stderr: "pipe" });
-    const text = new TextDecoder().decode(ghVersion.stdout);
-    ghVersionOutput = ghVersion.exitCode === 0 ? text : `exit ${ghVersion.exitCode}: ${text}`;
+    const result = Bun.spawnSync(["gh", "--version"], { stdout: "pipe", stderr: "pipe" });
+    ghVersion = {
+      exitCode: result.exitCode ?? 1,
+      stdout: new TextDecoder().decode(result.stdout),
+      stderr: new TextDecoder().decode(result.stderr),
+    };
   } catch {
     // Spawn fails (ENOENT) when gh is not on PATH; ghVersionError(null) says so.
   }
-  const versionError = ghVersionError(ghVersionOutput);
+  const versionError = ghVersionError(ghVersion);
   if (versionError) {
     console.error(`::error::${versionError}`);
     process.exit(1);

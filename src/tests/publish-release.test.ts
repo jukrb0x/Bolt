@@ -687,17 +687,19 @@ test("a draft on the second page is completed from the slurped list", () => {
   ).toBe(true);
 });
 
+const ghOut = (stdout: string): ExecResult => ({ exitCode: 0, stdout, stderr: "" });
+
 test("gh older than 2.48 fails early with the version found and how to upgrade", () => {
   const old = ghVersionError(
-    "gh version 2.47.1 (2024-04-01)\nhttps://github.com/cli/cli/releases/tag/v2.47.1\n",
+    ghOut("gh version 2.47.1 (2024-04-01)\nhttps://github.com/cli/cli/releases/tag/v2.47.1\n"),
   );
   expect(old).toContain("requires gh 2.48 or later");
   expect(old).toContain("found 2.47.1");
   expect(old).toContain("Install or upgrade it from https://cli.github.com/");
-  expect(ghVersionError("gh version 1.99.0 (2021-01-01)")).toContain("found 1.99.0");
-  expect(ghVersionError("gh version 2.48.0 (2024-04-17)")).toBeNull();
-  expect(ghVersionError("gh version 2.60.1 (2024-10-24)")).toBeNull();
-  expect(ghVersionError("gh version 3.0.0 (2030-01-01)")).toBeNull();
+  expect(ghVersionError(ghOut("gh version 1.99.0 (2021-01-01)"))).toContain("found 1.99.0");
+  expect(ghVersionError(ghOut("gh version 2.48.0 (2024-04-17)"))).toBeNull();
+  expect(ghVersionError(ghOut("gh version 2.60.1 (2024-10-24)"))).toBeNull();
+  expect(ghVersionError(ghOut("gh version 3.0.0 (2030-01-01)"))).toBeNull();
 });
 
 test("gh not on PATH names the requirement and where to install it", () => {
@@ -707,12 +709,23 @@ test("gh not on PATH names the requirement and where to install it", () => {
 });
 
 test("an unparseable gh version names what was printed and where to install gh", () => {
-  for (const output of ["", "something else\n", "exit 1: "]) {
-    const message = ghVersionError(output);
+  for (const output of ["", "something else\n"]) {
+    const message = ghVersionError(ghOut(output));
     expect(message).toContain("requires gh 2.48 or later");
     expect(message).toContain("printed an unrecognized version");
     expect(message).toContain("Install or upgrade it from https://cli.github.com/");
   }
+});
+
+test("gh --version exiting non-zero reports the exit code and gh's stderr", () => {
+  const message = ghVersionError({
+    exitCode: 3,
+    stdout: "",
+    stderr: "  error: config file is corrupt\n",
+  });
+  expect(message).toContain("gh --version failed (exit 3): error: config file is corrupt.");
+  expect(message).toContain("Install or upgrade it from https://cli.github.com/");
+  expect(message).not.toContain("unrecognized version");
 });
 
 // Emulates gh: `-F key=@file` reads the file, `-f` sends the literal string.

@@ -94,7 +94,21 @@ jobs:
 
           $tag = [string]$env:RELEASE_TAG
           # Same shape the Release workflow stamps. Rejects v2.1.0 and an uppercase V.
-          $mode = & (Join-Path $env:GITHUB_WORKSPACE "scripts/self-update-tag.ps1") -Tag $tag
+          # src/tests/self-update-tag.test.ts runs this block under pwsh.
+          # BEGIN tag-check
+          $tagScript = Join-Path $env:GITHUB_WORKSPACE "scripts/self-update-tag.ps1"
+          if (-not (Test-Path -LiteralPath $tagScript)) {
+            throw "scripts/self-update-tag.ps1 not found in the checked-out ref $env:GITHUB_REF ($env:GITHUB_SHA). This ref predates the script; re-run with workflow_dispatch on main or a newer tag."
+          }
+          # The script exits 1 on an invalid tag. Stop does not turn an exit code into an error.
+          $mode = & $tagScript -Tag $tag
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tag validation failed for '$tag' (exit $LASTEXITCODE); see the error above."
+          }
+          if ($mode -cne "prerelease" -and $mode -cne "stable") {
+            throw "Tag validation for '$tag' printed '$mode', expected 'prerelease' or 'stable'."
+          }
+          # END tag-check
           $resp = Invoke-WebRequest -UseBasicParsing -Headers @{
             Authorization = "Bearer ${{ github.token }}"
             Accept        = "application/vnd.github+json"

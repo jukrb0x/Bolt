@@ -50,7 +50,7 @@ test("live Windows checks query the triggering tag", () => {
 test("self-update passes --force only for a prerelease tag", () => {
   const update = readFileSync(workflows[1], "utf8");
   // scripts/self-update-tag.ps1 decides the mode; self-update-tag.test.ts runs it.
-  expect(update).toContain('scripts/self-update-tag.ps1") -Tag $tag');
+  expect(update).toContain("$mode = & $tagScript -Tag $tag");
   expect(update).toContain("sparse-checkout: scripts");
   const at = update.indexOf('if ($mode -ceq "prerelease")');
   expect(at).toBeGreaterThan(-1);
