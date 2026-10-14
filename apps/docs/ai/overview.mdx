@@ -13,8 +13,8 @@ the same permissions and allowlists you already use for shell commands apply to 
 <Warning>
   **Status.** Most of this page describes a reviewed design for agent support, pending maintainer
   sign-off. It is not in the current release. Today's binary has the `ai` handler flag, `bolt ai`,
-  and a first skill. It does not have structured `--json` on most commands (only `bolt version --json`), agent mode, `bolt status`, or `--execute`. Sections
-  below say which is which.
+  and a first skill. It does not have structured `--json` on most commands (only `bolt version
+  --json`), agent mode, `bolt status`, or `--execute`. Sections below say which is which.
 </Warning>
 
 ## Available today
@@ -42,15 +42,16 @@ tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
   `bolt run --dry-run` is a static preview (no plugins, hooks, handlers, or file writes). Use
   `--simulate` only with consent — it loads plugins. Do not auto-approve any other `bolt run`.
 
-  Every command rejects unknown and reserved flags with exit code `2` before anything runs.
-  Unknown-flag errors may include did-you-mean and a `Flags:` / `--help` line; reserved errors
-  (e.g. `bolt list --json`) are only the "reserved by bolt and not supported yet. Remove it…"
-  line. Reserved names `--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`
-  use that reserved wording unless the command declares them (`bolt version --json` works).
-  Undeclared `--dry-run` / `--simulate` on other commands are unknown flags, not reserved.
-  Reserved names cannot be used as task params on `run` / `inspect`. `bolt ai --json` does not
-  write `.bolt/ai-context.md`; it exits `2`. Planned agent commands therefore fail on today's
-  binary — wait until `bolt version --json` reports the capabilities.
+Every command rejects unknown and reserved flags with exit code `2` before anything runs.
+Unknown-flag errors may include did-you-mean and a `Flags:` / `--help` line; reserved errors
+(e.g. `bolt list --json`) are only the "reserved by bolt and not supported yet. Remove it…"
+line. Reserved names `--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`
+use that reserved wording unless the command declares them (`bolt version --json` works).
+Undeclared `--dry-run` / `--simulate` on other commands are unknown flags, not reserved.
+Reserved names cannot be used as task params on `run` / `inspect`. `bolt ai --json` does not
+write `.bolt/ai-context.md`; it exits `2`. Planned agent commands therefore fail on today's
+binary — wait until `bolt version --json` reports the capabilities.
+
 </Note>
 
 ## Planned: skills that call the CLI with `--json`

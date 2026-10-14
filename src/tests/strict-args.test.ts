@@ -227,7 +227,11 @@ describe("CLI-1 integration via main.ts", () => {
   });
 
   test("generic guard: every registered leaf rejects --definitely-unknown and --agent", async () => {
-    type Node = { args?: Record<string, unknown>; subCommands?: Record<string, Node>; meta?: { name?: string } };
+    type Node = {
+      args?: Record<string, unknown>;
+      subCommands?: Record<string, Node>;
+      meta?: { name?: string };
+    };
     const leaves: string[][] = [];
     const walk = (node: Node, path: string[]) => {
       const subs = node.subCommands ?? {};
@@ -243,8 +247,7 @@ describe("CLI-1 integration via main.ts", () => {
     expect(leaves.length).toBeGreaterThan(5);
     for (const pathParts of leaves) {
       // plugin new needs a positional; pass a dummy name before the bad flag
-      const prefix =
-        pathParts.join(" ") === "plugin new" ? [...pathParts, "tmpplug"] : pathParts;
+      const prefix = pathParts.join(" ") === "plugin new" ? [...pathParts, "tmpplug"] : pathParts;
       for (const bad of ["--definitely-unknown", "--agent"] as const) {
         const r = await bolt([...prefix, bad]);
         expect(r.code).toBe(2);

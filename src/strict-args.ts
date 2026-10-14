@@ -200,7 +200,11 @@ export function reservedParamError(
     );
   }
 
-  if (IMPLEMENTED_RESERVED.has(name) && ctx.flags.includes(name) && FALSY.has(value.toLowerCase())) {
+  if (
+    IMPLEMENTED_RESERVED.has(name) &&
+    ctx.flags.includes(name) &&
+    FALSY.has(value.toLowerCase())
+  ) {
     return new UsageError(
       `"${name}=${value}" is not a param: --${name} is a bolt flag and takes no value. ` +
         `To run for real, just remove --${name}. If this is a task param, ${renameHint}`,
@@ -343,9 +347,7 @@ export function parseStrictArgs(rawArgs: string[], spec: StrictArgSpec): StrictP
           i++;
           continue;
         }
-        throw new UsageError(
-          `Flag "--${strPrimary}" needs a value, e.g. --${strPrimary}=value.`,
-        );
+        throw new UsageError(`Flag "--${strPrimary}" needs a value, e.g. --${strPrimary}=value.`);
       }
 
       if (rawName === "help" && value !== undefined) {
