@@ -687,15 +687,82 @@ test("a draft on the second page is completed from the slurped list", () => {
   ).toBe(true);
 });
 
-test("gh older than 2.48 fails early with the version found", () => {
-  expect(
-    ghVersionError(
-      "gh version 2.47.1 (2024-04-01)\nhttps://github.com/cli/cli/releases/tag/v2.47.1\n",
-    ),
-  ).toContain("requires gh 2.48 or later, found 2.47.1");
+test("gh older than 2.48 fails early with the version found and how to upgrade", () => {
+  const old = ghVersionError(
+    "gh version 2.47.1 (2024-04-01)\nhttps://github.com/cli/cli/releases/tag/v2.47.1\n",
+  );
+  expect(old).toContain("requires gh 2.48 or later");
+  expect(old).toContain("found 2.47.1");
+  expect(old).toContain("Install or upgrade it from https://cli.github.com/");
   expect(ghVersionError("gh version 1.99.0 (2021-01-01)")).toContain("found 1.99.0");
-  expect(ghVersionError("")).toContain("requires gh 2.48 or later, found an unrecognized version");
   expect(ghVersionError("gh version 2.48.0 (2024-04-17)")).toBeNull();
   expect(ghVersionError("gh version 2.60.1 (2024-10-24)")).toBeNull();
   expect(ghVersionError("gh version 3.0.0 (2030-01-01)")).toBeNull();
+});
+
+test("gh not on PATH names the requirement and where to install it", () => {
+  expect(ghVersionError(null)).toBe(
+    "scripts/publish-release.ts requires gh 2.48 or later, but gh was not found on PATH. Install or upgrade it from https://cli.github.com/",
+  );
+});
+
+test("an unparseable gh version names what was printed and where to install gh", () => {
+  for (const output of ["", "something else\n", "exit 1: "]) {
+    const message = ghVersionError(output);
+    expect(message).toContain("requires gh 2.48 or later");
+    expect(message).toContain("printed an unrecognized version");
+    expect(message).toContain("Install or upgrade it from https://cli.github.com/");
+  }
+});
+
+// Emulates gh: `-F key=@file` reads the file, `-f` sends the literal string.
+test("a successful create sends the notes file as the body and does not list releases again", () => {
+  const calls: string[][] = [];
+  const notes = "## Changes\n\n- Fix the thing\n";
+  let sentBody: string | undefined;
+  const code = runPublish({
+    argv: publishArgv,
+    env: { GITHUB_REPOSITORY: REPO },
+    exists: () => true,
+    readFile: (file) => (file.endsWith("assets.txt") ? `${ASSETS.join("\n")}\n` : "sums\n"),
+    exec: (_command, args) => {
+      calls.push(args);
+      if (args[0] === "ls-remote")
+        return { exitCode: 0, stdout: `${COMMIT}\trefs/tags/v2.1.3^{}\n`, stderr: "" };
+      if (args.some((arg) => arg.includes("/releases/tags/")))
+        return http(args, 404, { message: "Not Found" });
+      if (args.includes("--paginate")) return releasePages(args, [[]]);
+      if (isCreatePost(args)) {
+        args.forEach((arg, i) => {
+          if (!arg.startsWith("body=")) return;
+          const value = arg.slice("body=".length);
+          const typed = args[i - 1] === "-F" && value.startsWith("@");
+          sentBody = typed && value === "@notes.md" ? notes : value;
+        });
+        const created = release({
+          id: 77,
+          isDraft: true,
+          uploadUrl:
+            "https://uploads.github.com/repos/jukrb0x/Bolt/releases/77/assets{?name,label}",
+          assets: [],
+        });
+        return http(args, 201, apiBody(created));
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  });
+  expect(code).toBe(0);
+  expect(sentBody).toBe(notes);
+  expect(sentBody).not.toBe("@notes.md");
+  const postAt = calls.findIndex(isCreatePost);
+  expect(postAt).toBeGreaterThan(-1);
+  const after = calls.slice(postAt + 1);
+  expect(after.some((args) => args.includes("--paginate"))).toBe(false);
+  expect(
+    after.some(
+      (args) =>
+        args.includes(`repos/${REPO}/releases`) && !isCreatePost(args) && args.includes("GET"),
+    ),
+  ).toBe(false);
+  expect(after.some((args) => args.some((arg) => arg.includes("/releases/tags/")))).toBe(false);
 });
