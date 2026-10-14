@@ -10,7 +10,11 @@ Source: [`src/commands/list.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/c
 List tasks and flows defined in bolt.yaml
 
 ```bash
-bolt list
+bolt list [options]
 ```
+
+| Argument | Type    | Alias | Required | Default | Description                                    |
+| -------- | ------- | ----- | -------- | ------- | ---------------------------------------------- |
+| `--json` | boolean |       |          | `false` | Print one bolt.list/v1 JSON document on stdout |
 
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

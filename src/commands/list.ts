@@ -1,10 +1,45 @@
 import { defineCommand } from "citty";
-import { loadProjectConfigOrExit } from "../project-config";
 import pc from "picocolors";
+import { loadProjectConfigOrExit } from "../project-config";
+import {
+  JSON_SCHEMA,
+  configRef,
+  emitJsonAndExit,
+  installJsonStdoutGuard,
+  loadConfigForJson,
+} from "../json-envelope";
 
 export default defineCommand({
   meta: { name: "list", description: "List tasks and flows defined in bolt.yaml" },
-  async run() {
+  args: {
+    json: {
+      type: "boolean",
+      default: false,
+      description: "Print one bolt.list/v1 JSON document on stdout",
+    },
+  },
+  async run({ args }) {
+    if (args?.json) {
+      installJsonStdoutGuard();
+      const { configPath, cfg } = await loadConfigForJson(JSON_SCHEMA.list);
+      emitJsonAndExit({
+        schema: JSON_SCHEMA.list,
+        exitCode: 0,
+        config: configRef(configPath),
+        data: {
+          tasks: Object.keys(cfg.tasks),
+          flows: Object.entries(cfg.flows).map(([name, flow]) => {
+            const item: { name: string; steps: string[]; description?: string } = {
+              name,
+              steps: flow.steps,
+            };
+            if (flow.description) item.description = flow.description;
+            return item;
+          }),
+        },
+      });
+    }
+
     const { configPath, cfg } = await loadProjectConfigOrExit();
 
     const tasks = Object.keys(cfg.tasks);

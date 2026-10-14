@@ -161,14 +161,14 @@ describe("CLI-1 integration via main.ts", () => {
     expect(ver.out.trim()).toBe(VERSION);
   });
 
-  test("list/info/check unknown and reserved flags exit 2", async () => {
+  test("list/info/check unknown flags exit 2; --json is declared", async () => {
     for (const cmd of ["list", "info", "check"] as const) {
       const bogus = await bolt([cmd, "--bogus"]);
       expect(bogus.code).toBe(2);
       expect(bogus.err).toContain("Unknown flag");
       const json = await bolt([cmd, "--json"]);
-      expect(json.code).toBe(2);
-      expect(json.err).toContain("reserved by bolt");
+      expect(json.err).not.toContain("reserved by bolt");
+      expect(json.out.startsWith("{")).toBe(true);
     }
   });
 

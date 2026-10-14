@@ -10,7 +10,11 @@ Source: [`src/commands/check.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/
 Validate bolt.yaml against the current schema
 
 ```bash
-bolt check
+bolt check [options]
 ```
+
+| Argument | Type    | Alias | Required | Default | Description                                     |
+| -------- | ------- | ----- | -------- | ------- | ----------------------------------------------- |
+| `--json` | boolean |       |          | `false` | Print one bolt.check/v1 JSON document on stdout |
 
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

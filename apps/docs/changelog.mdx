@@ -5,13 +5,38 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### JSON envelope for read commands (BOLT-M1 slice 1a)
+
+`bolt list`, `bolt info`, `bolt check`, and `bolt inspect` accept `--json`. Stdout is one JSON document and nothing else. `console.log` and other stdout writes are redirected to stderr for that process.
+
+```json
+{
+  "schema": "bolt.list/v1",
+  "bolt": "x.y.z",
+  "ok": true,
+  "config": { "path": "/abs/bolt.yaml", "local": null },
+  "data": {},
+  "warnings": [],
+  "errors": []
+}
+```
+
+- Schema names: `bolt.list/v1`, `bolt.info/v1`, `bolt.check/v1`, `bolt.inspect/v1`.
+- `config` is `null` when no `bolt.yaml` is found. The field is present. When `bolt.yaml` exists and `bolt.local.yaml` does not, `config.local` is `null`.
+- `warnings` and `errors` items are `{ "code", "message", "hint"? }`.
+- `ok` is true exactly when the process exits 0.
+
+`bolt version --json` is unchanged: a flat object with `version`, `plugin_api`, `manifest_format`, and `capabilities`.
+
+This slice does not add `bolt status`, `bolt run --execute` / `--plan` / `--agent` / `--confirmed-by-user`, or `bolt ai --json`.
+
 ### Capability selection (BOLT-EXT-2)
 
 Singleton capability tags resolve to one handler. The map lives at the top level of `bolt.yaml` and `bolt.local.yaml`:
 
 ```yaml
 capabilities:
-  vcs.sync: git/pull   # namespace/handler
+  vcs.sync: git/pull # namespace/handler
 ```
 
 `bolt.local.yaml` wins per key. `capabilities: {}` is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`) in the map are ignored with one warning.

@@ -705,7 +705,7 @@ test("run rejects unknown flags, valued boolean flags and --prefixed values (exi
       [["run", "mark", "--execute"], "--execute is reserved by bolt and not supported yet"],
       [["run", "mark", "--", "plan=x"], "in bolt.yaml use my_plan and pass -- my_plan=x"],
       [["run", "mark", "--", "dry-run=false"], "pass -- my_dry_run=false"],
-      [["inspect", "mark", "--json"], "--json is reserved by bolt and not supported yet"],
+      [["inspect", "mark", "--agent"], "--agent is reserved by bolt and not supported yet"],
       [["--version=1"], "--version takes no value. Use: bolt --version"],
       [["--version", "run", "mark"], "--version must be used on its own. Use: bolt --version"],
     ];

@@ -349,7 +349,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
 
 export interface ConfigCheckResult {
   ok: boolean;
-  errors: Array<{ path: string; message: string }>;
+  errors: Array<{ path: string; message: string; code?: string }>;
 }
 
 /** Plugin metadata failures. Core schema errors stay in BoltConfigSchema. */
@@ -476,7 +476,11 @@ export async function checkConfig(
     );
     warnings = report.warnings;
     for (const issue of report.errors) {
-      errors.push({ path: issue.path, message: issue.message });
+      errors.push({
+        path: issue.path,
+        message: issue.message,
+        ...(issue.code ? { code: issue.code } : {}),
+      });
     }
   }
 

@@ -14,8 +14,9 @@ the same permissions and allowlists you already use for shell commands apply to 
 <Warning>
   **Status.** Most of this page describes a reviewed design for agent support, pending maintainer
   sign-off. It is not in the current release. Today's binary has the `ai` handler flag, `bolt ai`,
-  and a first skill. It does not have `--json` (except `bolt version --json`), agent mode, `bolt
-  status`, or `--execute`. Sections below marked **Planned** are not implemented yet.
+  and a first skill. `--json` works on `version` (a flat object) and on `list`, `info`, `check`, and
+  `inspect` (one shared JSON envelope). It does not have agent mode, `bolt status`, `--execute`, or
+  `--json` on `run` / `ai`. Sections below marked **Planned** are not implemented yet.
 </Warning>
 
 ## Available today
@@ -52,9 +53,10 @@ tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
 
 Every command rejects unknown and reserved flags with exit code `2` before anything runs.
 Unknown-flag errors may include did-you-mean and a `Flags:` / `--help` line; reserved errors
-(e.g. `bolt list --json`) are only the "reserved by bolt and not supported yet. Remove it…"
+(e.g. `bolt run --json`) are only the "reserved by bolt and not supported yet. Remove it…"
 line. Reserved names `--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`
-use that reserved wording unless the command declares them (`bolt version --json` works).
+use that reserved wording unless the command declares them (`bolt version --json`, and
+`--json` on `list`, `info`, `check`, and `inspect`, work).
 Undeclared `--dry-run` / `--simulate` on other commands are unknown flags, not reserved.
 Reserved names cannot be used as task params on `run` / `inspect`. `bolt ai --json` does not
 write `.bolt/ai-context.md`; it exits `2`. Planned agent commands therefore fail on today's
@@ -90,14 +92,16 @@ agent client's command allowlist:
 ## Planned: skills that call the CLI with `--json`
 
 Nothing in this section is implemented in the current release unless it says so. There is no
-`bolt status` command, and `--json` exists only on `bolt version`.
+`bolt status` command. `--json` on `list`, `info`, `check`, and `inspect` prints the shared
+envelope below. `bolt version --json` stays a flat object. `run` and `ai` do not accept `--json`.
 
 ### The loop (Planned)
 
 <Info>
-  Only the first half of step 1 works today: `bolt version --json` prints `version`, `plugin_api`,
-  `manifest_format`, and `capabilities`. Steps 2 to 5 (`bolt status`, `--agent`, `--json` on other
-  commands, `plan_hash`, `--execute`, `--plan`, `--confirmed-by-user`) are not implemented.
+  Step 1 works today: `bolt version --json` prints `version`, `plugin_api`, `manifest_format`, and
+  `capabilities`. `bolt list --json`, `bolt info --json`, `bolt check --json`, and `bolt inspect
+  --json` print the shared envelope, without `--agent`. Still not implemented: `bolt status`,
+  `--agent`, `--json` on `run`, `plan_hash`, `--execute`, `--plan`, and `--confirmed-by-user`.
 </Info>
 
 An agent following the Bolt skill works in five steps:
@@ -131,11 +135,12 @@ An agent following the Bolt skill works in five steps:
 ### JSON output (Planned)
 
 <Info>
-  The shared envelope, per-command schemas, and `«env:NAME»` / `«local:NAME»` redaction are not
-  implemented. `bolt version --json` prints its own flat object, not this envelope.
+  `bolt list --json`, `bolt info --json`, `bolt check --json`, and `bolt inspect --json` print this
+  envelope. `bolt version --json` still prints its own flat object. `«env:NAME»` / `«local:NAME»`
+  redaction, `bolt status`, and `--json` on `run` / `ai` are not implemented.
 </Info>
 
-With `--json`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
+With `--json` on `list`, `info`, `check`, and `inspect`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
 envelope:
 
 ```json
@@ -154,11 +159,11 @@ envelope:
   branch on the code and exit status, not on message text.
 - Each command has a versioned schema (`bolt.list/v1`, `bolt.inspect/v1`, `bolt.run/v1`, …). Within
   `v1`, changes are additive only.
-- Values from environment variables appear as `«env:NAME»`, and values set in `bolt.local.yaml` appear
-  as `«local:NAME»`. This keeps secrets out of agent transcripts. It does not hide them from an agent
-  that can read your files.
+- Planned, not shipped: values from environment variables appear as `«env:NAME»`, and values set in
+  `bolt.local.yaml` appear as `«local:NAME»`. That keeps secrets out of agent transcripts. It does not
+  hide them from an agent that can read your files.
 
-Planned `--json` support: `version`, `list`, `info`, `check`, `inspect`, `status` (new), `run`, and `ai`.
+`--json` today: `version` (flat), `list`, `info`, `check`, `inspect` (envelope). Still planned: `status` (new), `run`, and `ai`.
 
 ### Which plans an agent may run (Planned)
 

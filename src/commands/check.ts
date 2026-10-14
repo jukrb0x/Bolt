@@ -5,10 +5,57 @@ import pc from "picocolors";
 import { planMigration } from "./migrate";
 import { CONFIG_EXIT_CODE } from "../exit-codes";
 import { configNotFoundMessage } from "../project-config";
+import {
+  JSON_SCHEMA,
+  configRef,
+  emitJsonAndExit,
+  installJsonStdoutGuard,
+  issue,
+  issueFromCliMessage,
+} from "../json-envelope";
 
 export default defineCommand({
   meta: { name: "check", description: "Validate bolt.yaml against the current schema" },
-  async run() {
+  args: {
+    json: {
+      type: "boolean",
+      default: false,
+      description: "Print one bolt.check/v1 JSON document on stdout",
+    },
+  },
+  async run({ args }) {
+    if (args?.json) {
+      installJsonStdoutGuard();
+      const configPath = await findConfig(process.cwd());
+      if (!configPath) {
+        emitJsonAndExit({
+          schema: JSON_SCHEMA.check,
+          exitCode: CONFIG_EXIT_CODE,
+          config: null,
+          data: { valid: false, legacy: [] },
+          errors: [issueFromCliMessage("CONFIG_NOT_FOUND", configNotFoundMessage(process.cwd()))],
+        });
+      }
+      const result = await checkConfig(configPath);
+      emitJsonAndExit({
+        schema: JSON_SCHEMA.check,
+        exitCode: result.ok ? 0 : CONFIG_EXIT_CODE,
+        config: configRef(configPath),
+        data: {
+          valid: result.ok,
+          legacy: result.legacy.map((item) => ({
+            file: item.file,
+            path: item.path,
+            message: item.message,
+          })),
+        },
+        warnings: result.warnings.map((message) => issue("CONFIG_WARNING", message)),
+        errors: result.errors.map((error) =>
+          issue(error.code ?? "CONFIG_INVALID", error.message, error.path),
+        ),
+      });
+    }
+
     const configPath = await findConfig(process.cwd());
     if (!configPath) {
       console.error(pc.red(`[ERROR] ${configNotFoundMessage(process.cwd())}`));
