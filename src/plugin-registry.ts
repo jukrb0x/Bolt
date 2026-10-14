@@ -32,14 +32,24 @@ const DECORATOR_TSCONFIG = JSON.stringify({ compilerOptions: PLUGIN_COMPILER_OPT
 
 const HOST_EXTERNALS = ["boltstack", "zod"];
 
+/**
+ * Compile inputs for a plugin directory: non-recursive `.ts` / `.tsx` basenames,
+ * sorted. Same set `compilePlugin` / `maxSourceMtime` and `sourcesHash` use.
+ */
+export function listCompileSources(pluginDir: string): string[] {
+  if (!existsSync(pluginDir)) return [];
+  return readdirSync(pluginDir)
+    .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".tsx"))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((entry) => path.join(pluginDir, entry));
+}
+
 /** Get the max mtime of all .ts files in a directory (non-recursive). */
 function maxSourceMtime(dir: string): number {
   let max = 0;
-  for (const entry of readdirSync(dir)) {
-    if (entry.endsWith(".ts") || entry.endsWith(".tsx")) {
-      const mt = statSync(path.join(dir, entry)).mtimeMs;
-      if (mt > max) max = mt;
-    }
+  for (const file of listCompileSources(dir)) {
+    const mt = statSync(file).mtimeMs;
+    if (mt > max) max = mt;
   }
   return max;
 }
@@ -62,7 +72,7 @@ function hasNodeModules(pluginDir: string): boolean {
   return existsSync(path.join(pluginDir, "node_modules"));
 }
 
-function pluginDirectory(resolved: string): string {
+export function pluginDirectory(resolved: string): string {
   try {
     if (existsSync(resolved) && statSync(resolved).isDirectory()) return resolved;
   } catch {

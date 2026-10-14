@@ -5,7 +5,7 @@ description: 'Plugins import boltstack and zod. The running bolt process injects
 
 Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and the plugin's declared `apiVersion`. It defaults to `1`. This bolt accepts plugin API `1` and `2` (`SUPPORTED_PLUGIN_API_VERSIONS`; `PLUGIN_API_VERSION` is `2`, the highest). Plugin API v2 adds [handler results](#handler-results-plugin-api-v2), [capability tags](#capability-tags-plugin-api-v2), and `ctx.emit`. See [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2).
 
-The manifest is not a file. `defineHandler` and `@handler` fill it in memory when the plugin is defined.
+The runtime manifest is not authored as YAML. `defineHandler` and `@handler` fill it in memory when the plugin is defined. Separately, `bolt ai` reads the serializable catalog file `bolt.plugin.json` (see [Plugin System](/guides/plugin-system)); refresh it with `bolt plugin build`.
 
 ## definePlugin
 

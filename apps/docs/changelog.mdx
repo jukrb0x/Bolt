@@ -5,6 +5,23 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Breaking: `bolt ai` reads `bolt.plugin.json` (no plugin execution) (BOLT-AI-3)
+
+`bolt ai` and `bolt ai --stdout` no longer call `buildRegistry`, compile plugins, or `import` project/user
+plugin code. They assemble the catalog from built-ins (in-process) plus each plugin's
+`<plugin-root>/bolt.plugin.json`. Default mode still writes only `.bolt/ai-context.md`; `--stdout` writes
+nothing under the project. Neither mode writes `.bolt/.cache`.
+
+**Migrate:** for every project/user/path plugin, run `bolt plugin build <ns>` once (or use a newly scaffolded
+plugin from `bolt plugin new`, which writes the file). Missing, invalid, or stale manifests (source
+`sourcesHash` mismatch) exit `3` with the absolute path and that fix command. Step text from custom
+`describe()` may be thinner; optional static `describe` strings in the JSON are supported. Builtin-only
+projects keep the same context hash as before.
+
+`bolt plugin build <ns>` is the only refresh path that executes plugin code — never auto-allow it. Do not
+auto-allow default `bolt ai` (writes a file). Re-adding `bolt ai --stdout` to agent auto-allow lists waits
+until after this change is released.
+
 ### Breaking: all commands reject unknown and reserved flags (BOLT-CLI-1)
 
 `bolt list`, `info`, `check`, `migrate`, `config`, `init`, `types`, `plugin new`,

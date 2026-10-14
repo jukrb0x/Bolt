@@ -13,10 +13,11 @@ bolt plugin <command>
 
 ## Subcommands
 
-| Command      | Description                            |
-| ------------ | -------------------------------------- |
-| `list`       | List loaded plugins and their handlers |
-| `new <name>` | Scaffold a plugin                      |
+| Command      | Description                                                        |
+| ------------ | ------------------------------------------------------------------ |
+| `list`       | List loaded plugins and their handlers                             |
+| `new <name>` | Scaffold a plugin (includes `bolt.plugin.json`)                    |
+| `build <ns>` | Load one plugin and write/refresh `bolt.plugin.json` for `bolt ai` |
 
 ## bolt plugin list
 
@@ -42,12 +43,23 @@ bolt plugin new <name> [--user]
 
 The name must match `/^[a-z0-9_-]+$/`. Without `--user`, Bolt must find a `bolt.yaml` by walking up from the current directory.
 
-The command writes two files:
+The command writes three files:
 
 - `index.ts` — `definePlugin` / `defineHandler` scaffold
 - `package.json` — `zod` in `dependencies`, `boltstack` in `devDependencies`
+- `bolt.plugin.json` — static catalog for `bolt ai` (includes `sourcesHash`)
 
-It does not write `tsconfig.json` or a manifest file. The manifest is built in memory when the plugin loads. See [Plugin Development](/guides/plugin-development).
+It does not write `tsconfig.json`. The runtime manifest is still built in memory when the plugin loads for `bolt run` / `plugin list`. See [Plugin Development](/guides/plugin-development).
+
+## bolt plugin build
+
+```bash
+bolt plugin build <namespace> [--user]
+```
+
+Loads that one plugin (compiling TypeScript if needed), then writes `<plugin-root>/bolt.plugin.json` with the serializable catalog and a fresh `sourcesHash`. This is the only CLI command that must execute plugin code to refresh AI context metadata. Never auto-allow it.
+
+Without `--user`, Bolt looks under `.bolt/plugins/<ns>`, then an explicit `plugins[].path` in `bolt.yaml`, then `~/.bolt/plugins/<ns>`. With `--user`, only the user-scope directory is used.
 
 The command prints a `bun install` hint. You do not need a `bun` binary, and loading the plugin does not run that hint. While compiling `index.ts`, if `dependencies` is non-empty and `node_modules` is missing, the host runs this executable as `install` with `BUN_BE_BUN=1`. A prebuilt `index.js` is loaded without that install. Editor types come from the release asset `bolt.d.ts` (`declare module "boltstack"`).
 
@@ -56,6 +68,7 @@ The command prints a `bun install` hint. You do not need a `bun` binary, and loa
 ```bash
 bolt plugin new myplugin
 bolt plugin new myplugin --user
+bolt plugin build myplugin
 bolt plugin list
 ```
 

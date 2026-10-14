@@ -1,8 +1,9 @@
 import { defineCommand } from "citty";
 import { loadProjectConfigOrExit } from "../project-config";
 import { generateAiContext } from "../ai-context";
-import { buildRegistry } from "../plugin-registry";
 import { builtinPlugins } from "../plugins";
+import { buildStaticAiRegistry, StaticManifestError } from "../static-plugin-manifest";
+import { CONFIG_EXIT_CODE } from "../exit-codes";
 import path from "path";
 import { mkdirSync, writeFileSync } from "fs";
 
@@ -18,7 +19,18 @@ export default defineCommand({
   async run({ args }) {
     const { configPath, cfg } = await loadProjectConfigOrExit();
     const configDir = path.dirname(path.resolve(configPath));
-    const registry = await buildRegistry(cfg, configDir, Object.values(builtinPlugins));
+
+    let registry;
+    try {
+      registry = buildStaticAiRegistry(cfg, configDir, Object.values(builtinPlugins));
+    } catch (e: unknown) {
+      if (e instanceof StaticManifestError) {
+        console.error(e.message);
+        process.exit(CONFIG_EXIT_CODE);
+      }
+      throw e;
+    }
+
     const content = generateAiContext(cfg, configPath, registry);
 
     if (args.stdout) {

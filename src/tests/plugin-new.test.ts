@@ -10,7 +10,7 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-test("scaffoldPlugin creates index.ts and package.json", async () => {
+test("scaffoldPlugin creates index.ts, package.json, and bolt.plugin.json", async () => {
   mkdirSync(tmpDir, { recursive: true });
   await scaffoldPlugin({ name: "myplugin", baseDir: tmpDir, isUser: false });
 
@@ -18,6 +18,11 @@ test("scaffoldPlugin creates index.ts and package.json", async () => {
   expect(existsSync(path.join(pluginDir, "index.ts"))).toBe(true);
   expect(existsSync(path.join(pluginDir, "tsconfig.json"))).toBe(false);
   expect(existsSync(path.join(pluginDir, "package.json"))).toBe(true);
+  expect(existsSync(path.join(pluginDir, "bolt.plugin.json"))).toBe(true);
+  const manifest = JSON.parse(readFileSync(path.join(pluginDir, "bolt.plugin.json"), "utf8"));
+  expect(manifest.namespace).toBe("myplugin");
+  expect(manifest.sourcesHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(manifest.handlers.run).toBeTruthy();
 });
 
 test("scaffoldPlugin index.ts has correct namespace", async () => {

@@ -1,9 +1,14 @@
 import { defineCommand } from "citty";
 import { findConfig } from "../discover";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
-import { homedir } from "os";
+import { homedir as osHomedir } from "os";
+
+function homedir(): string {
+  return process.env.HOME || process.env.USERPROFILE || osHomedir();
+}
 import path from "path";
 import pc from "picocolors";
+import { scaffoldStaticManifest, writeStaticPluginFile } from "../static-plugin-manifest";
 
 export interface ScaffoldOptions {
   name: string;
@@ -63,6 +68,7 @@ export default definePlugin({
     JSON.stringify(packageJson, null, 2) + "\n",
     "utf8",
   );
+  writeStaticPluginFile(pluginDir, scaffoldStaticManifest(name, pluginDir));
   return pluginDir;
 }
 
@@ -124,6 +130,14 @@ export default defineCommand({
     console.log(`  ${pc.cyan(`cd ${pluginDir}`)}`);
     console.log(
       `  ${pc.cyan("bun install")}         # links bolt types + installs bun-types for IDE support`,
+    );
+    console.log("");
+    console.log(
+      pc.dim(
+        "After changing handlers, run `bolt plugin build " +
+          name +
+          "` to refresh bolt.plugin.json.",
+      ),
     );
     if (!args.user) {
       console.log("");

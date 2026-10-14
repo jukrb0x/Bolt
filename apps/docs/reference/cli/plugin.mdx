@@ -34,4 +34,17 @@ List active plugins and their handlers
 bolt plugin list
 ```
 
+### bolt plugin build
+
+Compile a plugin once and write bolt.plugin.json for bolt ai
+
+```bash
+bolt plugin build <name> [options]
+```
+
+| Argument | Type       | Alias | Required | Default | Description                              |
+| -------- | ---------- | ----- | -------- | ------- | ---------------------------------------- |
+| `name`   | positional |       | yes      |         | Plugin namespace to build                |
+| `--user` | boolean    |       |          | `false` | Build from user scope (~/.bolt/plugins/) |
+
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

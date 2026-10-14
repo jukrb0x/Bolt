@@ -5,7 +5,7 @@ description: "A plugin is a TypeScript module that exports a plugin object: a na
 
 A plugin is a TypeScript module that exports a plugin object: a namespace and async handlers. `uses:` steps call those handlers as `namespace/handler`.
 
-The manifest is built in memory from `@handler` or `defineHandler`. Bolt does not read a JSON or YAML manifest.
+The runtime manifest is built in memory from `@handler` or `defineHandler` when a plugin loads. For `bolt ai`, Bolt reads a static catalog file `bolt.plugin.json` next to each project/user/path plugin instead of importing plugin code. Built-ins stay in-process. Refresh that file with `bolt plugin build <ns>` after handler changes.
 
 ## Discovery
 
@@ -45,7 +45,7 @@ bolt plugin new myplugin
 bolt plugin new myplugin --user
 ```
 
-Writes `index.ts` and `package.json` in the plugin directory. A plugin at `.bolt/plugins/myplugin/index.ts` is discovered with no `bolt.yaml` change. An explicit path:
+Writes `index.ts`, `package.json`, and a starter `bolt.plugin.json` in the plugin directory. A plugin at `.bolt/plugins/myplugin/index.ts` is discovered with no `bolt.yaml` change. An explicit path:
 
 ```yaml
 plugins:
@@ -54,6 +54,14 @@ plugins:
 ```
 
 Core `bolt.yaml` stays `version: 1` with `project.name`. Unreal `targets` belong under the `ue` plugin's `config`, not at the root of the file.
+
+## `bolt.plugin.json`
+
+Each project, user, or explicit-path plugin root may contain `bolt.plugin.json`: a serializable catalog (`namespace`, `description`, `sourcesHash`, `handlers` with `ai` / `description` / `paramsSchema` / optional `capabilities` and `describe`). It is not a dump of in-memory Zod schemas.
+
+`sourcesHash` is the SHA-256 of the contents of every non-recursive `.ts` / `.tsx` file in the plugin directory (the same set JIT compile uses). `bolt ai` recomputes that hash without importing the plugin; a missing file or mismatch exits `3` with the absolute path and `Run: bolt plugin build <ns>`.
+
+`bolt plugin list` and `bolt run` still load and execute plugins. Only `bolt ai` uses the static file.
 
 ## Handler params
 

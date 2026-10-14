@@ -591,6 +591,8 @@ export default definePlugin({
     writeBolt(project.dir, `tasks:\n  ping:\n    - uses: echo/ping\n`, {
       extraPlugins: "  - namespace: echo\n    path: ./echo/index.ts\n",
     });
+    const built = await bolt(project.dir, ["plugin", "build", "echo"]);
+    expect(built.exitCode).toBe(0);
     const ai = await bolt(project.dir, ["ai", "--stdout"]);
     expect(ai.exitCode).toBe(0);
     expect(ai.output).toContain("# Bolt — Sample");

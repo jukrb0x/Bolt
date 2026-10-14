@@ -56,6 +56,10 @@ Read `.bolt/ai-context.md` relative to the `bolt.yaml` location. If it does not 
 bolt ai
 ```
 
+`bolt ai` reads built-ins plus each plugin's `bolt.plugin.json` (it does not execute project/user plugin
+code). If it exits `3` naming a missing or stale manifest, ask the user to run `bolt plugin build <ns>`
+(never auto-allow that). Do not auto-allow `bolt ai` either while it writes `.bolt/ai-context.md`.
+
 ### Step 3: Validate freshness
 
 The header names the digest and its inputs:
@@ -181,3 +185,4 @@ Check `ai-context.md` for the exact task name — it varies per project. Typical
 | "bolt.local.yaml missing or invalid"                                                       | Per-machine config absent                                     | Copy `bolt.local.example.yaml` → `bolt.local.yaml` (or run `bolt init`) and set paths |
 | `Unknown task "…"` / `Unknown flow "…"` (exit 2); may add `Task names are case-sensitive.` | Name not defined in this project's bolt.yaml (case-sensitive) | Use the "Did you mean" hint, or run `bolt list`                                       |
 | Build fails mid-flow                                                                       | Build error in UE                                             | Check the log file path printed in output                                             |
+| `Static plugin manifest …` (exit 3) with `Run: bolt plugin build <ns>`                     | Missing/stale/invalid `bolt.plugin.json`                      | Ask the user to run `bolt plugin build <ns>` (never auto-allow)                       |

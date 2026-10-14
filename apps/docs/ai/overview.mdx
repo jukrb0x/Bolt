@@ -31,8 +31,11 @@ Every plugin handler declares whether agents may use it. Plugin authors set this
 plugins and handlers an agent may use. Handlers that agents may not use are left out, and handlers that need
 your confirmation are marked as such. The file header carries a context hash computed from `bolt.yaml` and
 the plugin catalog. `bolt.local.yaml` is not an input. Use `bolt ai --stdout` to print it instead of
-writing the file. Both forms load project and user plugins and run their top-level code, and a first run writes
-plugin build caches under `.bolt/.cache/`.
+writing the file. Both forms assemble the catalog from built-ins (in-process) plus each project/user/path
+plugin's `bolt.plugin.json` — they do not import or execute project/user plugin code and do not write
+`.bolt/.cache/`. Missing or stale manifests exit `3`; refresh with `bolt plugin build <ns>`. Default `bolt ai`
+still writes `.bolt/ai-context.md`. Until the allowlist is updated after this ships, do not auto-allow any
+`bolt ai` form.
 
 ### The current skill
 
@@ -76,8 +79,9 @@ agent client's command allowlist:
 - Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, and only the prefix
   `bolt run --dry-run`. Add `bolt status` once it exists (Planned).
 - Never auto-allow any other `bolt run`, `bolt plugin build`, `bolt self-update`, `bolt init`,
-  `bolt migrate`, or any `bolt ai`. `bolt ai --json` exits `2` and writes nothing. Never auto-allow
-  `bolt run --simulate` or `bolt ai --stdout`: both run plugin code from the repository.
+  `bolt migrate`, or any `bolt ai` (including `--stdout`). `bolt ai --json` exits `2` and writes nothing.
+  Never auto-allow `bolt run --simulate` (it runs plugin code). `bolt plugin build` executes plugin code
+  to refresh `bolt.plugin.json` and must stay off the allowlist.
 - On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or
   `bolt.exe` in the repository cannot take its place.
 - Planned: once `bolt version --json` lists the `static-dry-run` capability, check for it before
