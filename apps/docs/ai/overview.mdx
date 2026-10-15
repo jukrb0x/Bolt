@@ -5,8 +5,9 @@ description: "How coding agents drive Bolt: a Bolt skill that calls the CLI, and
 
 Coding agents such as Cursor and Claude Code use Bolt through the same `bolt` CLI that people use. A
 **Bolt skill** tells the agent which commands to run and in what order. Planned: with `--json`, each
-command will return one structured JSON document the agent can read without parsing human output. Today
-only `bolt version --json` prints JSON.
+command will return one structured JSON document the agent can read without parsing human output.
+`bolt version --json` prints a flat object. `list`, `info`, `check`, `inspect`, and `status` print
+one JSON envelope. `run` and `ai` do not accept `--json`.
 
 Bolt does not run an MCP server or any other service for agents. There is one interface, the CLI, and
 the same permissions and allowlists you already use for shell commands apply to it.
@@ -14,9 +15,10 @@ the same permissions and allowlists you already use for shell commands apply to 
 <Warning>
   **Status.** Most of this page describes a reviewed design for agent support, pending maintainer
   sign-off. It is not in the current release. Today's binary has the `ai` handler flag, `bolt ai`,
-  and a first skill. `--json` works on `version` (a flat object) and on `list`, `info`, `check`, and
-  `inspect` (one shared JSON envelope). It does not have agent mode, `bolt status`, `--execute`, or
-  `--json` on `run` / `ai`. Sections below marked **Planned** are not implemented yet.
+  and a first skill. `--json` works on `version` (a flat object) and on `list`, `info`, `check`,
+  `inspect`, and `status` (one shared JSON envelope). `bolt inspect --json` includes `plan_hash`,
+  `ai`, and `ai_reasons`, and masks env and local values. It does not have agent mode, `--execute`,
+  or `--json` on `run` / `ai`. Sections below marked **Planned** are not implemented yet.
 </Warning>
 
 ## Available today
@@ -72,14 +74,15 @@ processes and writes no files. `bolt run --simulate` runs plugin code and is not
 Planned: Bolt's checks will guard against a cooperative agent that makes mistakes: a wrong task name, a
 plan that changed between preview and execution (bound by `plan_hash`), or a forgotten confirmation
 (`--confirmed-by-user`). `bolt version --json` will advertise a `static-dry-run` capability; today it
-lists only `handler-results`, `capability-tags`, and `plugin-api-2`.
+lists `handler-results`, `capability-tags`, `plugin-api-2`, and `plugin-manifest`. It does not list
+`static-dry-run`.
 
 Bolt will not be able to stop an agent that ignores the skill. It will not be able to verify that
 `--confirmed-by-user` reflects a real yes, and it does not sandbox plugin code. The real boundary is your
 agent client's command allowlist:
 
-- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt ai --stdout`, and only the prefix
-  `bolt run --dry-run`. Add `bolt status` once it exists (Planned).
+- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt status`, `bolt ai --stdout`, and only the prefix
+  `bolt run --dry-run`. `bolt status` is read-only.
 - Never auto-allow any other `bolt run`, `bolt plugin build`, `bolt self-update`, `bolt init`,
   `bolt migrate`, or default `bolt ai` (it writes `.bolt/ai-context.md`). `bolt ai --json` exits `2` and writes nothing.
   Never auto-allow `bolt run --simulate` (it runs plugin code). `bolt plugin build` executes plugin code
@@ -91,17 +94,19 @@ agent client's command allowlist:
 
 ## Planned: skills that call the CLI with `--json`
 
-Nothing in this section is implemented in the current release unless it says so. There is no
-`bolt status` command. `--json` on `list`, `info`, `check`, and `inspect` prints the shared
-envelope below. `bolt version --json` stays a flat object. `run` and `ai` do not accept `--json`.
+Nothing in this section is implemented in the current release unless it says so. `bolt status`
+exists and is read-only (`bolt status --json` is `bolt.status/v1`). It does not take `--agent`.
+`--json` on `list`, `info`, `check`, `inspect`, and `status` prints the shared envelope below.
+`bolt version --json` stays a flat object. `run` and `ai` do not accept `--json`.
 
 ### The loop (Planned)
 
 <Info>
   Step 1 works today: `bolt version --json` prints `version`, `plugin_api`, `manifest_format`, and
-  `capabilities`. `bolt list --json`, `bolt info --json`, `bolt check --json`, and `bolt inspect
-  --json` print the shared envelope, without `--agent`. Still not implemented: `bolt status`,
-  `--agent`, `--json` on `run`, `plan_hash`, `--execute`, `--plan`, and `--confirmed-by-user`.
+  `capabilities`. `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect
+  --json`, and `bolt status --json` print the shared envelope, without `--agent`. `bolt inspect
+  --json` includes `plan_hash`. Still not implemented: `--agent`, `--json` on `run`, `--execute`,
+  `--plan`, and `--confirmed-by-user`.
 </Info>
 
 An agent following the Bolt skill works in five steps:
@@ -135,9 +140,10 @@ An agent following the Bolt skill works in five steps:
 ### JSON output (Planned)
 
 <Info>
-  `bolt list --json`, `bolt info --json`, `bolt check --json`, and `bolt inspect --json` print this
-  envelope. `bolt version --json` still prints its own flat object. `«env:NAME»` / `«local:NAME»`
-  redaction, `bolt status`, and `--json` on `run` / `ai` are not implemented.
+  `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`, and
+  `bolt status --json` print this envelope. `bolt version --json` still prints its own flat object.
+  `bolt inspect --json` and `bolt info --json` render `${{ env.NAME }}` as `«env:NAME»` and a
+  `bolt.local.yaml` value as `«local:…»`. `--json` on `run` / `ai` is not implemented.
 </Info>
 
 With `--json` on `list`, `info`, `check`, and `inspect`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
@@ -163,13 +169,16 @@ envelope:
   `bolt.local.yaml` appear as `«local:NAME»`. That keeps secrets out of agent transcripts. It does not
   hide them from an agent that can read your files.
 
-`--json` today: `version` (flat), `list`, `info`, `check`, `inspect` (envelope). Still planned: `status` (new), `run`, and `ai`.
+`--json` today: `version` (flat), `list`, `info`, `check`, `inspect`, `status` (envelope). Still planned: `run` and `ai`.
 
 ### Which plans an agent may run (Planned)
 
 <Info>
-  Effective agent mode per plan and the `bolt.local.yaml` switch are not implemented. Today the `ai`
-  flag only controls what `bolt ai` writes to `.bolt/ai-context.md`.
+  `bolt inspect --json` reports an effective `ai` for the plan (`false` stricter than `confirm`
+  stricter than `true`) and `ai_reasons` for the steps that set it. `bolt.local.yaml` `ai.run`
+  (`never` or `confirm`, default `confirm`) is reported by `bolt status` and included in
+  `plan_hash`. It does not gate execution. There is no `--execute` path. The `ai` flag still
+  controls what `bolt ai` writes to `.bolt/ai-context.md`.
 </Info>
 
 Each plan gets an effective agent mode derived from its steps, and the strictest step wins. Shell

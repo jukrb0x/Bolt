@@ -120,7 +120,7 @@ export function pluginCacheFile(cacheRoot: string, pluginName: string, entryTs: 
  * Bun.build leaves import.meta.* pointing at the emitted file.
  * Rewrite those reads to the plugin source so adjacent assets still resolve.
  */
-function rewritePluginLocation(source: string, entryTs: string): string {
+export function rewritePluginLocation(source: string, entryTs: string): string {
   const abs = canonicalPluginEntry(entryTs);
   const values: Record<string, string> = {
     url: pathToFileURL(abs).href,
@@ -179,6 +179,17 @@ function installPluginDependencies(pluginName: string, sourceDir: string): void 
 
 export type PluginSource = "builtin" | "user" | "project" | "path";
 
+/** Where a loaded non-builtin plugin came from, for the content-addressed cache. */
+export interface PluginOrigin {
+  /** Plugin source directory (the folder that contains the entry). */
+  root: string;
+  /** Source entry that was loaded (`index.ts` / `index.js`), not the JIT cache file. */
+  entry: string;
+  source: Exclude<PluginSource, "builtin">;
+  /** `<project>/.bolt/.cache` or `~/.bolt/.cache`. */
+  cacheRoot: string;
+}
+
 const SOURCE_RANK: Record<PluginSource, number> = { path: 0, project: 1, user: 2, builtin: 3 };
 
 export interface CapabilityMatch {
@@ -197,6 +208,17 @@ export class PluginRegistry {
   private configOrder: string[] = [];
   /** Non-fatal registration notes, e.g. a redundant `static apiVersion`. */
   readonly warnings: string[] = [];
+  private origins = new Map<string, PluginOrigin>();
+  /** Set immediately before a load so `register` can record the source path. */
+  private pendingOrigin: PluginOrigin | undefined;
+
+  prepareOrigin(origin: PluginOrigin | undefined): void {
+    this.pendingOrigin = origin;
+  }
+
+  origin(namespace: string): PluginOrigin | undefined {
+    return this.origins.get(namespace);
+  }
 
   /**
    * Branded plugins keep the manifest their copy already built.
@@ -225,6 +247,13 @@ export class PluginRegistry {
     const loaded = this.normalize(plugin);
     this.plugins.set(loaded.namespace, loaded);
     this.sources.set(loaded.namespace, source);
+    if (this.pendingOrigin) {
+      this.origins.set(loaded.namespace, {
+        ...this.pendingOrigin,
+        source: this.pendingOrigin.source,
+      });
+      this.pendingOrigin = undefined;
+    }
   }
 
   setConfigOrder(namespaces: string[]): void {
@@ -405,24 +434,39 @@ export class PluginRegistry {
       const tsFile = path.join(entryPath, "index.ts");
 
       let candidate: string | null = null;
+      let sourceEntry: string | null = null;
 
       if (existsSync(tsFile) && projectRoot) {
+        sourceEntry = tsFile;
         try {
           candidate = await this.compilePlugin(entry, tsFile, projectRoot);
         } catch (e: unknown) {
           throw pluginLoadError(entry, entryPath, e);
         }
       } else if (existsSync(jsFile)) {
+        sourceEntry = jsFile;
         candidate = jsFile;
       } else if (existsSync(tsFile)) {
         // loadFromPath compiles this, with the plugin directory as the cache root.
+        sourceEntry = tsFile;
         candidate = tsFile;
       }
 
-      if (candidate) {
+      if (candidate && sourceEntry) {
+        const cacheRoot =
+          source === "user"
+            ? path.join(os.homedir(), ".bolt", ".cache")
+            : path.join(projectRoot ?? path.dirname(dir), ".bolt", ".cache");
+        this.prepareOrigin({
+          root: entryPath,
+          entry: sourceEntry,
+          source: source === "builtin" ? "project" : source,
+          cacheRoot,
+        });
         try {
           await this.loadFromPath(entry, candidate, undefined, source);
         } catch (e: unknown) {
+          this.prepareOrigin(undefined);
           throw pluginLoadError(entry, entryPath, e);
         }
       }
@@ -477,6 +521,22 @@ export async function buildRegistry(
     if (!entry.path) continue;
     const resolved = path.resolve(configDir, entry.path);
     const dir = pluginDirectory(resolved);
+    let sourceEntry = resolved;
+    try {
+      if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+        const ts = path.join(resolved, "index.ts");
+        const js = path.join(resolved, "index.js");
+        sourceEntry = existsSync(ts) ? ts : js;
+      }
+    } catch {
+      // Missing path: loadAndInstantiate reports it.
+    }
+    reg.prepareOrigin({
+      root: dir,
+      entry: sourceEntry,
+      source: "path",
+      cacheRoot: path.join(configDir, ".bolt", ".cache"),
+    });
     try {
       if (entry.config) {
         await reg.loadAndInstantiate(entry.namespace, resolved, entry.config, undefined, configDir);
@@ -484,6 +544,7 @@ export async function buildRegistry(
         await reg.loadFromPath(entry.namespace, resolved, configDir);
       }
     } catch (e: unknown) {
+      reg.prepareOrigin(undefined);
       throw pluginLoadError(entry.namespace, dir, e);
     }
   }

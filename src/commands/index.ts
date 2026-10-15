@@ -11,6 +11,7 @@ import inspectCmd from "./inspect";
 import initCmd from "./init";
 import typesCmd from "./types";
 import aiCmd from "./ai";
+import statusCmd from "./status";
 
 /** Top-level `bolt` subcommands. Used by src/main.ts and the docs generator. */
 export const commands = {
@@ -24,6 +25,7 @@ export const commands = {
   types: typesCmd,
   plugin: pluginCmd,
   inspect: inspectCmd,
+  status: statusCmd,
   "self-update": updateCmd,
   ai: aiCmd,
   version: versionCmd,
@@ -41,6 +43,7 @@ export const commandSources: Record<keyof typeof commands, string> = {
   types: "types.ts",
   plugin: "plugin.ts",
   inspect: "inspect.ts",
+  status: "status.ts",
   "self-update": "update.ts",
   ai: "ai.ts",
   version: "version.ts",

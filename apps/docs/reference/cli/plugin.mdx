@@ -36,15 +36,15 @@ bolt plugin list
 
 ### bolt plugin build
 
-Compile a plugin once and write bolt.plugin.json for bolt ai
+Bundle plugins and write content-addressed manifests for the current config
 
 ```bash
-bolt plugin build <name> [options]
+bolt plugin build [options]
 ```
 
-| Argument | Type       | Alias | Required | Default | Description                              |
-| -------- | ---------- | ----- | -------- | ------- | ---------------------------------------- |
-| `name`   | positional |       | yes      |         | Plugin namespace to build                |
-| `--user` | boolean    |       |          | `false` | Build from user scope (~/.bolt/plugins/) |
+| Argument  | Type    | Alias | Required | Default | Description                                                         |
+| --------- | ------- | ----- | -------- | ------- | ------------------------------------------------------------------- |
+| `--user`  | boolean |       |          | `false` | Build from user scope (~/.bolt/plugins/) only                       |
+| `--prune` | boolean |       |          | `false` | Delete manifests for other source hashes and unreferenced artefacts |
 
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

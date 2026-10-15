@@ -5,8 +5,10 @@ import path from "path";
 import type { BoltConfig } from "./config";
 import { getParamMap, type BoltPlugin } from "./plugin";
 import type { PluginRegistry } from "./plugin-registry";
+import { builtinPlugins } from "./plugins";
 import { resolveUeTargets } from "./plugins/ue";
 import { resolveRunPlan, type PlanNode } from "./run-plan";
+import { buildStaticAiRegistry } from "./static-plugin-manifest";
 
 /** Describe a resolved plugin/local action using the plugin's describe() if available. */
 function describeUses(
@@ -81,13 +83,7 @@ export function generateAiContext(
 ): string {
   const yamlRaw = readFileSync(configPath, "utf8");
   const catalog = pluginCatalog(registry);
-  // bolt.yaml text plus the sorted catalog actually written. Not bolt.local.yaml, sources, or node_modules.
-  const hash = createHash("sha256")
-    .update(yamlRaw)
-    .update("\0")
-    .update(stableCatalogJson(catalog))
-    .digest("hex")
-    .slice(0, 16);
+  const hash = computeContextHash(yamlRaw, registry);
 
   const lines: string[] = [];
 
@@ -413,6 +409,47 @@ function renderPlugins(catalog: CatalogPlugin[]): string[] {
     lines.push("");
   }
   return lines;
+}
+
+/** 16-hex context hash. Inputs are bolt.yaml bytes and the sorted plugin catalog. */
+export function computeContextHash(yamlRaw: string, registry: PluginRegistry): string {
+  return createHash("sha256")
+    .update(yamlRaw)
+    .update("\0")
+    .update(stableCatalogJson(pluginCatalog(registry)))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+/**
+ * Context hash for read-only commands. Missing or stale bolt.plugin.json files are
+ * skipped so status and inspect still run; bolt ai stays strict.
+ */
+export function contextHashForProject(
+  cfg: BoltConfig,
+  configPath: string,
+  configDir: string,
+): string {
+  const registry = buildStaticAiRegistry(cfg, configDir, Object.values(builtinPlugins), {
+    lenient: true,
+  });
+  return computeContextHash(readFileSync(configPath, "utf8"), registry);
+}
+
+export function contextFileState(
+  configDir: string,
+  currentHash: string,
+): { file: string; file_hash?: string; current_hash: string; fresh: boolean } {
+  const file = path.join(configDir, ".bolt", "ai-context.md");
+  if (!existsSync(file)) return { file, current_hash: currentHash, fresh: false };
+  const match = readFileSync(file, "utf8").match(/<!-- context hash: ([0-9a-f]{16}) -->/);
+  const fileHash = match?.[1];
+  return {
+    file,
+    ...(fileHash ? { file_hash: fileHash } : {}),
+    current_hash: currentHash,
+    fresh: fileHash === currentHash,
+  };
 }
 
 function stableCatalogJson(catalog: CatalogPlugin[]): string {

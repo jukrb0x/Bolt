@@ -208,6 +208,9 @@ describe("CLI --json", () => {
       expect(infoBody.data).toEqual({
         version: 1,
         project: { name: "Demo" },
+        vars: {},
+        targets: {},
+        plugins: [],
         tasks: ["hello"],
         flows: [{ name: "all", steps: ["hello"] }],
       });
@@ -224,19 +227,35 @@ describe("CLI --json", () => {
       const inspectBody = parseStdout(inspect.out);
       expect(inspectBody.schema).toBe("bolt.inspect/v1");
       expect(inspectBody.ok).toBe(true);
-      expect(inspectBody.data).toEqual({
+      const inspectData = inspectBody.data as Record<string, unknown>;
+      expect(inspectData).toMatchObject({
         kind: "tasks",
         name: null,
+        names: ["hello"],
         params: {},
+        ai: "confirm",
         tasks: [
           {
             name: "hello",
+            ai: "confirm",
             continueOnFailure: false,
-            nodes: [{ kind: "run", command: "echo hi", continueOnError: false }],
+            nodes: [
+              {
+                kind: "run",
+                command: "echo hi",
+                continueOnError: false,
+                continue_on_error: false,
+              },
+            ],
           },
         ],
         capabilities: [],
       });
+      expect(inspectData.context_hash).toMatch(/^[0-9a-f]{16}$/);
+      expect(inspectData.plan_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(inspectData.ai_reasons).toEqual([
+        { node: "hello > run", ai: "confirm", message: "run: echo hi" },
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -8,6 +8,9 @@ import {
   installJsonStdoutGuard,
   loadConfigForJson,
 } from "../json-envelope";
+import { maskedTree, maskedVars } from "../plan-preview";
+import { resolveUeTargets } from "../plugins/ue";
+import { builtinPlugins } from "../plugins";
 
 function row(label: string, value: string) {
   console.log(`  ${pc.cyan(label.padEnd(13))}${value}`);
@@ -26,6 +29,7 @@ export default defineCommand({
     if (args?.json) {
       installJsonStdoutGuard();
       const { configPath, cfg } = await loadConfigForJson(JSON_SCHEMA.info);
+      const builtins = new Set(Object.keys(builtinPlugins));
       emitJsonAndExit({
         schema: JSON_SCHEMA.info,
         exitCode: 0,
@@ -33,6 +37,16 @@ export default defineCommand({
         data: {
           version: cfg.version,
           project: { name: cfg.project.name },
+          vars: maskedVars(cfg),
+          targets: maskedTree(resolveUeTargets(cfg.plugins), cfg, "plugins.ue.targets"),
+          plugins: (cfg.plugins ?? []).map((plugin) => ({
+            namespace: plugin.namespace,
+            source: plugin.path ? "path" : builtins.has(plugin.namespace) ? "builtin" : "project",
+            ...(plugin.path ? { path: plugin.path } : {}),
+            ...(plugin.config
+              ? { config: maskedTree(plugin.config, cfg, `plugins.${plugin.namespace}`) }
+              : {}),
+          })),
           tasks: Object.keys(cfg.tasks),
           flows: Object.entries(cfg.flows).map(([name, flow]) => ({
             name,

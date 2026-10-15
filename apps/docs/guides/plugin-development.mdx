@@ -3,7 +3,7 @@ title: "Plugin Development"
 description: "A plugin is a TypeScript module. Bolt builds its runtime manifest in memory from defineHandler or @handler, and bolt ai reads bolt.plugin.json."
 ---
 
-A plugin is a TypeScript module. Bolt builds its runtime manifest in memory from `defineHandler` or `@handler`. For `bolt ai`, also keep `bolt.plugin.json` up to date (`bolt plugin new` scaffolds it; `bolt plugin build <ns>` refreshes it after you change handlers).
+A plugin is a TypeScript or JavaScript module. Bolt builds its runtime manifest in memory from `defineHandler` or `@handler`. For `bolt ai` and for agent previews, keep `bolt.plugin.json` and the content-addressed cache up to date (`bolt plugin new` scaffolds the JSON file; `bolt plugin build [ns...]` refreshes both after you change handlers). A human `bolt run` refreshes the cache for plugins it loads. Read-only commands do not.
 
 ## Prerequisites
 

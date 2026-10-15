@@ -19,6 +19,17 @@
         "minLength": 1
       }
     },
+    "ai": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-machine agent policy. bolt status reports ai.run. Omitted ai.run means confirm. Agent execute is not implemented in this release.",
+      "properties": {
+        "run": {
+          "enum": ["never", "confirm"],
+          "description": "Reported by bolt status as policy.ai_run. confirm is the default."
+        }
+      }
+    },
     "plugins": {
       "type": "object",
       "properties": {

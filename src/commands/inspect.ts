@@ -11,6 +11,7 @@ import {
 } from "../run-plan";
 import path from "path";
 import { findConfig } from "../discover";
+import { previewPlan } from "../plan-preview";
 import { UsageError } from "../strict-args";
 import {
   JSON_SCHEMA,
@@ -162,11 +163,24 @@ async function runInspectJson(rawArgs: string[]): Promise<never> {
     });
   }
 
-  const report = assessCapabilities(cfg, path.dirname(configPath), {
+  const configDir = path.dirname(configPath);
+  const report = assessCapabilities(cfg, configDir, {
     requested: capabilityUsesInPlan(result.plan),
     catalog: true,
   });
+  const preview = previewPlan({
+    cfg,
+    configPath,
+    configDir,
+    plan: result.plan,
+    names,
+    params,
+  });
   const failed = report.errors.length > 0;
+  const warnings = [
+    ...report.warnings.map((message) => issue("CAPABILITY_WARNING", message)),
+    ...preview.warnings,
+  ];
   emitJsonAndExit({
     schema: JSON_SCHEMA.inspect,
     exitCode: failed ? CONFIG_EXIT_CODE : 0,
@@ -174,11 +188,16 @@ async function runInspectJson(rawArgs: string[]): Promise<never> {
     data: {
       kind: result.plan.kind,
       name: result.plan.name ?? null,
+      names: preview.names,
       params,
-      tasks: result.plan.tasks,
+      context_hash: preview.context_hash,
+      plan_hash: preview.plan_hash,
+      ai: preview.ai,
+      ai_reasons: preview.ai_reasons,
+      tasks: preview.tasks,
       capabilities: report.resolved,
     },
-    warnings: report.warnings.map((message) => issue("CAPABILITY_WARNING", message)),
+    warnings,
     errors: report.errors.map((error) =>
       issue(
         error.code ?? "CAPABILITY_ERROR",

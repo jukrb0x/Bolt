@@ -62,6 +62,7 @@
               "reference/cli/types",
               "reference/cli/plugin",
               "reference/cli/inspect",
+              "reference/cli/status",
               "reference/cli/self-update",
               "reference/cli/ai",
               "reference/cli/version"

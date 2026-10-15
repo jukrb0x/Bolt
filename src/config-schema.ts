@@ -293,6 +293,18 @@ const BOLT_LOCAL_CONFIG_JSON_SCHEMA = {
         "Per-key override of bolt.yaml capabilities. An empty object is the same as omitting the key.",
       additionalProperties: { type: "string", minLength: 1 },
     },
+    ai: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Per-machine agent policy. bolt status reports ai.run. Omitted ai.run means confirm. Agent execute is not implemented in this release.",
+      properties: {
+        run: {
+          enum: ["never", "confirm"],
+          description: "Reported by bolt status as policy.ai_run. confirm is the default.",
+        },
+      },
+    },
     plugins: {
       type: "object",
       properties: {

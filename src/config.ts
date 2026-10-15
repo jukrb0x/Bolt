@@ -108,6 +108,13 @@ const LocalConfigSchema = z
     vars: z.record(z.string()).optional(),
     plugins: z.record(z.record(z.unknown())).optional(),
     capabilities: CapabilitySelectionSchema,
+    /** Machine policy reported by `bolt status`. Agent execute is not implemented. */
+    ai: z
+      .object({
+        run: z.enum(["never", "confirm"]).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type LocalConfig = z.infer<typeof LocalConfigSchema>;
@@ -170,6 +177,12 @@ export interface BoltConfig {
   capabilities?: Record<string, string>;
   /** Which file supplied each key in `capabilities`. */
   capabilitySources?: Partial<Record<string, SelectionFile>>;
+  /** Var names set in bolt.local.yaml. Omitted on hand-built configs; loadConfig sets it. */
+  localVarKeys?: string[];
+  /** Dotted leaves supplied by bolt.local.yaml `plugins`, e.g. `plugins.ue.engine.path`. */
+  localPluginPaths?: string[];
+  /** bolt.local.yaml `ai.run`. Defaults to `confirm` when the block is absent. */
+  aiRun?: "never" | "confirm";
   /**
    * Directory containing the bolt.yaml this config was loaded from.
    * Set by loadConfig. Not a bolt.yaml field. Relative plugin paths resolve against it.
@@ -197,6 +210,28 @@ const LOCAL_FILENAME = "bolt.local.yaml";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Dotted paths of every leaf in a bolt.local.yaml `plugins` map. */
+export function collectLocalPluginPaths(plugins: Record<string, unknown> | undefined): string[] {
+  const out: string[] = [];
+  const walk = (value: unknown, prefix: string) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const entries = Object.entries(value as Record<string, unknown>);
+      if (entries.length === 0) {
+        out.push(prefix);
+        return;
+      }
+      for (const [key, child] of entries) walk(child, `${prefix}.${key}`);
+      return;
+    }
+    out.push(prefix);
+  };
+  if (!plugins) return out;
+  for (const [namespace, config] of Object.entries(plugins)) {
+    walk(config, `plugins.${namespace}`);
+  }
+  return out.sort();
 }
 
 /** Deep-merge objects. Arrays and scalars in `override` replace the base value. */
@@ -341,6 +376,9 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     plugins: shared.plugins,
     capabilities,
     capabilitySources,
+    localVarKeys: Object.keys(local.vars ?? {}).sort(),
+    localPluginPaths: collectLocalPluginPaths(local.plugins as Record<string, unknown> | undefined),
+    aiRun: local.ai?.run ?? "confirm",
     configDir,
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,

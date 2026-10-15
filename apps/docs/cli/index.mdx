@@ -17,6 +17,7 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 | [`bolt config`](/cli/config)           | Manage configuration                         |
 | [`bolt plugin`](/cli/plugin)           | Manage plugins                               |
 | [`bolt inspect`](/cli/inspect)         | Preview resolved steps for a task or flow    |
+| `bolt status`                          | Context freshness, built plugins, and policy |
 | [`bolt version`](/cli/version)         | Print version                                |
 | [`bolt self-update`](/cli/self-update) | Update to latest release                     |
 | `bolt ai`                              | Generate `.bolt/ai-context.md` for AI agents |
@@ -73,11 +74,13 @@ runs. There are two error shapes:
   No `Flags:` list and no did-you-mean.
 
 Declared on purpose and accepted: `bolt version --json` (flat version object),
-`bolt list --json`, `bolt info --json`, `bolt check --json`, and `bolt inspect --json`
-(one shared JSON envelope on stdout; logs go to stderr), `bolt migrate --dry-run`,
-`bolt run --dry-run` / `--simulate`. On `bolt inspect`, undeclared `--dry-run` /
-`--simulate` still say `Unknown flag` with the inspect-is-already-a-preview note.
-`bolt run --json` and `bolt ai --json` are still reserved.
+`bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`,
+and `bolt status --json` (one shared JSON envelope on stdout; logs go to stderr),
+`bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`. On `bolt inspect`,
+undeclared `--dry-run` / `--simulate` still say `Unknown flag` with the
+inspect-is-already-a-preview note. `bolt run --json` and `bolt ai --json` are still
+reserved. `--agent`, `--execute`, `--plan`, and `--confirmed-by-user` are reserved
+on every command.
 
 Only `bolt run` and `bolt inspect` accept `--key=value` task params and a `--`
 passthrough. Other commands reject arguments after `--` (with a "Bolt flags go before

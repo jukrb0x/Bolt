@@ -61,7 +61,20 @@ Each project, user, or explicit-path plugin root may contain `bolt.plugin.json`:
 
 `sourcesHash` is the SHA-256 of the contents of every non-recursive `.ts` / `.tsx` file in the plugin directory (the same set JIT compile uses). `bolt ai` recomputes that hash without importing the plugin; a missing file or mismatch exits `3` with the absolute path and `Run: bolt plugin build <ns>`.
 
-`bolt plugin list` and `bolt run` still load and execute plugins. Only `bolt ai` uses the static file.
+`bolt plugin list` and `bolt run` still load and execute plugins. `bolt ai` reads the static file and does not import plugin code.
+
+## Content-addressed cache
+
+`bolt plugin build` also writes a content-addressed cache, separate from the JIT compile cache under `<project>/.bolt/.cache/plugins/<ns>/<id>/`:
+
+| File     | Path                                                              |
+| -------- | ----------------------------------------------------------------- |
+| Artefact | `<cache>/plugins/<ns>/artefacts/<artefact_hash>/index.js`         |
+| Manifest | `<cache>/plugins/<ns>/manifests/<source_hash>-<config_hash>.json` |
+
+`<cache>` is `<project>/.bolt/.cache` for a project or path plugin, and `~/.bolt/.cache` for a user plugin. The artefact is the bundled `index.js` after location rewriting. It is immutable. The manifest schema is `bolt.plugin-manifest/v1`. `source_hash` covers the plugin tree (skipping `node_modules`, `.bolt`, and symlinks), including `bolt.plugin.json`. `config_hash` is the canonical JSON of the effective plugin config for a class plugin, or `noconfig` otherwise.
+
+TypeScript and JavaScript entries are both bundled. `boltstack` and `zod` stay external. A native `.node` addon or a dynamic non-literal `require` / `import` fails the build and writes no manifest. Read-only commands (`inspect`, `list`, `info`, `check`, `status`, `ai`, `run --dry-run`) never import an unbuilt plugin. A human `bolt run` and `bolt run --simulate` refresh the manifest for each plugin they loaded. `--prune` drops manifests for other source hashes and artefacts no remaining manifest names.
 
 ## Handler params
 

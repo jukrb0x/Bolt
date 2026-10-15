@@ -109,6 +109,10 @@ Result: `Build MyProject completed` (assuming `TELEGRAM_CHAT_ID` is set).
 
 If a path doesn't resolve to a scalar value (missing key, or it points at an object), the original `${{ ... }}` text is left untouched. Nothing is thrown — check your output if a value looks wrong.
 
+## JSON masking
+
+Human output and real execution use the resolved value. `bolt inspect --json` and `bolt info --json` do not. `${{ env.NAME }}` is rendered as `«env:NAME»`. A value that comes from `bolt.local.yaml` (`vars`, or a plugin-config leaf such as `plugins.ue.engine.path`) is rendered as `«local:…»`. Committed `bolt.yaml` vars stay as written. `plan_hash` includes `sha256` of the real secret, never the plaintext and never the mask token, so a changed secret changes the hash.
+
 ## See Also
 
 - [bolt.yaml Guide](/guides/bolt-yaml) — configuration walkthrough

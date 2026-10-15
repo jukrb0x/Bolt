@@ -5,6 +5,31 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Content-addressed plugin builds (BOLT-M1 Phase 1b)
+
+`bolt plugin build [namespace...] [--user] [--prune]` bundles TypeScript and JavaScript with the host bundler. The only host externals are `boltstack` and `zod`. It writes two caches:
+
+- `<cache>/plugins/<ns>/artefacts/<artefact_hash>/index.js` — immutable bundle
+- `<cache>/plugins/<ns>/manifests/<source_hash>-<config_hash>.json` — `bolt.plugin-manifest/v1`
+
+Project plugins use `<project>/.bolt/.cache`. User plugins use `~/.bolt/.cache`. The command still writes `<plugin-root>/bolt.plugin.json`. A class plugin with a non-empty config gets one manifest per config hash, so two configs of the same source coexist. Function and object plugins, and class plugins with an empty config, use the config key `noconfig`.
+
+A native `.node` addon, or a dynamic non-literal `require` or `import`, fails closed. The command exits 1 and writes no manifest and no `bolt.plugin.json` for that source and config. A human `bolt run` can still load that plugin on the existing unbundled path.
+
+A human `bolt run`, and `bolt run --simulate`, keep today's compile-and-load path and also refresh the manifest and artefact for each non-builtin plugin they loaded. `bolt run --dry-run`, `bolt inspect`, `bolt list`, `bolt info`, `bolt check`, `bolt ai`, and `bolt status` do not import an unbuilt plugin and do not write the cache. `--prune` drops manifests whose source hash is not the one just built, and artefacts no remaining manifest names.
+
+`bolt inspect --json` stays `bolt.inspect/v1`. It adds `data.names`, `data.context_hash`, `data.plan_hash`, `data.ai`, `data.ai_reasons`, and per-task `ai`. Human inspect text is unchanged and still shows real interpolated values. In JSON, `${{ env.NAME }}` renders as `«env:NAME»`. A value that comes from `bolt.local.yaml` renders as `«local:NAME»` (plugin-config leaves use a dotted path such as `«local:plugins.ue.engine.path»`). Execution still uses the real values. `plan_hash` is the sha256 of a canonical payload. A masked value contributes `sha256(value)` and never the plaintext. An unbuilt non-builtin plugin used by the preview is a warning `PLUGIN_NOT_BUILT` (exit 0) with hint `bolt plugin build <ns>`. That handler is treated as `ai: false` for the plan. This release does not fail the preview with exit 4.
+
+`bolt info --json` adds masked `vars`, `targets`, and `plugins` (including plugin config).
+
+`bolt status` and `bolt status --json` (`bolt.status/v1`) report `agent_mode` (always `false` in this release), context freshness, whether `bolt.local.yaml` is present and valid, whether each discovered plugin is built for the current source and config, `policy.ai_run`, and schema names. `data.schemas` lists only commands that accept `--json` today (`list`, `info`, `check`, `inspect`, `status`). It does not include `run` until `bolt run --json` exists.
+
+`bolt.local.yaml` accepts `ai.run: never | confirm`. Omitted means `confirm`. `bolt status` reports it. It does not gate execution.
+
+`bolt version --json` appends the capability `plugin-manifest`.
+
+This slice does not add `--agent`, `--execute`, `--plan`, `--confirmed-by-user`, `bolt run --json`, or `bolt ai --json`.
+
 ### JSON envelope for read commands (BOLT-M1 slice 1a)
 
 `bolt list`, `bolt info`, `bolt check`, and `bolt inspect` accept `--json`. Stdout is one JSON document and nothing else. `console.log` and other stdout writes are redirected to stderr for that process.
@@ -28,7 +53,7 @@ description: "User-visible changes and migration notes."
 
 `bolt version --json` is unchanged: a flat object with `version`, `plugin_api`, `manifest_format`, and `capabilities`.
 
-This slice does not add `bolt status`, `bolt run --execute` / `--plan` / `--agent` / `--confirmed-by-user`, or `bolt ai --json`.
+Slice 1a itself does not add `bolt status` or those flags. Phase 1b (above) adds `bolt status` and inspect `plan_hash`. `--execute`, `--plan`, `--agent`, `--confirmed-by-user`, `bolt run --json`, and `bolt ai --json` are still not implemented.
 
 ### Capability selection (BOLT-EXT-2)
 
@@ -54,7 +79,7 @@ Resolve-time (design §6 #11): a selection that names a built handler succeeds o
 
 Load-time: a real `bolt run` still compiles every project and user plugin in `buildRegistry`. A sibling that fails to compile can fail the whole run even when the selection already points at a built handler. "Not built" (missing or stale `bolt.plugin.json`) is not a compile failure. Skipping or soft-failing an unselected sibling is a follow-up (EXT-2.1 / BOLT-AI-2). This release does not change the loader.
 
-`capabilitySelectionHash` is the digest `plan_hash` will include as `capability_selection` when BOLT-AI-2 lands. This release does not hash plans and does not add a second hash field.
+`capabilitySelectionHash` is still not a field of `plan_hash`. Phase 1b hashes inspect previews; that payload does not include `capability_selection`.
 
 **Migrate:** `uses: git/pull` and `uses: svn/update` are unchanged. Built-in `git/pull` and `svn/update` both provide `vcs.sync`; `git/info` and `svn/info` both provide `vcs.info`. A step written as `uses: vcs.sync` (or `uses: vcs.info`) must set that key, or it exits `3`. No Unreal project is required. With only one of those handlers available, Bolt selects it without a `capabilities:` key.
 
@@ -71,9 +96,11 @@ plugin from `bolt plugin new`, which writes the file). Missing, invalid, or stal
 `describe()` may be thinner; optional static `describe` strings in the JSON are supported. Builtin-only
 projects keep the same context hash as before.
 
-`bolt plugin build <ns>` is the only refresh path that executes plugin code — never auto-allow it. Do not
-auto-allow default `bolt ai` (writes a file). Agents may auto-allow `bolt ai --stdout` (print-only; no
-project writes).
+`bolt plugin build` executes plugin code to refresh `bolt.plugin.json` and the content-addressed cache.
+A human `bolt run` and `bolt run --simulate` also refresh those files for plugins they load. Never
+auto-allow `bolt plugin build` or any `bolt run` other than `--dry-run`. Do not auto-allow default
+`bolt ai` (writes a file). Agents may auto-allow `bolt ai --stdout` (print-only; no project writes)
+and `bolt status` (read-only).
 
 ### Breaking: all commands reject unknown and reserved flags (BOLT-CLI-1)
 
@@ -261,5 +288,5 @@ Exit codes: `0` success, `1` task failure, `2` usage error, `3` config error,
 
 ### Plugin API v2: Deferred (not in BOLT-EXT-1)
 
-- **Top-level `capabilities:` selection** is BOLT-EXT-2 (see above). EXT-1 added tags and `PluginRegistry.findByCapability()` only. `capabilitySelectionHash` is the `capability_selection` input `plan_hash` will use when BOLT-AI-2 lands. This changelog entry does not hash plans.
+- **Top-level `capabilities:` selection** is BOLT-EXT-2 (see above). EXT-1 added tags and `PluginRegistry.findByCapability()` only. `capabilitySelectionHash` is still not a field of the Phase 1b `plan_hash`. The EXT-1 entry does not hash plans.
 - **Structured JSONL run log** (ai-mcp §5.3.7) is **not** shipped here. It is delivered by task **BOLT-AI-2**. Until then, `ctx.emit` events go to the existing text log `.bolt/logs/bolt_<timestamp>.log` (and the terminal / `RunnerOptions.onEvent`). There is no `--json=ndjson` and no event field in a `bolt.run/v1` envelope.

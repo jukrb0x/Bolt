@@ -173,7 +173,12 @@ test("bolt version --json lists plugin_api and capabilities", async () => {
   const info = JSON.parse(String(logged[0]));
   expect(info.plugin_api).toEqual([1, 2]);
   expect(info.manifest_format).toBe(2);
-  expect(info.capabilities).toEqual(["handler-results", "capability-tags", "plugin-api-2"]);
+  expect(info.capabilities).toEqual([
+    "handler-results",
+    "capability-tags",
+    "plugin-api-2",
+    "plugin-manifest",
+  ]);
 });
 
 test("a stale .bolt/ai-context.md prompts a rebuild with bolt ai", () => {

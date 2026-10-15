@@ -39,11 +39,11 @@ bolt version --json
   "version": "2.1.1",
   "plugin_api": [1, 2],
   "manifest_format": 2,
-  "capabilities": ["handler-results", "capability-tags", "plugin-api-2"]
+  "capabilities": ["handler-results", "capability-tags", "plugin-api-2", "plugin-manifest"]
 }
 ```
 
-`plugin_api` lists every plugin API version this bolt accepts. `capabilities` is append-only. Plugin authors check for `plugin-api-2` before declaring `apiVersion: 2`. An older bolt prints only the version string instead of JSON; treat it as plugin API v1 only.
+`plugin_api` lists every plugin API version this bolt accepts. `capabilities` is append-only. Plugin authors check for `plugin-api-2` before declaring `apiVersion: 2`. `plugin-manifest` means this bolt writes content-addressed plugin manifests (`bolt plugin build`, and a human `bolt run`). An older bolt prints only the version string instead of JSON; treat it as plugin API v1 only.
 
 ## See Also
 

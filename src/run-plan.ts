@@ -1,11 +1,35 @@
 import type { BoltConfig } from "./config";
 import { isCapabilityRef } from "./capability-selection";
-import { interpolate } from "./interpolate";
+import {
+  interpolateSegments,
+  joinSegments,
+  type InterpContext,
+  type InterpSegment,
+} from "./interpolate";
 
 export type PlanNode =
   | { kind: "call"; name: string; nodes: PlanNode[] }
   | { kind: "uses"; ref: string; params: Record<string, string> }
   | { kind: "run"; command: string; continueOnError: boolean };
+
+/** Non-enumerable so plan equality stays on the executed strings. */
+export const PLAN_PROVENANCE = Symbol.for("bolt.plan.provenance");
+
+export type PlanProvenance =
+  | { kind: "run"; segments: InterpSegment[] }
+  | { kind: "uses"; params: Record<string, InterpSegment[]> };
+
+export function attachProvenance(node: object, provenance: PlanProvenance): void {
+  Object.defineProperty(node, PLAN_PROVENANCE, {
+    value: provenance,
+    enumerable: false,
+    writable: false,
+  });
+}
+
+export function readProvenance(node: object): PlanProvenance | undefined {
+  return (node as { [PLAN_PROVENANCE]?: PlanProvenance })[PLAN_PROVENANCE];
+}
 
 export interface PlannedTask {
   name: string;
@@ -86,6 +110,7 @@ export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResul
   const resolveTask = (
     name: string,
     params: Record<string, string>,
+    paramProvenance: Record<string, InterpSegment[]>,
     stack: string[],
     path: string,
   ): { ok: true; nodes: PlanNode[] } | { ok: false; errors: PlanError[] } => {
@@ -104,36 +129,57 @@ export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResul
     const nextStack = [...stack, name];
     for (const [index, step] of steps.entries()) {
       const stepPath = `${path}.steps[${index}]`;
-      const ctx = {
+      const ctx: InterpContext = {
         project: cfg.project as unknown as Record<string, string>,
         vars: cfg.vars,
         env: process.env as Record<string, string>,
         params,
+        localVars: new Set(cfg.localVarKeys ?? []),
+        paramProvenance,
       };
 
       if ("run" in step && step.run !== undefined) {
-        nodes.push({
+        const segments = interpolateSegments(step.run, ctx);
+        const node: PlanNode = {
           kind: "run",
-          command: interpolate(step.run, ctx),
+          command: joinSegments(segments),
           continueOnError: step["continue-on-error"] ?? false,
-        });
+        };
+        attachProvenance(node, { kind: "run", segments });
+        nodes.push(node);
         continue;
       }
 
-      const yamlParams = Object.fromEntries(
-        Object.entries(step.with ?? {}).map(([key, value]) => [key, interpolate(value, ctx)]),
-      );
-      const effectiveParams = { ...yamlParams, ...params };
+      const yamlProvenance: Record<string, InterpSegment[]> = {};
+      for (const [key, value] of Object.entries(step.with ?? {})) {
+        yamlProvenance[key] = interpolateSegments(value, ctx);
+      }
+      const provenance: Record<string, InterpSegment[]> = { ...yamlProvenance };
+      for (const [key, value] of Object.entries(params)) {
+        provenance[key] = paramProvenance[key] ?? [{ kind: "param", name: key, value }];
+      }
+      const effectiveParams: Record<string, string> = {};
+      for (const [key, segments] of Object.entries(provenance)) {
+        effectiveParams[key] = joinSegments(segments);
+      }
 
       if ("call" in step && step.call !== undefined) {
-        const nested = resolveTask(step.call, effectiveParams, nextStack, `${stepPath}.call`);
+        const nested = resolveTask(
+          step.call,
+          effectiveParams,
+          provenance,
+          nextStack,
+          `${stepPath}.call`,
+        );
         if (!nested.ok) return nested;
         nodes.push({ kind: "call", name: step.call, nodes: nested.nodes });
       } else if ("uses" in step && step.uses !== undefined) {
         const refError = usesRefError(step.uses);
         if (refError)
           return { ok: false, errors: [{ path: `${stepPath}.uses`, message: refError }] };
-        nodes.push({ kind: "uses", ref: step.uses, params: effectiveParams });
+        const node: PlanNode = { kind: "uses", ref: step.uses, params: effectiveParams };
+        attachProvenance(node, { kind: "uses", params: provenance });
+        nodes.push(node);
       }
     }
     return { ok: true, nodes };
@@ -141,7 +187,11 @@ export function resolveRunPlan(cfg: BoltConfig, request: PlanRequest): PlanResul
 
   const tasks: PlannedTask[] = [];
   for (const [index, name] of names.entries()) {
-    const resolved = resolveTask(name, request.params, [], `tasks[${index}]`);
+    const cliProvenance: Record<string, InterpSegment[]> = {};
+    for (const [key, value] of Object.entries(request.params)) {
+      cliProvenance[key] = [{ kind: "param", name: key, value }];
+    }
+    const resolved = resolveTask(name, request.params, cliProvenance, [], `tasks[${index}]`);
     if (!resolved.ok) return resolved;
     tasks.push({
       name,

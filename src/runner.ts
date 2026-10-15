@@ -25,6 +25,7 @@ import { Notifier, type BuildContext } from "./notify";
 import { formatPlanErrors, resolveRunPlan, type PlanNode, type RunPlan } from "./run-plan";
 import { RunEvents } from "./step-events";
 import { staleAiContextWarning } from "./ai-context";
+import { refreshLoadedPlugins } from "./plugin-cache";
 import {
   BoltStepError,
   validateHandlerResult,
@@ -108,6 +109,11 @@ interface RunnerOptions {
   onEvent?: (event: StampedEvent) => void;
   /** Every validated result returned by a plugin API v2 handler. */
   onStepResult?: (result: StepResult) => void;
+  /**
+   * Human `bolt run` and `--simulate` write content-addressed manifests for plugins
+   * this run loaded. Read-only commands leave it unset.
+   */
+  refreshPluginCache?: boolean;
 }
 
 /**
@@ -206,6 +212,10 @@ export class Runner {
       svnPlugin,
     ]);
     for (const warning of this.registry.warnings) this.opts.logger?.warn(warning);
+    if (this.opts.refreshPluginCache) {
+      const notes = await refreshLoadedPlugins(this.registry, this.cfg.plugins);
+      for (const note of notes) this.opts.logger?.warn(note);
+    }
     const stale = staleAiContextWarning(this.opts.configDir ?? process.cwd());
     if (stale) this.opts.logger?.warn(stale);
 

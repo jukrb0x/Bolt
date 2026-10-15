@@ -13,11 +13,11 @@ bolt plugin <command>
 
 ## Subcommands
 
-| Command      | Description                                                        |
-| ------------ | ------------------------------------------------------------------ |
-| `list`       | List loaded plugins and their handlers                             |
-| `new <name>` | Scaffold a plugin (includes `bolt.plugin.json`)                    |
-| `build <ns>` | Load one plugin and write/refresh `bolt.plugin.json` for `bolt ai` |
+| Command         | Description                                                                  |
+| --------------- | ---------------------------------------------------------------------------- |
+| `list`          | List loaded plugins and their handlers                                       |
+| `new <name>`    | Scaffold a plugin (includes `bolt.plugin.json`)                              |
+| `build [ns...]` | Bundle plugins and write content-addressed manifests plus `bolt.plugin.json` |
 
 ## bolt plugin list
 
@@ -54,10 +54,18 @@ It does not write `tsconfig.json`. The runtime manifest is still built in memory
 ## bolt plugin build
 
 ```bash
-bolt plugin build <namespace> [--user]
+bolt plugin build [namespace...] [--user] [--prune]
 ```
 
-Loads that one plugin (compiling TypeScript if needed), then writes `<plugin-root>/bolt.plugin.json` with the serializable catalog and a fresh `sourcesHash`. This is the only CLI command that must execute plugin code to refresh AI context metadata. Never auto-allow it.
+Bundles each named plugin (TypeScript or JavaScript) and writes:
+
+- `<plugin-root>/bolt.plugin.json` — static catalog for `bolt ai`
+- `<cache>/plugins/<ns>/artefacts/<artefact_hash>/index.js` — immutable bundle
+- `<cache>/plugins/<ns>/manifests/<source_hash>-<config_hash>.json` — `bolt.plugin-manifest/v1`
+
+Project cache is `<project>/.bolt/.cache`. User cache is `~/.bolt/.cache`. With no namespace, Bolt builds every discovered plugin in that scope. `--user` limits discovery to `~/.bolt/plugins/`. `--prune` deletes manifests for other source hashes and artefacts nothing still names. Manifests for other configs of the source just built are kept.
+
+A native `.node` addon or a dynamic non-literal `require` / `import` exits 1 and writes nothing for that plugin. Never auto-allow `bolt plugin build`: it executes plugin code. A human `bolt run` also refreshes the cache for plugins it loads.
 
 Without `--user`, Bolt looks under `.bolt/plugins/<ns>`, then an explicit `plugins[].path` in `bolt.yaml`, then `~/.bolt/plugins/<ns>`. With `--user`, only the user-scope directory is used.
 
@@ -69,6 +77,7 @@ The command prints a `bun install` hint. You do not need a `bun` binary, and loa
 bolt plugin new myplugin
 bolt plugin new myplugin --user
 bolt plugin build myplugin
+bolt plugin build myplugin --prune
 bolt plugin list
 ```
 

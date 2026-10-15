@@ -262,14 +262,24 @@ function pluginEntryCandidate(pluginRoot: string): string | null {
   return null;
 }
 
-function loadStaticDirectory(reg: PluginRegistry, dir: string, source: PluginSource): void {
+function loadStaticDirectory(
+  reg: PluginRegistry,
+  dir: string,
+  source: PluginSource,
+  lenient: boolean,
+): void {
   if (!existsSync(dir)) return;
   for (const entry of readdirSync(dir)) {
     const entryPath = path.join(dir, entry);
     if (!statSync(entryPath).isDirectory()) continue;
     if (!pluginEntryCandidate(entryPath)) continue;
-    const file = readAndVerifyStaticManifest(entry, entryPath);
-    reg.register(stubPluginFromStatic(file), source);
+    try {
+      const file = readAndVerifyStaticManifest(entry, entryPath);
+      reg.register(stubPluginFromStatic(file), source);
+    } catch (error) {
+      if (lenient && error instanceof StaticManifestError) continue;
+      throw error;
+    }
   }
 }
 
@@ -281,15 +291,17 @@ export function buildStaticAiRegistry(
   cfg: { plugins?: { namespace: string; path?: string; config?: Record<string, unknown> }[] },
   configDir: string,
   builtins: BoltPlugin[],
+  opts: { lenient?: boolean } = {},
 ): PluginRegistry {
+  const lenient = opts.lenient === true;
   const reg = new PluginRegistry();
   for (const p of builtins) reg.register(p);
 
   const userPluginsDir = path.join(userHome(), ".bolt", "plugins");
-  loadStaticDirectory(reg, userPluginsDir, "user");
+  loadStaticDirectory(reg, userPluginsDir, "user", lenient);
 
   const projectPluginsDir = path.join(configDir, ".bolt", "plugins");
-  loadStaticDirectory(reg, projectPluginsDir, "project");
+  loadStaticDirectory(reg, projectPluginsDir, "project", lenient);
 
   reg.setConfigOrder((cfg.plugins ?? []).map((entry) => entry.namespace));
 
@@ -297,8 +309,13 @@ export function buildStaticAiRegistry(
     if (!entry.path) continue;
     const resolved = path.resolve(configDir, entry.path);
     const root = pluginDirectory(resolved);
-    const file = readAndVerifyStaticManifest(entry.namespace, root);
-    reg.register(stubPluginFromStatic(file), "path");
+    try {
+      const file = readAndVerifyStaticManifest(entry.namespace, root);
+      reg.register(stubPluginFromStatic(file), "path");
+    } catch (error) {
+      if (lenient && error instanceof StaticManifestError) continue;
+      throw error;
+    }
   }
 
   return reg;

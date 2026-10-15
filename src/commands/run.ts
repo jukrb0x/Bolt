@@ -297,6 +297,7 @@ export default defineCommand({
       dryRun: simulate,
       logger,
       configDir,
+      refreshPluginCache: true,
       notifier: simulate ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications),
     });
 
