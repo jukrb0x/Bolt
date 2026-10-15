@@ -188,8 +188,8 @@ capabilities:
   vcs.info: git/info
 ```
 
-| Field  | Type   | Required | Description                                      |
-| ------ | ------ | -------- | ------------------------------------------------ |
+| Field   | Type   | Required | Description                                         |
+| ------- | ------ | -------- | --------------------------------------------------- |
 | `<tag>` | string | yes      | Handler ref, for example `git/pull` or `svn/update` |
 
 A tag with one built handler is selected automatically (`auto: only match` in `bolt inspect` and `bolt run --dry-run`). Unknown keys and refs that do not provide the tag fail `bolt check` with exit code `3`, naming the file, the key, and a "did you mean" hint. See [git/ and svn/](./built-in-handlers.md#git-and-svn--version-control).
@@ -244,11 +244,11 @@ plugins:
     use_tortoise: true
 ```
 
-| Field          | Type                       | Required | Description                                              |
-| -------------- | -------------------------- | -------- | -------------------------------------------------------- |
-| `vars`         | map (string→string)        | no       | Per-machine variable overrides                           |
-| `plugins`      | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace      |
-| `capabilities` | map (tag→handler ref)      | no       | Per-key override of `bolt.yaml` `capabilities`           |
+| Field          | Type                       | Required | Description                                         |
+| -------------- | -------------------------- | -------- | --------------------------------------------------- |
+| `vars`         | map (string→string)        | no       | Per-machine variable overrides                      |
+| `plugins`      | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace |
+| `capabilities` | map (tag→handler ref)      | no       | Per-key override of `bolt.yaml` `capabilities`      |
 
 v2.0 keys (`engine_path`, `project_path`, `uproject`, `use_tortoise`) are rejected. Run `bolt migrate` to convert them.
 

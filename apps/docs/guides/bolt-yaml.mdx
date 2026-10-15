@@ -7,10 +7,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                | Why                                                                         |
-| ----------------- | ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.         |
-| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, and `capabilities` overrides        | Per-machine vars, plugin config, and singleton capability choices. A missing file is fine. |
+| File              | Committed?    | Contains                                                | Why                                                                                        |
+| ----------------- | ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.                        |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, and `capabilities` overrides         | Per-machine vars, plugin config, and singleton capability choices. A missing file is fine. |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
