@@ -1,6 +1,11 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+// Cold pwsh on ubuntu-latest can take longer than bun's 5s default. The runner
+// then kills the spawn and the test sees exit 1. Later cases in this file finish
+// in a few hundred ms once pwsh is warm. 30s is the ceiling for one start.
+setDefaultTimeout(30_000);
 
 // Runs scripts/self-update-tag.ps1, the tag check (and --force decision for
 // self-update) that verify-windows-self-update.yml and verify-windows-install.yml
