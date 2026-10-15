@@ -12,6 +12,7 @@ export const JSON_SCHEMA = {
   check: "bolt.check/v1",
   inspect: "bolt.inspect/v1",
   status: "bolt.status/v1",
+  run: "bolt.run/v1",
 } as const;
 
 export interface JsonIssue {

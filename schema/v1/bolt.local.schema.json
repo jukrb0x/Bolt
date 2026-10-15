@@ -22,11 +22,19 @@
     "ai": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Per-machine agent policy. bolt status reports ai.run. Omitted ai.run means confirm. Agent execute is not implemented in this release.",
+      "description": "Per-machine agent policy. ai.run never refuses every agent execute. Omitted ai.run means confirm and does not block ai:true plans. ai.trust_plugins lifts the non-builtin confirm cap. It never lifts ai:false or a plugin that shadows a built-in namespace.",
       "properties": {
         "run": {
           "enum": ["never", "confirm"],
-          "description": "Reported by bolt status as policy.ai_run. confirm is the default."
+          "description": "never refuses agent execute (AGENT_EXECUTION_DISABLED). confirm is the default and does not block ai:true plans."
+        },
+        "trust_plugins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Namespaces whose handlers may keep ai:true. Does not lift ai:false or shadowing."
         }
       }
     },

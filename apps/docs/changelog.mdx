@@ -5,6 +5,43 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Agent execute (BOLT-M1 Phase 2a)
+
+`bolt run` accepts `--agent`, `--json`, `--execute`, `--plan=<plan_hash>`, and `--confirmed-by-user`. `--agent` is also on when `BOLT_AGENT` is `1` or `true` after trimming (any case). `--execute`, `--plan`, and `--confirmed-by-user` imply agent mode even without `--agent`. On `bolt run`, agent mode prints JSON. A human `bolt run` with none of those flags is unchanged, including a text `--dry-run`.
+
+`bolt run --dry-run … --json` prints one `bolt.run/v1` document. `data` is `{ preview: true, plan_hash, ai, ai_reasons, plan }`. `plan` matches `bolt inspect --json` (`kind`, `name`, `names`, `params`, `context_hash`, `plan_hash`, `ai`, `ai_reasons`, `tasks`, `capabilities`). The same preview is what agent mode returns when `--execute` is absent.
+
+`bolt run <names> --execute --plan=<plan_hash> --json` recomputes the hash and runs that plan when both gates pass. Success `data` is `{ preview: false, plan_hash, outcome: "ok", log }` (`log` uses forward slashes). A step failure is `outcome: "failed"`, with optional `failed_task` and `log`, error `RUN_FAILED`, exit 1. A bare `--plan` (no `=`) is agent mode and prints JSON, the same as `--plan=<hash>`.
+
+`plan_hash` now also includes each task's `continueOnFailure` (the flow's `continue_on_fail` flag) and, when a step names a capability, the resolved `namespace/handler`. Phase 1b hashed neither. A `plan_hash` saved from Phase 1b, or from an earlier Phase 2a build, no longer matches. Preview again. That invalidation is expected.
+
+An agent execute of `ue/ini_get` or `ue/ini_read_all` confines `file` to the UE plugin's `project.path`, after resolving symlinks. A path that leaves that directory, or that cannot be resolved, is `AI_FORBIDDEN`. The root is the UE project directory, not the directory that contains `bolt.yaml`. A human `bolt run` is not confined here.
+
+Stage 1 does not import plugin code. It refuses with exit 4, in this order:
+
+1. `PLUGIN_NOT_BUILT` — a participating non-builtin is not built. Hint: `bolt plugin build <ns>`.
+2. Artefact integrity — the content-addressed file is missing or its bytes no longer hash to the manifest. `PLAN_MISMATCH`, and `ai_reasons` includes `ARTEFACT_TAMPERED`.
+3. `AGENT_EXECUTION_DISABLED` — `bolt.local.yaml` has `ai.run: never`.
+4. `PLAN_MISMATCH` — `--plan` is not the recomputed `plan_hash`.
+5. `AI_FORBIDDEN` — effective `ai` is `false`. The hint is the human `bolt run …` command.
+6. `CONFIRM_REQUIRED` — effective `ai` is `confirm` and `--confirmed-by-user` was not passed.
+
+Capability errors still exit 3 before Stage 1. A Stage 1 refusal writes no log.
+
+Stage 2 loads only the participating plugins, and only from the content-addressed artefact. It does not compile, install, or read the plugin source tree. If the live handlers, `ai`, or params schema hash differ from the manifest, the run stops with `PLAN_MISMATCH` (exit 4) and writes no log. Importing the artefact runs module top-level and a class constructor; `onInit`, hooks, and handlers run only after that check passes.
+
+A non-builtin handler declared `ai: true` is capped at `confirm` unless its namespace is in `bolt.local.yaml` `ai.trust_plugins`. Trust does not lift `ai: false`. A plugin that shadows a built-in namespace is `ai: false`, with warning `PLUGIN_SHADOWS_BUILTIN`. `bolt inspect --json` uses the same effective `ai`, so the hash matches `bolt run`.
+
+`--confirmed-by-user` is a mechanical check: a `confirm` plan runs when the flag is present. This release does not review built-in confirm-tier handlers, and `bolt version --json` does not advertise a `confirm` capability. Destructive built-ins stay `ai: false`. Read-only built-ins marked `ai: true` here: `ue/info`, `ue/ini_get`, `ue/ini_read_all`, plus the existing `git/info` and `svn/info`. `git/status` and `svn/status` stay `confirm`.
+
+`bolt version --json` appends capabilities `agent` and `execute`. `bolt status --json` lists `schemas.run` as `v1`. `agent_mode` follows `BOLT_AGENT`. `bolt status` does not accept `--agent`.
+
+Exit `70` is `INTERNAL` (uncaught exception or rejection). Exit `130` is `INTERRUPTED` (`SIGINT`, and `SIGBREAK` on Windows). Both try to print a JSON envelope with `config: null`.
+
+Not in this release: Phase 2b confirm-tier sign-off, `bolt ai --json`, MCP, NDJSON, doctor/why, and HMAC `plan_hash`. The shipped skill still has no execute path.
+
+These combinations exit 2: `--execute` with `--dry-run` or `--simulate`, `--simulate` in agent mode, `--execute` without `--plan`, `--plan` without `--execute`, and an empty `--plan`. `--json=v1` is accepted on `bolt run`.
+
 ### Content-addressed plugin builds (BOLT-M1 Phase 1b)
 
 `bolt plugin build [namespace...] [--user] [--prune]` bundles TypeScript and JavaScript with the host bundler. The only host externals are `boltstack` and `zod`. It writes two caches:

@@ -349,6 +349,10 @@ export function parseStrictArgs(rawArgs: string[], spec: StrictArgSpec): StrictP
       const boolPrimary = spec.booleanLookup.get(rawName);
       if (boolPrimary) {
         if (value !== undefined) {
+          if (boolPrimary === "json" && value === "v1") {
+            booleans[boolPrimary] = true;
+            continue;
+          }
           const fix =
             IMPLEMENTED_RESERVED.has(boolPrimary) && FALSY.has(value.toLowerCase())
               ? ` To run for real, just remove --${boolPrimary}.`

@@ -5,12 +5,24 @@ import { commands } from "./commands";
 import { VERSION } from "./version";
 import { checkCommandName, checkGlobalArgs } from "./global-args";
 import { loadUsageConfig, printUsageError, USAGE_EXIT_CODE } from "./commands/run";
+import { requestsJson } from "./agent-run";
+import { findConfig } from "./discover";
+import {
+  configRef,
+  emitJsonAndExit,
+  installJsonStdoutGuard,
+  issueFromCliMessage,
+  JSON_SCHEMA,
+} from "./json-envelope";
 import {
   leafAllowsParams,
+  parseStrictArgs,
   parseStrictArgsOrExit,
   resolveLeafCommand,
   specFromCittyArgs,
+  UsageError,
 } from "./strict-args";
+import { installProcessGuards } from "./process-guards";
 
 if (process.platform === "win32") cleanupInstalledBolt(process.execPath);
 
@@ -82,7 +94,27 @@ if (leaf) {
   const spec = specFromCittyArgs(command, args, { allowParams: leafAllowsParams(leaf.path) });
   // Validate only; discard the result. citty still parses for most commands; run/inspect
   // re-parse via parseRunArgsOrExit so values stay in one place.
-  parseStrictArgsOrExit(leaf.rest, spec);
+  // This check exits before the command runs, so agent JSON has to be emitted here.
+  if (command === "run" && requestsJson(leaf.rest)) {
+    try {
+      parseStrictArgs(leaf.rest, spec);
+    } catch (error) {
+      if (error instanceof UsageError) {
+        installJsonStdoutGuard();
+        emitJsonAndExit({
+          schema: JSON_SCHEMA.run,
+          exitCode: USAGE_EXIT_CODE,
+          config: configRef(await findConfig(process.cwd())),
+          data: null,
+          errors: [issueFromCliMessage("USAGE", error.message)],
+        });
+      }
+      throw error;
+    }
+  } else {
+    parseStrictArgsOrExit(leaf.rest, spec);
+  }
 }
 
+installProcessGuards();
 runMain(main, { showUsage });

@@ -8,15 +8,28 @@ import {
   CapabilitySelectionError,
   formatCapabilityErrors,
 } from "../capability-selection";
-import { capabilityUsesInPlan } from "../run-plan";
+import {
+  capabilityUsesInPlan,
+  formatPlanErrors,
+  resolveRunPlan,
+  type PlanRequest,
+} from "../run-plan";
 import { Logger } from "../logger";
 import { Notifier } from "../notify";
 import path from "path";
 import { mkdirSync } from "fs";
 import { VERSION } from "../version";
 import { CONFIG_EXIT_CODE, USAGE_EXIT_CODE } from "../exit-codes";
+import { isAgentMode } from "../agent-mode";
+import { dispatchJsonRun, requestsJson, semanticProblem, type JsonRunArgs } from "../agent-run";
+import {
+  configRef,
+  emitJsonAndExit,
+  installJsonStdoutGuard,
+  issueFromCliMessage,
+  JSON_SCHEMA,
+} from "../json-envelope";
 import { loadProjectConfigOrExit } from "../project-config";
-import { formatPlanErrors, resolveRunPlan, type PlanRequest } from "../run-plan";
 import { DRY_RUN_HEADER, dryRunFooter, renderDryRun } from "../dry-run";
 import { closestMatches, formatDidYouMean } from "../suggest";
 import {
@@ -24,6 +37,7 @@ import {
   parseStrictArgs,
   parseStrictArgsOrExit,
   specFromCittyArgs,
+  UsageError,
   type StrictArgSpec,
 } from "../strict-args";
 export {
@@ -47,7 +61,25 @@ export interface ParsedRun {
   dryRun: boolean;
   /** `--simulate`: run with plugins loaded in dry-run mode (side effects allowed). */
   simulate: boolean;
+  /** Set when the command declares the flag. Omitted by the default parser. */
+  agent?: boolean;
+  execute?: boolean;
+  json?: boolean;
+  confirmedByUser?: boolean;
+  /** Set when `--plan` is declared. Undefined when the flag was not passed. */
+  plan?: string;
 }
+
+/** Flags `bolt run` accepts. `plan` is a string; the rest are booleans. */
+export const RUN_PARSE_FLAGS = [
+  "dry-run",
+  "simulate",
+  "json",
+  "agent",
+  "execute",
+  "confirmed-by-user",
+  "plan",
+];
 
 export { CONFIG_EXIT_CODE, USAGE_EXIT_CODE };
 
@@ -62,8 +94,40 @@ function runSpec(opts: ParseRunOptions = {}): StrictArgSpec {
   const command = opts.command ?? "run";
   const flags = opts.flags ?? ["dry-run", "simulate"];
   const args: Record<string, { type: string }> = {};
-  for (const f of flags) args[f] = { type: "boolean" };
+  for (const f of flags) args[f] = { type: f === "plan" ? "string" : "boolean" };
   return specFromCittyArgs(command, args, { allowParams: true });
+}
+
+function toJsonArgs(parsed: ParsedRun): JsonRunArgs {
+  return {
+    names: parsed.names,
+    params: parsed.params,
+    dryRun: parsed.dryRun,
+    simulate: parsed.simulate,
+    execute: parsed.execute === true,
+    agent: parsed.agent === true,
+    json: parsed.json === true,
+    confirmedByUser: parsed.confirmedByUser === true,
+    plan: parsed.plan,
+  };
+}
+
+function toParsedRun(result: ReturnType<typeof parseStrictArgs>, opts: ParseRunOptions): ParsedRun {
+  const flags = new Set(opts.flags ?? ["dry-run", "simulate"]);
+  const parsed: ParsedRun = {
+    names: result.positionals,
+    params: result.params,
+    dryRun: result.booleans["dry-run"] === true,
+    simulate: result.booleans.simulate === true,
+  };
+  if (flags.has("agent")) parsed.agent = result.booleans.agent === true;
+  if (flags.has("execute")) parsed.execute = result.booleans.execute === true;
+  if (flags.has("json")) parsed.json = result.booleans.json === true;
+  if (flags.has("confirmed-by-user")) {
+    parsed.confirmedByUser = result.booleans["confirmed-by-user"] === true;
+  }
+  if (flags.has("plan") && result.strings.plan !== undefined) parsed.plan = result.strings.plan;
+  return parsed;
 }
 
 /**
@@ -71,26 +135,12 @@ function runSpec(opts: ParseRunOptions = {}): StrictArgSpec {
  * Thin wrapper over shared `parseStrictArgs` (BOLT-CLI-1).
  */
 export function parseRunArgs(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
-  const spec = runSpec(opts);
-  const result = parseStrictArgs(rawArgs, spec);
-  return {
-    names: result.positionals,
-    params: result.params,
-    dryRun: result.booleans["dry-run"] === true,
-    simulate: result.booleans.simulate === true,
-  };
+  return toParsedRun(parseStrictArgs(rawArgs, runSpec(opts)), opts);
 }
 
 /** Parse argv for a command, printing usage errors and exiting with USAGE_EXIT_CODE. */
 export function parseRunArgsOrExit(rawArgs: string[], opts: ParseRunOptions = {}): ParsedRun {
-  const spec = runSpec(opts);
-  const result = parseStrictArgsOrExit(rawArgs, spec);
-  return {
-    names: result.positionals,
-    params: result.params,
-    dryRun: result.booleans["dry-run"] === true,
-    simulate: result.booleans.simulate === true,
-  };
+  return toParsedRun(parseStrictArgsOrExit(rawArgs, runSpec(opts)), opts);
 }
 
 /** Max names shown on a Tasks:/Flows: line before truncating. */
@@ -222,11 +272,80 @@ export default defineCommand({
       description:
         "Load plugins and run hooks and handlers in dry-run mode; writes a log file and may have side effects",
     },
+    json: {
+      type: "boolean",
+      default: false,
+      description: "Print one bolt.run/v1 JSON document on stdout",
+    },
+    agent: {
+      type: "boolean",
+      default: false,
+      description: "Agent mode: JSON preview unless --execute is set. Also BOLT_AGENT=1",
+    },
+    execute: {
+      type: "boolean",
+      default: false,
+      description: "Execute a previewed plan. Requires --plan=<plan_hash>. Implies agent mode",
+    },
+    plan: {
+      type: "string",
+      description: "plan_hash from a previous --dry-run --json preview",
+    },
+    "confirmed-by-user": {
+      type: "boolean",
+      default: false,
+      description: "User approved a confirm-mode plan. Implies agent mode",
+    },
   },
   async run({ rawArgs }) {
-    const { names, params, dryRun, simulate } = parseRunArgsOrExit(rawArgs ?? [], {
-      flags: ["dry-run", "simulate"],
-    });
+    const raw = rawArgs ?? [];
+    const jsonish = requestsJson(raw);
+    let parsed: ParsedRun;
+    try {
+      parsed = parseRunArgs(raw, { flags: RUN_PARSE_FLAGS });
+    } catch (e) {
+      if (!(e instanceof UsageError)) throw e;
+      if (jsonish) {
+        installJsonStdoutGuard();
+        emitJsonAndExit({
+          schema: JSON_SCHEMA.run,
+          exitCode: USAGE_EXIT_CODE,
+          config: configRef(await findConfig(process.cwd())),
+          data: null,
+          errors: [issueFromCliMessage("USAGE", e.message)],
+        });
+      }
+      printUsageError(e.message);
+      process.exit(USAGE_EXIT_CODE);
+    }
+
+    const args = toJsonArgs(parsed);
+    const problem = semanticProblem(args);
+    if (problem) {
+      if (jsonish || isAgentMode(args)) {
+        installJsonStdoutGuard();
+        emitJsonAndExit({
+          schema: JSON_SCHEMA.run,
+          exitCode: USAGE_EXIT_CODE,
+          config: configRef(await findConfig(process.cwd())),
+          data: null,
+          errors: [issueFromCliMessage("USAGE", problem)],
+        });
+      }
+      printUsageError(problem);
+      process.exit(USAGE_EXIT_CODE);
+    }
+
+    const agent = isAgentMode(args);
+    const preview = parsed.dryRun || ((agent || parsed.json === true) && !parsed.execute);
+    if (agent || parsed.json || parsed.execute) {
+      if (preview || parsed.execute) {
+        installJsonStdoutGuard();
+        await dispatchJsonRun(args);
+      }
+    }
+
+    const { names, params, dryRun, simulate } = parsed;
 
     if (names.length === 0) {
       printUsageError(missingNameMessage("run", await loadUsageConfig()));

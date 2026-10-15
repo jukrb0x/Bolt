@@ -30,7 +30,9 @@ test("string @handler on ue produces a manifest and does not invent params", () 
     description: "Build target: ${target} with config: ${config}",
     ai: false,
   });
-  expect(ue.manifest.handlers.ini_get).toEqual({ ai: false });
+  expect(ue.manifest.handlers.ini_get).toEqual({ ai: true });
+  expect(ue.manifest.handlers.ini_read_all.ai).toBe(true);
+  expect(ue.manifest.handlers.info.ai).toBe(true);
   expect(Object.keys(ue.manifest.handlers).sort()).toEqual(Object.keys(ue.handlers).sort());
   expect("deps" in ue.manifest).toBe(false);
 

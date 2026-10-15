@@ -248,7 +248,11 @@ describe("CLI-1 integration via main.ts", () => {
     for (const pathParts of leaves) {
       // plugin new needs a positional; pass a dummy name before the bad flag
       const prefix = pathParts.join(" ") === "plugin new" ? [...pathParts, "tmpplug"] : pathParts;
-      for (const bad of ["--definitely-unknown", "--agent"] as const) {
+      const flags =
+        pathParts.join(" ") === "run"
+          ? (["--definitely-unknown"] as const)
+          : (["--definitely-unknown", "--agent"] as const);
+      for (const bad of flags) {
         const r = await bolt([...prefix, bad]);
         expect(r.code).toBe(2);
         expect(r.err.length).toBeGreaterThan(0);

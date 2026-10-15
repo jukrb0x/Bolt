@@ -32,6 +32,8 @@ export const VERSION_CAPABILITIES: readonly string[] = [
   "capability-tags",
   "plugin-api-2",
   "plugin-manifest",
+  "agent",
+  "execute",
 ];
 
 export function isSupportedPluginApi(version: unknown): version is number {

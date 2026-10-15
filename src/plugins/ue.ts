@@ -533,11 +533,11 @@ export class UEPlugin extends PluginBase.withDescriptor({
     }
   }
 
-  @handler()
+  @handler({ ai: true })
   async ini_get(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, section, key, type } = params;
     const projectPath = ueConfig(ctx).project.path;
-    const projFile = path.join(projectPath, file);
+    const projFile = path.resolve(projectPath, file);
 
     const options = type ? { valueType: type as "string" | "number" | "boolean" } : undefined;
     const value = await ueIni.readIni(projFile, section, key, options);
@@ -581,11 +581,11 @@ export class UEPlugin extends PluginBase.withDescriptor({
     }
   }
 
-  @handler()
+  @handler({ ai: true })
   async ini_read_all(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file } = params;
     const projectPath = ueConfig(ctx).project.path;
-    const projFile = path.join(projectPath, file);
+    const projFile = path.resolve(projectPath, file);
 
     const data = await ueIni.readIniAll(projFile);
 
@@ -616,9 +616,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     await this.build(params, ctx);
   }
 
-  // ai: false (string form). If this ever becomes AI-callable, add "ue/info" to
-  // AI_PATH_RESTRICTED in runner.ts so core checks its paths for AI invocations.
-  @handler("Show VCS info")
+  @handler({ ai: true, description: "Show VCS info" })
   async info(params: Record<string, string>, ctx: BoltPluginContext) {
     const flavor = engineFlavor(ueConfig(ctx));
     ctx.logger.info(`Engine: UE${flavor.major}, editor ${flavor.editor} (from ${flavor.source})`);

@@ -233,7 +233,7 @@ function sourceKind(entry: string): "ts" | "js" {
   return entry.endsWith(".ts") || entry.endsWith(".tsx") ? "ts" : "js";
 }
 
-function handlersFrom(plugin: BoltPlugin): Record<string, CacheHandler> {
+export function cacheHandlersFrom(plugin: BoltPlugin): Record<string, CacheHandler> {
   const manifest = plugin.manifest?.handlers ?? {};
   const out: Record<string, CacheHandler> = {};
   for (const name of Object.keys(manifest).sort()) {
@@ -318,7 +318,7 @@ export function publishBuiltPlugin(input: PublishInput): PublishResult {
     source_hash: sourceHash,
     config_hash: configHash,
     export_kind: kind,
-    handlers: handlersFrom(input.plugin),
+    handlers: cacheHandlersFrom(input.plugin),
   };
   const manifestPath = path.join(
     input.cacheRoot,
@@ -372,6 +372,46 @@ export function lookupManifest(
     manifest: hit,
     manifestPath: path.join(dir, `${sourceHash}-${want}.json`),
   };
+}
+
+export function artefactFile(cacheRoot: string, namespace: string, artefactHash: string): string {
+  return path.join(cacheRoot, "plugins", namespace, "artefacts", artefactHash, "index.js");
+}
+
+/** Read the content-addressed file as bytes. Does not import it. */
+export function artefactIntegrity(
+  file: string,
+  artefactHash: string,
+): "ok" | "missing" | "tampered" {
+  if (!existsSync(file)) return "missing";
+  try {
+    return sha256(readFileSync(file)) === artefactHash ? "ok" : "tampered";
+  } catch {
+    return "missing";
+  }
+}
+
+/**
+ * Live handler set, `ai`, and params schema hash versus the built manifest.
+ * Undefined means they match. Used by execute Stage 2.
+ */
+export function handlersDiffer(plugin: BoltPlugin, manifest: CacheManifest): string | undefined {
+  const live = cacheHandlersFrom(plugin);
+  const cached = manifest.handlers ?? {};
+  const liveNames = Object.keys(live).sort();
+  const cachedNames = Object.keys(cached).sort();
+  if (liveNames.join("\0") !== cachedNames.join("\0")) {
+    return `handlers ${liveNames.join(",") || "(none)"} != ${cachedNames.join(",") || "(none)"}`;
+  }
+  for (const name of liveNames) {
+    if ((live[name].ai ?? false) !== (cached[name].ai ?? false)) {
+      return `${name} ai ${String(live[name].ai)} != ${String(cached[name].ai)}`;
+    }
+    if ((live[name].params_schema_hash ?? "") !== (cached[name].params_schema_hash ?? "")) {
+      return `${name} params_schema_hash`;
+    }
+  }
+  return undefined;
 }
 
 export function lookupPluginManifest(

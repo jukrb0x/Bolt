@@ -9,6 +9,8 @@ Run tasks (in the order you type) or a single flow defined in `bolt.yaml`.
 
 ```bash
 bolt run <name...> [--dry-run | --simulate] [--key=value ...] [-- key=value ...]
+bolt run --dry-run <name...> --json
+bolt run <name...> --execute --plan=<plan_hash> [--confirmed-by-user] --json
 ```
 
 ## Description
@@ -59,13 +61,15 @@ Run-specific rules:
   are allowed before it. A help flag wins (`bolt --help --version` shows help);
   otherwise `--version` must be used on its own (`bolt --version`) and takes no value.
 - Reserved names: `dry-run`, `simulate`, `json`, `agent`, `execute`, `plan`,
-  `confirmed-by-user`. Only `--dry-run` and `--simulate` are implemented; the others fail with
-  `--<name> is reserved by bolt and not supported yet`. None of them can be used
-  as a param name, neither as `--name=value` nor as `name=value` after `--`;
-  the error tells you to rename the param, e.g. `plan` → `my_plan` in
-  `bolt.yaml`, then pass `-- my_plan=x`. Valued forms such as `--json=v1` or
-  `--plan=<hash>` also report that the flag is not supported yet. Reserved names
-  are case-sensitive: `--PLAN=x` is an ordinary param.
+  `confirmed-by-user`. On `bolt run` they are flags, not param names. Using one as a
+  param (`-- plan=x`, or a valued form of a boolean such as `--execute=true`) fails
+  with exit `2` and tells you to rename the param, e.g. `plan` → `my_plan`.
+  `--json=v1` is accepted. `--plan=<hash>` is the plan hash flag. These combinations
+  are usage errors: `--execute` with `--dry-run` or `--simulate`, `--simulate` in
+  agent mode, `--execute` without `--plan`, `--plan` without `--execute`, and an
+  empty `--plan`. Reserved names are case-sensitive: `--PLAN=x` is an ordinary param.
+  The same names on other commands are still "not supported yet" unless that command
+  declares them.
 - `--dry-run=false` and `-- dry-run=false`: to run for real, just remove `--dry-run`
   (the same for `--simulate`).
 - `--dry-run` together with `--simulate`.
@@ -155,26 +159,50 @@ Handlers that honor `ctx.dryRun` log what they would do instead of doing it.
 and a plugin can still have side effects. Notifications are not sent.
 `--dry-run` and `--simulate` cannot be combined.
 
+## Agent mode
+
+Agent mode is on when any of these is set: `--agent`, `BOLT_AGENT` equal to `1` or `true` after trimming (any case), `--execute`, `--plan`, or `--confirmed-by-user`. On `bolt run` it prints one `bolt.run/v1` JSON document. A human run with none of those flags is unchanged.
+
+`bolt run --dry-run <names> --json` (or the same command with `--agent` and no `--execute`) is a static preview. It returns `plan_hash`, effective `ai`, `ai_reasons`, and a `plan` object with the same shape as [`bolt inspect --json`](/cli/inspect). It does not import project or user plugins and writes nothing.
+
+`bolt run <names> --execute --plan=<plan_hash> --json` recomputes that hash and runs the plan when both gates pass:
+
+1. **Stage 1** does not import plugin code. It refuses with exit `4`, in order: `PLUGIN_NOT_BUILT`, artefact integrity (`PLAN_MISMATCH` plus `ai_reasons` code `ARTEFACT_TAMPERED`), `AGENT_EXECUTION_DISABLED` (`ai.run: never`), `PLAN_MISMATCH` (the hash differs), `AI_FORBIDDEN` (effective `ai` is `false`), `CONFIRM_REQUIRED` (effective `ai` is `confirm` and `--confirmed-by-user` is absent). Capability errors still exit `3` before this. No log is written.
+2. **Stage 2** loads only the participating plugins, from their content-addressed artefacts. It does not compile or install. If the loaded handlers differ from the manifest, the run stops with `PLAN_MISMATCH` (exit `4`) and writes no log. Otherwise it executes the same plan.
+
+A non-builtin `ai: true` handler is treated as `confirm` unless its namespace is in `ai.trust_plugins`. A plugin that shadows a built-in namespace is `ai: false` (`PLUGIN_SHADOWS_BUILTIN`). `--confirmed-by-user` lets a `confirm` plan run. It does not mean built-in confirm-tier handlers have been reviewed. Destructive built-ins stay `ai: false`. Read-only built-ins an agent may run without that flag include `ue/info`, `ue/ini_get`, `ue/ini_read_all`, `git/info`, and `svn/info`.
+
+`plan_hash` covers the resolved plan, including each task's `continueOnFailure` and the handler a capability step resolves to. Changing `continue_on_fail` or a `capabilities:` mapping changes the hash. `ue/ini_get` and `ue/ini_read_all` may only read a `file` inside the UE `project.path` (symlink-resolved). A path outside it is `AI_FORBIDDEN`. `--plan` without `=` is the same flag as `--plan=<hash>`.
+
+Success data is `{ preview: false, plan_hash, outcome: "ok", log }`. A failed step is `outcome: "failed"` with error `RUN_FAILED` (exit `1`).
+
 ## Exit codes
 
-| Code | Meaning                                                                                                                                                                                                               |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success (a dry run with no problems)                                                                                                                                                                                  |
-| `1`  | Task failure (a step failed while running)                                                                                                                                                                            |
-| `2`  | Usage error: unknown flag, command, task, or flow; malformed param; no task given                                                                                                                                     |
-| `3`  | Config error: `bolt.yaml` missing, unreadable, unparseable, failing the schema, an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref), or a config problem found by `--dry-run` |
-| `4`  | Denied: `AI_FORBIDDEN` (AI invocations only); an unreadable `bolt.yaml` exits `3`                                                                                                                                     |
+| Code  | Meaning                                                                                                                                                                                                               |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`   | Success (a dry run with no problems, or an agent execute that finished)                                                                                                                                               |
+| `1`   | Task failure (a step failed while running)                                                                                                                                                                            |
+| `2`   | Usage error: unknown flag, command, task, or flow; malformed param; no task given; illegal agent-flag combination                                                                                                     |
+| `3`   | Config error: `bolt.yaml` missing, unreadable, unparseable, failing the schema, an invalid task graph (unknown `call:` target, call cycle, malformed or legacy `uses:` ref), or a config problem found by `--dry-run` |
+| `4`   | Denied: `PLUGIN_NOT_BUILT`, `PLAN_MISMATCH`, `AGENT_EXECUTION_DISABLED`, `AI_FORBIDDEN`, `CONFIRM_REQUIRED`. An unreadable `bolt.yaml` exits `3`                                                                      |
+| `70`  | Internal: uncaught exception or rejection. JSON envelope when it can be written; `config` is null                                                                                                                     |
+| `130` | Interrupted: `SIGINT`, or `SIGBREAK` on Windows                                                                                                                                                                       |
 
 Config errors are reported before anything runs and before a log file is created.
 
 ## Options
 
-| Flag               | Default | Description                                        |
-| ------------------ | ------- | -------------------------------------------------- |
-| `--dry-run`        | `false` | Show what would run; runs nothing, writes nothing  |
-| `--simulate`       | `false` | Run plugins in dry-run mode; may have side effects |
-| `--<key>=<value>`  | -       | Pass a param to the whole run (overrides `with:`)  |
-| `-- <key>=<value>` | -       | Params after `--`; values may start with `--`      |
+| Flag                  | Default | Description                                                                   |
+| --------------------- | ------- | ----------------------------------------------------------------------------- |
+| `--dry-run`           | `false` | Show what would run; runs nothing, writes nothing                             |
+| `--simulate`          | `false` | Run plugins in dry-run mode; may have side effects. Not allowed in agent mode |
+| `--json`              | `false` | Print one `bolt.run/v1` document. With no `--execute`, this is a preview      |
+| `--agent`             | `false` | Agent mode (also `BOLT_AGENT=1` or `true`). JSON preview unless `--execute`   |
+| `--execute`           | `false` | Run a previewed plan. Requires `--plan`. Implies agent mode                   |
+| `--plan=<plan_hash>`  | -       | Hash from a previous `--dry-run --json` preview. Requires `--execute`         |
+| `--confirmed-by-user` | `false` | User approved a `confirm` plan. Implies agent mode                            |
+| `--<key>=<value>`     | -       | Pass a param to the whole run (overrides `with:`)                             |
+| `-- <key>=<value>`    | -       | Params after `--`; values may start with `--`                                 |
 
 ## Arguments
 
@@ -202,6 +230,10 @@ bolt run update build --dry-run
 
 # Let plugins show what they would do (hooks run, a log file is written)
 bolt run update build --simulate
+
+# Agent preview, then execute an ai:true plan (hash comes from the preview)
+bolt run show_engine --dry-run --agent --json
+bolt run show_engine --execute --plan=<plan_hash> --json
 ```
 
 ## Defining Tasks and Flows

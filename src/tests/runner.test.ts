@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { Runner } from "../runner";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import os from "os";
 import path from "path";
-import { mockRuntime, testCfg } from "./env";
+import { mockRuntime, testCfg, withUeConfig } from "./env";
 import type { Runtime } from "../runtime/types";
 import type { BoltConfig } from "../config";
 import { Notifier } from "../notify";
@@ -612,6 +613,109 @@ describe("git/info and svn/info: symlinked vs literal out-of-project paths", () 
         await expect(
           new Runner(cfgFor("Engine"), { configDir: root, aiInvocation: true }).runTask("peek"),
         ).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+describe("ue/ini_get and ue/ini_read_all stay inside the UE project directory", () => {
+  const setup = () => {
+    const base = mkdtempSync(path.join(os.tmpdir(), "bolt-ue-ini-"));
+    const boltDir = path.join(base, "bolt");
+    const game = path.join(base, "game");
+    mkdirSync(path.join(game, "Config"), { recursive: true });
+    mkdirSync(boltDir, { recursive: true });
+    writeFileSync(path.join(game, "Config", "DefaultEngine.ini"), "[Core.System]\nFoo=1\n");
+    writeFileSync(path.join(boltDir, "secret.ini"), "[Core.System]\nFoo=LEAK\n");
+    symlinkSync(
+      boltDir,
+      path.join(game, "link"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const ue = withUeConfig({ project: { path: game, vcs: "svn" } });
+    const cfgFor = (ref: string, file: string): BoltConfig => ({
+      ...ue,
+      // Pathless ue entry: metadata only, so the built-in plugin stays loaded.
+      plugins: ue.plugins.map(({ namespace, config }) => ({ namespace, config })),
+      tasks: {
+        read: [
+          {
+            uses: ref,
+            with: ref === "ue/ini_get" ? { file, section: "Core.System", key: "Foo" } : { file },
+          },
+        ],
+      },
+    });
+    return { base, boltDir, game, cfgFor };
+  };
+
+  for (const ref of ["ue/ini_get", "ue/ini_read_all"]) {
+    test(`${ref}: traversal and a symlink out of project.path are AI_FORBIDDEN; an in-project file is read`, async () => {
+      const { base, game, cfgFor } = setup();
+      const { Logger } = await import("../logger");
+      try {
+        const lines: string[] = [];
+        const logger = new Logger({ sink: (line) => lines.push(line) });
+        await new Runner(cfgFor(ref, "Config/DefaultEngine.ini"), {
+          configDir: path.join(base, "bolt"),
+          aiInvocation: true,
+          logger,
+        }).runTask("read");
+        expect(lines.join("\n")).toContain(ref === "ue/ini_get" ? "1" : "[Core.System]");
+        expect(lines.join("\n")).not.toContain("LEAK");
+
+        const absolute = path.join(game, "Config", "DefaultEngine.ini");
+        lines.length = 0;
+        await new Runner(cfgFor(ref, absolute), {
+          configDir: path.join(base, "bolt"),
+          aiInvocation: true,
+          logger,
+        }).runTask("read");
+        expect(lines.join("\n")).toContain(ref === "ue/ini_get" ? "1" : "Foo=1");
+        expect(lines.join("\n")).not.toContain("LEAK");
+
+        await expect(
+          new Runner(cfgFor(ref, "../bolt/secret.ini"), {
+            configDir: path.join(base, "bolt"),
+            aiInvocation: true,
+          }).runTask("read"),
+        ).rejects.toMatchObject({
+          code: "AI_FORBIDDEN",
+          message: expect.stringMatching(/UE project directory/),
+        });
+        await expect(
+          new Runner(cfgFor(ref, path.join(base, "bolt", "secret.ini")), {
+            configDir: path.join(base, "bolt"),
+            aiInvocation: true,
+          }).runTask("read"),
+        ).rejects.toMatchObject({ code: "AI_FORBIDDEN" });
+        await expect(
+          new Runner(cfgFor(ref, "link/secret.ini"), {
+            configDir: path.join(base, "bolt"),
+            aiInvocation: true,
+          }).runTask("read"),
+        ).rejects.toMatchObject({
+          code: "AI_FORBIDDEN",
+          message: expect.stringMatching(/symlink/),
+        });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    });
+
+    test(`${ref}: a human run can still read a path outside the UE project`, async () => {
+      const { base, cfgFor } = setup();
+      const { Logger } = await import("../logger");
+      try {
+        const lines: string[] = [];
+        await new Runner(cfgFor(ref, "../bolt/secret.ini"), {
+          configDir: path.join(base, "bolt"),
+          logger: new Logger({ sink: (line) => lines.push(line) }),
+          runtime: mockRuntime,
+        }).runTask("read");
+        expect(lines.join("\n")).toContain("LEAK");
       } finally {
         rmSync(base, { recursive: true, force: true });
       }

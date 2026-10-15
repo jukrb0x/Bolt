@@ -10,7 +10,7 @@ import {
 import { normalizeTextualBooleans, type BoltPlugin, type BoltPluginContext } from "./plugin";
 import { createRuntime, type Runtime } from "./runtime";
 import type { SpawnOptions } from "./runtime/types";
-import uePlugin from "./plugins/ue";
+import uePlugin, { ueConfigSchema } from "./plugins/ue";
 import fsPlugin from "./plugins/fs";
 import jsonPlugin from "./plugins/json";
 import gitPlugin from "./plugins/git";
@@ -117,9 +117,14 @@ interface RunnerOptions {
 }
 
 /**
- * Path params that an AI invocation may only point inside the project directory,
- * after resolving symlinks (fail closed). Human runs are not restricted here:
- * git/info and svn/info warn; fs/* and json/* keep main's literal check.
+ * Path params that an AI invocation may only point inside the Bolt project
+ * directory (`configDir`), after resolving symlinks (fail closed). Human runs
+ * are not restricted here: git/info and svn/info warn; fs/* and json/* keep
+ * main's literal check.
+ *
+ * `ue/ini_get` and `ue/ini_read_all` are not in this map. Their `file` is joined
+ * onto the UE plugin's `project.path`, which is not `configDir`. See
+ * {@link AI_UE_INI_FILE}.
  */
 const AI_PATH_RESTRICTED = new Map<string, string[]>([
   ["git/info", ["path"]],
@@ -131,6 +136,9 @@ const AI_PATH_RESTRICTED = new Map<string, string[]>([
   ["json/set", ["file"]],
   ["json/merge", ["file", "patch"]],
 ]);
+
+/** Read-only ini handlers. `file` must stay inside the UE project directory. */
+const AI_UE_INI_FILE = new Set(["ue/ini_get", "ue/ini_read_all"]);
 
 /** Errors the runner already printed (step failure), so callers do not print them twice. */
 const reportedErrors = new WeakSet<object>();
@@ -177,6 +185,8 @@ export function resolveLocalAction(actionPath: string): string {
 
 export class Runner {
   private registry?: PluginRegistry;
+  /** Set when a task fails and the plan stops. */
+  failedTask?: string;
   private runtime: Runtime;
   private events: RunEvents;
 
@@ -218,8 +228,13 @@ export class Runner {
     }
     const stale = staleAiContextWarning(this.opts.configDir ?? process.cwd());
     if (stale) this.opts.logger?.warn(stale);
+    await this.initPlugins();
+    return this.registry;
+  }
 
-    // Call onInit for any plugins that implement lifecycle hooks
+  /** onInit for plugins already in the registry. Does not load or compile anything. */
+  private async initPlugins(): Promise<void> {
+    if (!this.registry) return;
     for (const ns of this.registry.listNamespaces()) {
       const plugin = this.registry.get(ns) as any;
       if (typeof plugin?.onInit === "function") {
@@ -231,8 +246,16 @@ export class Runner {
         }
       }
     }
+  }
 
-    return this.registry;
+  /**
+   * Run a plan that was already resolved and hashed. Does not call ensureRegistry,
+   * so it never compiles, installs, or imports from a source directory.
+   */
+  async executeResolved(plan: RunPlan, registry: PluginRegistry): Promise<void> {
+    this.registry = registry;
+    await this.initPlugins();
+    await this.executePlan(plan);
   }
 
   private pluginContext(): Omit<BoltPluginContext, "emit"> {
@@ -346,6 +369,7 @@ export class Runner {
           error: message,
         });
         if (!task.continueOnFailure) {
+          this.failedTask = task.name;
           await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
           throw error;
         }
@@ -429,6 +453,15 @@ export class Runner {
       for (const key of AI_PATH_RESTRICTED.get(ref) ?? []) {
         this.assertAiPathInProject(ref, key, params[key]);
       }
+    }
+    if (this.opts.aiInvocation && AI_UE_INI_FILE.has(ref)) {
+      this.assertAiPathInRoot(
+        ref,
+        "file",
+        params.file,
+        this.ueProjectRoot(),
+        "UE project directory",
+      );
     }
     const step = [...trail, ref].join(" > ");
     // One context object per step, shared by the hooks and the handler as before.
@@ -521,19 +554,50 @@ export class Runner {
 
   /** Core-side AI rejection for {@link AI_PATH_RESTRICTED} handlers. */
   private assertAiPathInProject(ref: string, key: string, value: string | undefined): void {
-    if (!value) return; // the handler reports the missing param
     const root = this.opts.configDir ?? process.cwd();
+    this.assertAiPathInRoot(ref, key, value, root, "project directory");
+  }
+
+  /**
+   * UE `project.path`, resolved the same way `ue/ini_*` joins `file`. Missing or
+   * invalid config fails closed: an AI read must not guess the root.
+   */
+  private ueProjectRoot(): string {
+    const entry = this.cfg.plugins?.find((item) => item.namespace === "ue");
+    const parsed = ueConfigSchema.safeParse(entry?.config);
+    if (!parsed.success) {
+      throw new BoltStepError(
+        "AI_FORBIDDEN",
+        `ue: project.path is missing or invalid, so an AI invocation cannot verify ini paths. Fix: set plugins.ue.config.project.path, or use a run: step.`,
+      );
+    }
+    const configDir = this.opts.configDir ?? process.cwd();
+    const raw = parsed.data.project.path;
+    return path.isAbsolute(raw) ? raw : path.resolve(configDir, raw);
+  }
+
+  /** Symlink-resolved confinement. `label` is the directory the message names. */
+  private assertAiPathInRoot(
+    ref: string,
+    key: string,
+    value: string | undefined,
+    root: string,
+    label: string,
+  ): void {
+    if (!value) return; // the handler reports the missing param
     try {
       safePath(value, root);
     } catch (error) {
       // Fail closed: any resolution failure (symlink loop, permission, ...) rejects.
       const reason = error instanceof Error ? error.message : String(error);
       const what = reason.includes("cannot be resolved")
-        ? `cannot be verified to be inside the project directory "${root}" (${reason})`
-        : `is outside the project directory "${root}" (${reason})`;
+        ? `cannot be verified to be inside the ${label} "${root}" (${reason})`
+        : `is outside the ${label} "${root}" (${reason})`;
+      const inside = label === "project directory" ? "the project" : `the ${label}`;
+      const under = label === "project directory" ? "the project directory" : `the ${label}`;
       throw new BoltStepError(
         "AI_FORBIDDEN",
-        `${ref}: ${key} "${value}" ${what}; AI invocations may only use paths inside the project. Fix: use a path under the project directory, or use a run: step for paths outside it.`,
+        `${ref}: ${key} "${value}" ${what}; AI invocations may only use paths inside ${inside}. Fix: use a path under ${under}, or use a run: step for paths outside it.`,
       );
     }
   }

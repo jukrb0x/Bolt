@@ -1,24 +1,21 @@
 ---
 title: "AI overview"
-description: "How coding agents drive Bolt: a Bolt skill that calls the CLI, and planned structured --json output."
+description: "How coding agents drive Bolt: a Bolt skill that calls the CLI, and structured --json output."
 ---
 
 Coding agents such as Cursor and Claude Code use Bolt through the same `bolt` CLI that people use. A
-**Bolt skill** tells the agent which commands to run and in what order. Planned: with `--json`, each
-command will return one structured JSON document the agent can read without parsing human output.
-`bolt version --json` prints a flat object. `list`, `info`, `check`, `inspect`, and `status` print
-one JSON envelope. `run` and `ai` do not accept `--json`.
+**Bolt skill** tells the agent which commands to run and in what order. With `--json`, `version` prints a
+flat object and `list`, `info`, `check`, `inspect`, `status`, and `run` each print one JSON document.
+`bolt ai` does not accept `--json`.
 
 Bolt does not run an MCP server or any other service for agents. There is one interface, the CLI, and
 the same permissions and allowlists you already use for shell commands apply to it.
 
 <Warning>
-  **Status.** Most of this page describes a reviewed design for agent support, pending maintainer
-  sign-off. It is not in the current release. Today's binary has the `ai` handler flag, `bolt ai`,
-  and a first skill. `--json` works on `version` (a flat object) and on `list`, `info`, `check`,
-  `inspect`, and `status` (one shared JSON envelope). `bolt inspect --json` includes `plan_hash`,
-  `ai`, and `ai_reasons`, and masks env and local values. It does not have agent mode, `--execute`,
-  or `--json` on `run` / `ai`. Sections below marked **Planned** are not implemented yet.
+  **Status.** Agent preview and execute for `ai: true` plans are in this release (`bolt version
+  --json` lists `agent` and `execute`). The shipped skill does not use `--execute`: Phase 2b
+  confirm-tier sign-off is not done. `bolt ai --json`, `--agent` on commands other than `bolt run`,
+  MCP, and NDJSON are not implemented. Sections below marked **Planned** are not implemented yet.
 </Warning>
 
 ## Available today
@@ -44,7 +41,8 @@ auto-allowed.
 
 The repository ships a skill at `skills/boltstack/SKILL.md`. It has the agent load `.bolt/ai-context.md`,
 use only the tasks and flows listed there, preview with `--dry-run` first, ask before running `--simulate` or `kill`
-tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
+tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone. It does not use `--execute`.
+Phase 2b is not done.
 
 <Note>
   `bolt run --dry-run` is a static preview. It reads `bolt.yaml`, resolves the plan, and prints each step
@@ -53,16 +51,14 @@ tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone.
   `ctx.dryRun = true`, and may have side effects. Bolt does not prompt before `--simulate` runs, so the agent
   must ask you first; only let it run `--simulate` after you approve it. The two flags cannot be combined. See [bolt run](/cli/run).
 
-Every command rejects unknown and reserved flags with exit code `2` before anything runs.
+Every command rejects unknown and undeclared reserved flags with exit code `2` before anything runs.
 Unknown-flag errors may include did-you-mean and a `Flags:` / `--help` line; reserved errors
-(e.g. `bolt run --json`) are only the "reserved by bolt and not supported yet. Remove it…"
-line. Reserved names `--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`
-use that reserved wording unless the command declares them (`bolt version --json`, and
-`--json` on `list`, `info`, `check`, and `inspect`, work).
+are only the "reserved by bolt and not supported yet. Remove it…" line. `bolt run` declares
+`--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. Other commands still reject
+those names, except `--json` on `version`, `list`, `info`, `check`, `inspect`, and `status`.
 Undeclared `--dry-run` / `--simulate` on other commands are unknown flags, not reserved.
 Reserved names cannot be used as task params on `run` / `inspect`. `bolt ai --json` does not
-write `.bolt/ai-context.md`; it exits `2`. Planned agent commands therefore fail on today's
-binary — wait until `bolt version --json` reports the capabilities.
+write `.bolt/ai-context.md`; it exits `2`. The skill ignores `agent` and `execute` until Phase 2b.
 
 </Note>
 
@@ -71,11 +67,11 @@ binary — wait until `bolt version --json` reports the capabilities.
 Available today: `bolt run --dry-run` is a static preview that runs no plugins, hooks, handlers, or
 processes and writes no files. `bolt run --simulate` runs plugin code and is not a safe preview.
 
-Planned: Bolt's checks will guard against a cooperative agent that makes mistakes: a wrong task name, a
-plan that changed between preview and execution (bound by `plan_hash`), or a forgotten confirmation
-(`--confirmed-by-user`). `bolt version --json` will advertise a `static-dry-run` capability; today it
-lists `handler-results`, `capability-tags`, `plugin-api-2`, and `plugin-manifest`. It does not list
-`static-dry-run`.
+Agent execute refuses a plan that changed between preview and execution (`PLAN_MISMATCH`), a plan
+whose effective `ai` is `false` (`AI_FORBIDDEN`), a `confirm` plan without `--confirmed-by-user`
+(`CONFIRM_REQUIRED`), `ai.run: never` (`AGENT_EXECUTION_DISABLED`), and an unbuilt or tampered
+plugin artefact. `bolt version --json` lists `handler-results`, `capability-tags`, `plugin-api-2`,
+`plugin-manifest`, `agent`, and `execute`. It does not list `static-dry-run` or `confirm`.
 
 Bolt will not be able to stop an agent that ignores the skill. It will not be able to verify that
 `--confirmed-by-user` reflects a real yes, and it does not sandbox plugin code. The real boundary is your
@@ -89,24 +85,23 @@ agent client's command allowlist:
   to refresh `bolt.plugin.json` and must stay off the allowlist.
 - On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or
   `bolt.exe` in the repository cannot take its place.
-- Planned: once `bolt version --json` lists the `static-dry-run` capability, check for it before
-  allowlisting `bolt run --dry-run`.
+- Do not auto-allow `bolt run --execute` or `--confirmed-by-user`. The skill has no execute path
+  until Phase 2b. `agent` and `execute` in `bolt version --json` describe the CLI, not the skill.
 
 ## Planned: skills that call the CLI with `--json`
 
-Nothing in this section is implemented in the current release unless it says so. `bolt status`
-exists and is read-only (`bolt status --json` is `bolt.status/v1`). It does not take `--agent`.
-`--json` on `list`, `info`, `check`, `inspect`, and `status` prints the shared envelope below.
-`bolt version --json` stays a flat object. `run` and `ai` do not accept `--json`.
+`bolt status` is read-only (`bolt status --json` is `bolt.status/v1`). It does not take `--agent`.
+`agent_mode` follows `BOLT_AGENT`. `--json` on `list`, `info`, `check`, `inspect`, `status`, and
+`run` prints the shared envelope below. `bolt version --json` stays a flat object. `bolt ai` does
+not accept `--json`. Discover-with-`--agent` on `list` and `info` is still planned.
 
 ### The loop (Planned)
 
 <Info>
-  Step 1 works today: `bolt version --json` prints `version`, `plugin_api`, `manifest_format`, and
-  `capabilities`. `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect
-  --json`, and `bolt status --json` print the shared envelope, without `--agent`. `bolt inspect
-  --json` includes `plan_hash`. Still not implemented: `--agent`, `--json` on `run`, `--execute`,
-  `--plan`, and `--confirmed-by-user`.
+  Preview and execute work on `bolt run` for an effective `ai: true` plan. `bolt version --json`
+  lists `agent` and `execute`. `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt
+  inspect --json`, and `bolt status --json` print the shared envelope. They do not take `--agent`.
+  The shipped skill still must not execute. Phase 2b confirm-tier sign-off is not done.
 </Info>
 
 An agent following the Bolt skill works in five steps:
@@ -140,13 +135,14 @@ An agent following the Bolt skill works in five steps:
 ### JSON output (Planned)
 
 <Info>
-  `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`, and
-  `bolt status --json` print this envelope. `bolt version --json` still prints its own flat object.
-  `bolt inspect --json` and `bolt info --json` render `${{ env.NAME }}` as `«env:NAME»` and a
-  `bolt.local.yaml` value as `«local:…»`. `--json` on `run` / `ai` is not implemented.
+  `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`,
+  `bolt status --json`, and `bolt run --json` print this envelope. `bolt version --json` still
+  prints its own flat object. `bolt inspect --json`, `bolt info --json`, and a `bolt run` preview
+  render `${{ env.NAME }}` as `«env:NAME»` and a `bolt.local.yaml` value as `«local:…»`.
+  `bolt ai --json` is not implemented.
 </Info>
 
-With `--json` on `list`, `info`, `check`, and `inspect`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
+With `--json` on `list`, `info`, `check`, `inspect`, `status`, and `run`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
 envelope:
 
 ```json
@@ -165,26 +161,26 @@ envelope:
   branch on the code and exit status, not on message text.
 - Each command has a versioned schema (`bolt.list/v1`, `bolt.inspect/v1`, `bolt.run/v1`, …). Within
   `v1`, changes are additive only.
-- Planned, not shipped: values from environment variables appear as `«env:NAME»`, and values set in
-  `bolt.local.yaml` appear as `«local:NAME»`. That keeps secrets out of agent transcripts. It does not
-  hide them from an agent that can read your files.
+- Values from environment variables appear as `«env:NAME»`, and values set in `bolt.local.yaml`
+  appear as `«local:NAME»`, on `inspect`, `info`, and a `run` preview. That keeps secrets out of
+  agent transcripts. It does not hide them from an agent that can read your files.
 
-`--json` today: `version` (flat), `list`, `info`, `check`, `inspect`, `status` (envelope). Still planned: `run` and `ai`.
+`--json` today: `version` (flat), `list`, `info`, `check`, `inspect`, `status`, `run` (envelope). Still planned: `ai`.
 
-### Which plans an agent may run (Planned)
+### Which plans an agent may run
 
 <Info>
-  `bolt inspect --json` reports an effective `ai` for the plan (`false` stricter than `confirm`
-  stricter than `true`) and `ai_reasons` for the steps that set it. `bolt.local.yaml` `ai.run`
-  (`never` or `confirm`, default `confirm`) is reported by `bolt status` and included in
-  `plan_hash`. It does not gate execution. There is no `--execute` path. The `ai` flag still
-  controls what `bolt ai` writes to `.bolt/ai-context.md`.
+  `bolt inspect --json` and `bolt run --dry-run --json` report an effective `ai` (`false` stricter
+  than `confirm` stricter than `true`) and `ai_reasons`. `ai.run: never` refuses agent execute. The
+  default `confirm` does not block an `ai: true` plan. A non-builtin `ai: true` handler is capped at
+  `confirm` unless its namespace is in `ai.trust_plugins`. Shadowing a built-in namespace forces
+  `ai: false`. `--confirmed-by-user` is mechanical. Built-in confirm-tier sign-off is Phase 2b.
 </Info>
 
 Each plan gets an effective agent mode derived from its steps, and the strictest step wins. Shell
-(`run:`) steps, local actions, and handlers from non-built-in plugins always require your confirmation.
-You will be able to turn off agent execution on a machine in `bolt.local.yaml`. The exact rules and
-built-in handler defaults are still being finalized.
+(`run:`) steps and local actions are `confirm`. Read-only built-ins an agent may run as `true` include
+`ue/info`, `ue/ini_get`, `ue/ini_read_all`, `git/info`, and `svn/info`. Destructive built-ins stay
+`false`. The `ai` flag still controls what `bolt ai` writes to `.bolt/ai-context.md`.
 
 ## Related
 

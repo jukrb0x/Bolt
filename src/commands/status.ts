@@ -9,22 +9,24 @@ import {
   installJsonStdoutGuard,
   loadConfigForJson,
 } from "../json-envelope";
+import { envAgentOn } from "../agent-mode";
 import { statusPlugins } from "../plan-preview";
 
-/** Commands that accept `--json` today. Add `run` only when `bolt run --json` exists. */
+/** Commands that accept `--json`. `run` is bolt.run/v1. `ai` stays out until bolt ai --json. */
 const SCHEMAS = {
   list: "v1",
   info: "v1",
   check: "v1",
   inspect: "v1",
   status: "v1",
+  run: "v1",
 } as const;
 
 function statusData(cfg: Awaited<ReturnType<typeof loadConfigForJson>>["cfg"], configPath: string) {
   const configDir = path.dirname(configPath);
   const current = contextHashForProject(cfg, configPath, configDir);
   return {
-    agent_mode: false,
+    agent_mode: envAgentOn(),
     context: contextFileState(configDir, current),
     local: { present: configRef(configPath)?.local != null, valid: true },
     plugins: statusPlugins(cfg, configDir),

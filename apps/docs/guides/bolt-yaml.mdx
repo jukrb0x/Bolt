@@ -7,10 +7,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                | Why                                                                                                         |
-| ----------------- | ------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.                                         |
-| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai.run`         | Per-machine vars, plugin config, capability choices, and the reported agent policy. A missing file is fine. |
+| File              | Committed?    | Contains                                                | Why                                                                                                                           |
+| ----------------- | ------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.                                                           |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`             | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine. |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -119,7 +119,8 @@ Optional and gitignored. A missing file is fine. It may hold these keys:
 - `vars` shallow-override the same keys in `bolt.yaml` `vars`.
 - `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace, before validation. Objects merge key by key; arrays and scalars replace. The namespace must be declared under `plugins` in `bolt.yaml`.
 - `capabilities.<tag>` replaces that one key from `bolt.yaml`. Other tags stay. `capabilities: {}` does not clear them.
-- `ai.run` is `never` or `confirm` (default `confirm`). `bolt status` reports it as `policy.ai_run`. It does not gate `bolt run`.
+- `ai.run` is `never` or `confirm` (default `confirm`). `never` refuses agent execute. `confirm` does not block an `ai: true` plan. A human `bolt run` ignores it.
+- `ai.trust_plugins` is a list of namespaces whose non-built-in handlers may keep `ai: true`. It does not lift `ai: false`, and it does not lift a plugin that shadows a built-in namespace.
 
 Use `plugins` for per-machine paths so they stay out of the committed `bolt.yaml`:
 

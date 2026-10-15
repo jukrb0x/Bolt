@@ -493,6 +493,24 @@ export class PluginRegistry {
     const plugin = this.resolvePluginExport(exported, namespace, config, deps);
     this.register(plugin, source);
   }
+
+  /**
+   * Import one already-built artefact. Does not compile, install, or read the source tree.
+   * The caller compares the live plugin to the manifest before any hook runs.
+   */
+  async importArtefact(
+    namespace: string,
+    file: string,
+    config: unknown,
+    source: Exclude<PluginSource, "builtin">,
+  ): Promise<BoltPlugin> {
+    const href = pathToFileURL(file).href;
+    const mod = await import(href);
+    const exported = mod.default ?? mod;
+    const plugin = this.resolvePluginExport(exported, namespace, config);
+    this.register(plugin, source);
+    return plugin;
+  }
 }
 
 export async function buildRegistry(

@@ -6,7 +6,7 @@ description: "Complete reference for Bolt's configuration. Field names and defau
 Complete reference for Bolt's configuration. Field names and defaults below mirror the Zod schema in `src/config.ts`. Unreal metadata is validated by the `ue` plugin, not by the core schema.
 
 - **`bolt.yaml`** — required. Starts with `version: 1`. `project` is a name. Tasks, flows, and plugin entries live here.
-- **`bolt.local.yaml`** — optional. `vars`, per-namespace `plugins` overrides, per-key `capabilities` overrides, and `ai.run`. A missing file is fine. JSON Schema: `schema/v1/bolt.local.schema.json`.
+- **`bolt.local.yaml`** — optional. `vars`, per-namespace `plugins` overrides, per-key `capabilities` overrides, and `ai` (`run`, `trust_plugins`). A missing file is fine. JSON Schema: `schema/v1/bolt.local.schema.json`.
 
 ## bolt.yaml
 
@@ -230,7 +230,7 @@ A run emits one start notification. Multi-task runs show the top-level task list
 
 ## bolt.local.yaml (optional)
 
-A missing file is fine. Invalid YAML or any key other than `vars`, `plugins`, `capabilities`, and `ai` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error. A target override may set only some fields (for example just `config`); the merged target is validated. `capabilities` overrides the same tags in `bolt.yaml` one key at a time. `capabilities: {}` does not clear the committed map. `ai.run` is `never` or `confirm`. Omitted means `confirm`. `bolt status` reports it. It does not gate execution.
+A missing file is fine. Invalid YAML or any key other than `vars`, `plugins`, `capabilities`, and `ai` is an error. Local vars shallow-override the same keys in `bolt.yaml`. `plugins.<namespace>` is deep-merged over the `config` of the `bolt.yaml` plugin entry with that namespace before validation (objects merge, arrays and scalars replace). A namespace that `bolt.yaml` does not declare is an error. A target override may set only some fields (for example just `config`); the merged target is validated. `capabilities` overrides the same tags in `bolt.yaml` one key at a time. `capabilities: {}` does not clear the committed map. `ai.run` is `never` or `confirm`. Omitted means `confirm`. `never` refuses agent execute (`AGENT_EXECUTION_DISABLED`). `confirm` does not block an `ai: true` plan. `ai.trust_plugins` lists namespaces whose handlers may keep `ai: true`. It does not lift `ai: false` or a plugin that shadows a built-in namespace. A name that is neither a built-in nor a `bolt.yaml` `plugins` entry is a `bolt check` warning.
 
 ```yaml
 vars:
@@ -244,12 +244,13 @@ plugins:
     use_tortoise: true
 ```
 
-| Field          | Type                       | Required | Description                                         |
-| -------------- | -------------------------- | -------- | --------------------------------------------------- |
-| `vars`         | map (string→string)        | no       | Per-machine variable overrides                      |
-| `plugins`      | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace |
-| `capabilities` | map (tag→handler ref)      | no       | Per-key override of `bolt.yaml` `capabilities`      |
-| `ai.run`       | `never` \| `confirm`       | no       | Reported by `bolt status` as `policy.ai_run`        |
+| Field              | Type                       | Required | Description                                                                           |
+| ------------------ | -------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| `vars`             | map (string→string)        | no       | Per-machine variable overrides                                                        |
+| `plugins`          | map (namespace→config map) | no       | Per-machine plugin config, deep-merged by namespace                                   |
+| `capabilities`     | map (tag→handler ref)      | no       | Per-key override of `bolt.yaml` `capabilities`                                        |
+| `ai.run`           | `never` \| `confirm`       | no       | `never` refuses agent execute. `confirm` is the default and does not block `ai: true` |
+| `ai.trust_plugins` | string array               | no       | Namespaces that may keep `ai: true`. Does not lift `ai: false` or shadowing           |
 
 v2.0 keys (`engine_path`, `project_path`, `uproject`, `use_tortoise`) are rejected. Run `bolt migrate` to convert them.
 

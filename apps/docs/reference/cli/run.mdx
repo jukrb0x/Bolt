@@ -13,9 +13,14 @@ Run tasks (in typed order) or a flow defined in bolt.yaml
 bolt run [options]
 ```
 
-| Argument     | Type    | Alias | Required | Default | Description                                                                                          |
-| ------------ | ------- | ----- | -------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `--dry-run`  | boolean |       |          | `false` | Show what would run without running anything: no commands, plugins, hooks, or file writes            |
-| `--simulate` | boolean |       |          | `false` | Load plugins and run hooks and handlers in dry-run mode; writes a log file and may have side effects |
+| Argument              | Type    | Alias | Required | Default | Description                                                                                          |
+| --------------------- | ------- | ----- | -------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `--dry-run`           | boolean |       |          | `false` | Show what would run without running anything: no commands, plugins, hooks, or file writes            |
+| `--simulate`          | boolean |       |          | `false` | Load plugins and run hooks and handlers in dry-run mode; writes a log file and may have side effects |
+| `--json`              | boolean |       |          | `false` | Print one bolt.run/v1 JSON document on stdout                                                        |
+| `--agent`             | boolean |       |          | `false` | Agent mode: JSON preview unless --execute is set. Also BOLT_AGENT=1                                  |
+| `--execute`           | boolean |       |          | `false` | Execute a previewed plan. Requires --plan=&#60;plan_hash&#62;. Implies agent mode                    |
+| `--plan`              | string  |       |          |         | plan_hash from a previous --dry-run --json preview                                                   |
+| `--confirmed-by-user` | boolean |       |          | `false` | User approved a confirm-mode plan. Implies agent mode                                                |
 
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

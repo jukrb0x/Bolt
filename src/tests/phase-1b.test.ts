@@ -207,8 +207,8 @@ test("read-only commands do not import an unbuilt plugin and previews fail close
       check: "v1",
       inspect: "v1",
       status: "v1",
+      run: "v1",
     });
-    expect(statusData.schemas).not.toHaveProperty("run");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -243,8 +243,8 @@ test("human bolt run and --simulate refresh the manifest; dry-run does not", asy
       ai: boolean | string;
       tasks: Array<{ nodes: Array<{ ai?: boolean | string }> }>;
     };
-    expect(data.ai).toBe(true);
-    expect(data.tasks[0].nodes[0].ai).toBe(true);
+    expect(data.ai).toBe("confirm");
+    expect(data.tasks[0].nodes[0].ai).toBe("confirm");
 
     rmSync(path.join(dir, ".bolt", ".cache"), { recursive: true, force: true });
     const simulated = await bolt(["run", "go", "--simulate"], dir, env);

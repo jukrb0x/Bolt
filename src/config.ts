@@ -108,10 +108,11 @@ const LocalConfigSchema = z
     vars: z.record(z.string()).optional(),
     plugins: z.record(z.record(z.unknown())).optional(),
     capabilities: CapabilitySelectionSchema,
-    /** Machine policy reported by `bolt status`. Agent execute is not implemented. */
+    /** Machine policy. `run: never` refuses agent execute. `trust_plugins` lifts the confirm cap. */
     ai: z
       .object({
         run: z.enum(["never", "confirm"]).optional(),
+        trust_plugins: z.array(z.string().min(1)).optional(),
       })
       .strict()
       .optional(),
@@ -183,6 +184,11 @@ export interface BoltConfig {
   localPluginPaths?: string[];
   /** bolt.local.yaml `ai.run`. Defaults to `confirm` when the block is absent. */
   aiRun?: "never" | "confirm";
+  /**
+   * bolt.local.yaml `ai.trust_plugins`. Lifts the non-builtin confirm cap.
+   * Does not lift `ai: false` or a plugin that shadows a built-in namespace.
+   */
+  trustPlugins?: string[];
   /**
    * Directory containing the bolt.yaml this config was loaded from.
    * Set by loadConfig. Not a bolt.yaml field. Relative plugin paths resolve against it.
@@ -379,6 +385,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     localVarKeys: Object.keys(local.vars ?? {}).sort(),
     localPluginPaths: collectLocalPluginPaths(local.plugins as Record<string, unknown> | undefined),
     aiRun: local.ai?.run ?? "confirm",
+    trustPlugins: local.ai?.trust_plugins ?? [],
     configDir,
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
@@ -466,6 +473,7 @@ export async function checkConfig(
   let localParsed: unknown = undefined;
   let localOverrides: Record<string, Record<string, unknown>> | undefined;
   let localCapabilities: Record<string, string> | undefined;
+  let trustPlugins: string[] = [];
   if (existsSync(localPath)) {
     try {
       localParsed = rt.parseYaml(readFileSync(localPath, "utf8")) ?? {};
@@ -480,6 +488,7 @@ export async function checkConfig(
       } else {
         localOverrides = localResult.data.plugins;
         localCapabilities = localResult.data.capabilities;
+        trustPlugins = localResult.data.ai?.trust_plugins ?? [];
       }
     } catch (e: any) {
       errors.push({ path: LOCAL_FILENAME, message: `YAML parse error: ${e.message}` });
@@ -524,6 +533,21 @@ export async function checkConfig(
       { requested: capabilityUsesInTasks(result.data.tasks) },
     );
     warnings = report.warnings;
+    const known = new Set([
+      "ue",
+      "fs",
+      "json",
+      "git",
+      "svn",
+      ...result.data.plugins.map((entry) => entry.namespace),
+    ]);
+    for (const namespace of trustPlugins) {
+      if (!known.has(namespace)) {
+        warnings.push(
+          `ai.trust_plugins names "${namespace}", which is not a built-in or a plugins entry in bolt.yaml.`,
+        );
+      }
+    }
     for (const issue of report.errors) {
       errors.push({
         path: issue.path,

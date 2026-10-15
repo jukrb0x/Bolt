@@ -68,19 +68,21 @@ runs. There are two error shapes:
   May include `Did you mean …?` (suggestions use only that command's own flags). A
   second indented line lists `Flags: …` (or `This command takes no flags`) and hints
   `Run bolt <cmd> --help for details.`
-- **Reserved, not implemented** (`--agent`, `--execute`, `--plan`,
-  `--confirmed-by-user`, and `--json` when the command does not declare it):
+- **Reserved, not implemented** (`--json`, `--agent`, `--execute`, `--plan`, and
+  `--confirmed-by-user` when that command does not declare them):
   `--<name> is reserved by bolt and not supported yet. Remove it from the command.`
   No `Flags:` list and no did-you-mean.
 
 Declared on purpose and accepted: `bolt version --json` (flat version object),
 `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`,
-and `bolt status --json` (one shared JSON envelope on stdout; logs go to stderr),
-`bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`. On `bolt inspect`,
-undeclared `--dry-run` / `--simulate` still say `Unknown flag` with the
-inspect-is-already-a-preview note. `bolt run --json` and `bolt ai --json` are still
-reserved. `--agent`, `--execute`, `--plan`, and `--confirmed-by-user` are reserved
-on every command.
+`bolt status --json`, and `bolt run --json` (one shared JSON envelope on stdout; logs
+go to stderr), `bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`, and on
+`bolt run` only: `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. On
+`bolt inspect`, undeclared `--dry-run` / `--simulate` still say `Unknown flag` with the
+inspect-is-already-a-preview note. `bolt ai --json` is still reserved. `--agent` on any
+command other than `bolt run` is still reserved. `BOLT_AGENT=1` turns on agent mode for
+`bolt run` without a flag; `bolt status` reports that as `agent_mode` and does not
+accept `--agent`.
 
 Only `bolt run` and `bolt inspect` accept `--key=value` task params and a `--`
 passthrough. Other commands reject arguments after `--` (with a "Bolt flags go before
@@ -88,12 +90,15 @@ passthrough. Other commands reject arguments after `--` (with a "Bolt flags go b
 
 ## Exit Codes
 
-| Code | Meaning                                                                    |
-| ---- | -------------------------------------------------------------------------- |
-| 0    | Success                                                                    |
-| 1    | Task failure while running                                                 |
-| 2    | Usage error (unknown flag/command/task, reserved flag)                     |
-| 3    | Config error (`bolt.yaml` missing/invalid, or `--dry-run` config problems) |
+| Code | Meaning                                                                                                                       |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                                                       |
+| 1    | Task failure while running                                                                                                    |
+| 2    | Usage error (unknown flag/command/task, reserved flag)                                                                        |
+| 3    | Config error (`bolt.yaml` missing/invalid, or `--dry-run` config problems)                                                    |
+| 4    | Denied on agent execute (`PLUGIN_NOT_BUILT`, `PLAN_MISMATCH`, `AGENT_EXECUTION_DISABLED`, `AI_FORBIDDEN`, `CONFIRM_REQUIRED`) |
+| 70   | Internal error (uncaught exception or rejection)                                                                              |
+| 130  | Interrupted (`SIGINT`, or `SIGBREAK` on Windows)                                                                              |
 
 ## Configuration Discovery
 

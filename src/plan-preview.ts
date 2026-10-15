@@ -12,12 +12,14 @@ import {
   type InterpSegment,
 } from "./interpolate";
 import {
+  artefactFile,
   canonicalJson,
   configRecord,
   discoverPlugins,
   lookupPluginManifest,
   sha256,
   userHome,
+  type CacheManifest,
   type LocatedPlugin,
 } from "./plugin-cache";
 import { builtinPlugins } from "./plugins";
@@ -33,7 +35,7 @@ function rank(ai: AiMode): number {
 export interface AiReason {
   node: string;
   ai: AiMode;
-  code?: "PLUGIN_NOT_BUILT";
+  code?: "PLUGIN_NOT_BUILT" | "PLUGIN_SHADOWS_BUILTIN" | "ARTEFACT_TAMPERED";
   message: string;
 }
 
@@ -94,10 +96,25 @@ function pluginConfig(cfg: BoltConfig, namespace: string): unknown {
 
 interface HandlerHit {
   ai: AiMode;
-  code?: "PLUGIN_NOT_BUILT";
+  code?: "PLUGIN_NOT_BUILT" | "PLUGIN_SHADOWS_BUILTIN";
   plugin_source?: Place["source"];
   artefact_hash?: string | null;
   config_hash?: string | null;
+  /** Non-builtin namespace that replaces a built-in of the same name. */
+  shadow?: string;
+  /** Declared `true` lowered to `confirm` because the namespace is not trusted. */
+  capped?: boolean;
+}
+
+export interface PreviewParticipant {
+  namespace: string;
+  source: "builtin" | "user" | "project" | "path";
+  built: boolean;
+  artefactHash: string | null;
+  configHash: string | null;
+  artefactPath: string | null;
+  manifest?: CacheManifest;
+  config: unknown;
 }
 
 function handlerHit(
@@ -124,6 +141,7 @@ function handlerHit(
     namespace,
     pluginConfig(cfg, namespace),
   );
+  const shadow = builtins[namespace] ? namespace : undefined;
   if (!lookup.built || !lookup.manifest) {
     return {
       ai: false,
@@ -131,19 +149,24 @@ function handlerHit(
       plugin_source: place.source,
       artefact_hash: null,
       config_hash: null,
+      shadow,
     };
   }
   const entry = lookup.manifest.handlers[handler];
-  if (!entry) {
+  if (!entry || shadow) {
     return {
       ai: false,
+      ...(shadow ? { code: "PLUGIN_SHADOWS_BUILTIN" as const, shadow } : {}),
       plugin_source: place.source,
       artefact_hash: lookup.manifest.artefact_hash,
       config_hash: lookup.manifest.config_hash,
     };
   }
+  const trust = new Set(cfg.trustPlugins ?? []);
+  const capped = entry.ai === true && !trust.has(namespace);
   return {
-    ai: entry.ai,
+    ai: capped ? "confirm" : entry.ai,
+    capped,
     plugin_source: place.source,
     artefact_hash: lookup.manifest.artefact_hash,
     config_hash: lookup.manifest.config_hash,
@@ -156,6 +179,7 @@ interface RatedNode {
   display: unknown;
   hashed: unknown;
   plugins: string[];
+  shadows: string[];
 }
 
 function rateNodes(
@@ -184,6 +208,7 @@ function rateNodes(
         display: { kind: "call", name: node.name, nodes: inner.map((item) => item.display) },
         hashed: { kind: "call", name: node.name, nodes: inner.map((item) => item.hashed) },
         plugins: inner.flatMap((item) => item.plugins),
+        shadows: inner.flatMap((item) => item.shadows),
       });
       continue;
     }
@@ -207,6 +232,7 @@ function rateNodes(
           continueOnError: node.continueOnError,
         },
         plugins: [],
+        shadows: [],
       });
       continue;
     }
@@ -221,6 +247,7 @@ function rateNodes(
         display: { kind: "uses", ref: node.ref, params, ai: "confirm" },
         hashed: { kind: "uses", ref: node.ref, params: hashedParams(node), ai: "confirm" },
         plugins: [],
+        shadows: [],
       });
       continue;
     }
@@ -232,13 +259,19 @@ function rateNodes(
     }
     const resolved = handlerHit(cfg, ref, discovered, builtins);
     const where = `${trail} > ${node.ref}`;
+    const namespaceForMsg = ref.slice(0, Math.max(ref.indexOf("/"), 0));
     const reason: AiReason = {
       node: where,
       ai: resolved.ai,
       ...(resolved.code ? { code: resolved.code } : {}),
-      message: resolved.code
-        ? `plugin "${ref.slice(0, ref.indexOf("/"))}" is not built for the current source and config`
-        : `${ref} ai ${String(resolved.ai)}`,
+      message:
+        resolved.code === "PLUGIN_NOT_BUILT"
+          ? `plugin "${namespaceForMsg}" is not built for the current source and config`
+          : resolved.code === "PLUGIN_SHADOWS_BUILTIN"
+            ? `plugin "${namespaceForMsg}" shadows a built-in namespace`
+            : resolved.capped
+              ? `${ref} ai confirm (non-builtin cap)`
+              : `${ref} ai ${String(resolved.ai)}`,
     };
     const slash = ref.indexOf("/");
     const namespace = slash === -1 ? ref : ref.slice(0, slash);
@@ -255,6 +288,8 @@ function rateNodes(
       hashed: {
         kind: "uses",
         ref: node.ref,
+        // Capability steps keep the label in `ref` and bind the handler execute will call.
+        ...(ref !== node.ref ? { handler: ref } : {}),
         params: hashedParams(node),
         ai: resolved.ai,
         ...(resolved.plugin_source ? { plugin_source: resolved.plugin_source } : {}),
@@ -265,6 +300,7 @@ function rateNodes(
           : namespace && resolved.plugin_source === "builtin"
             ? [`builtin:${namespace}`]
             : [],
+      shadows: resolved.shadow ? [resolved.shadow] : [],
     });
   }
   return rated;
@@ -314,6 +350,7 @@ export interface InspectPreview {
     nodes: unknown[];
   }>;
   warnings: JsonIssue[];
+  participants: PreviewParticipant[];
 }
 
 export function planHashFor(payload: unknown): string {
@@ -382,9 +419,15 @@ export function previewPlan(opts: {
   );
   participants.sort((a, b) => (a.namespace < b.namespace ? -1 : a.namespace > b.namespace ? 1 : 0));
 
+  const loaded: PreviewParticipant[] = [...pluginIds].map((id) =>
+    participantFromId(id, opts.cfg, discovered),
+  );
+  loaded.sort((a, b) => (a.namespace < b.namespace ? -1 : a.namespace > b.namespace ? 1 : 0));
+
   const hashedTasks = tasks.map((item) => ({
     name: item.task.name,
     ai: item.ai,
+    continueOnFailure: item.task.continueOnFailure,
     nodes: item.rated.map((node) => node.hashed),
   }));
   const payload = {
@@ -403,10 +446,17 @@ export function previewPlan(opts: {
   };
 
   const unbuilt = new Set<string>();
+  const shadows = new Set<string>();
   for (const reason of tasks.flatMap((item) => item.rated.flatMap((node) => node.reasons))) {
-    if (reason.code !== "PLUGIN_NOT_BUILT") continue;
     const match = reason.message.match(/^plugin "([^"]+)"/);
-    if (match) unbuilt.add(match[1]);
+    if (!match) continue;
+    if (reason.code === "PLUGIN_NOT_BUILT") unbuilt.add(match[1]);
+    if (reason.code === "PLUGIN_SHADOWS_BUILTIN") shadows.add(match[1]);
+  }
+  for (const task of tasks) {
+    for (const node of task.rated) {
+      for (const namespace of node.shadows) shadows.add(namespace);
+    }
   }
 
   return {
@@ -421,15 +471,70 @@ export function previewPlan(opts: {
       continueOnFailure: item.task.continueOnFailure,
       nodes: item.rated.map((node) => node.display),
     })),
-    warnings: [...unbuilt]
-      .sort()
-      .map((namespace) =>
-        issue(
-          "PLUGIN_NOT_BUILT",
-          `Plugin "${namespace}" is not built for the current source and config.`,
-          `bolt plugin build ${namespace}`,
+    warnings: [
+      ...[...unbuilt]
+        .sort()
+        .map((namespace) =>
+          issue(
+            "PLUGIN_NOT_BUILT",
+            `Plugin "${namespace}" is not built for the current source and config.`,
+            `bolt plugin build ${namespace}`,
+          ),
         ),
-      ),
+      ...[...shadows]
+        .sort()
+        .map((namespace) =>
+          issue(
+            "PLUGIN_SHADOWS_BUILTIN",
+            `Plugin "${namespace}" shadows a built-in namespace. Its handlers count as ai:false in agent mode.`,
+          ),
+        ),
+    ],
+    participants: loaded,
+  };
+}
+
+function participantFromId(
+  id: string,
+  cfg: BoltConfig,
+  discovered: Map<string, LocatedPlugin>,
+): PreviewParticipant {
+  if (id.startsWith("builtin:")) {
+    const namespace = id.slice("builtin:".length);
+    return {
+      namespace,
+      source: "builtin",
+      built: true,
+      artefactHash: null,
+      configHash: null,
+      artefactPath: null,
+      config: pluginConfig(cfg, namespace),
+    };
+  }
+  const config = pluginConfig(cfg, id);
+  const located = discovered.get(id);
+  if (!located) {
+    return {
+      namespace: id,
+      source: "project",
+      built: false,
+      artefactHash: null,
+      configHash: null,
+      artefactPath: null,
+      config,
+    };
+  }
+  const lookup = lookupPluginManifest(located.root, located.cacheRoot, id, config);
+  const artefactHash = lookup.manifest?.artefact_hash ?? null;
+  return {
+    namespace: id,
+    source: located.source,
+    built: Boolean(lookup.built && lookup.manifest),
+    artefactHash,
+    configHash: lookup.manifest?.config_hash ?? null,
+    artefactPath: artefactHash ? artefactFile(located.cacheRoot, id, artefactHash) : null,
+    manifest: lookup.manifest,
+    config,
   };
 }
 
