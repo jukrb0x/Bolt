@@ -54,13 +54,13 @@ test("core config validation does not special-case ue or svn metadata", () => {
   expect(src).not.toMatch(/from ["']\.\/plugins\/svn["']/);
 });
 
-test("bolt init, ai-context, and the runner do not call the reserved hooks", () => {
+test("ai-context calls aiContext; init and the runner leave the other hooks unused", () => {
   expect(readFileSync(path.join(REPO_ROOT, "src/commands/init.ts"), "utf8")).not.toMatch(
     /initDetect/,
   );
-  expect(readFileSync(path.join(REPO_ROOT, "src/ai-context.ts"), "utf8")).not.toMatch(
-    /\.aiContext\b/,
-  );
+  const aiContext = readFileSync(path.join(REPO_ROOT, "src/ai-context.ts"), "utf8");
+  expect(aiContext).toMatch(/\.aiContext\b/);
+  expect(aiContext).not.toMatch(/\.aiPathRoots\b|initDetect/);
   expect(readFileSync(path.join(REPO_ROOT, "src/runner.ts"), "utf8")).not.toMatch(
     /\.aiPathRoots\b/,
   );

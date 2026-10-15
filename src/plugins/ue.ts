@@ -1,4 +1,6 @@
+import { maskedTree } from "../interpolate";
 import { PluginBase, handler } from "../plugin";
+import type { BoltConfig } from "../config";
 import type { BoltPluginContext, ConfigIssue, HandlerResult, ValidateConfigInput } from "../plugin";
 import path from "path";
 import { existsSync, readdirSync, readFileSync, statSync, renameSync, mkdirSync } from "fs";
@@ -304,6 +306,37 @@ export class UEPlugin extends PluginBase.withDescriptor({
         hint: "Add plugins: [{ namespace: ue, config: { engine, project, uproject } }]",
       },
     ];
+  }
+
+  aiContext(input: { cfg: BoltConfig; configDir: string }): {
+    markdown?: string[];
+    info?: Record<string, unknown>;
+  } {
+    const raw = input.cfg.plugins?.find((entry) => entry.namespace === "ue")?.config;
+    if (raw === undefined) return {};
+    const parsed = ueConfigSchema.safeParse(raw);
+    if (!parsed.success) return {};
+    const targets = parsed.data.targets;
+    const markdown: string[] = [];
+    if (Object.keys(targets).length > 0) {
+      markdown.push("## Targets", "");
+      for (const [name, target] of Object.entries(targets)) {
+        const detail = target.name
+          ? `${target.kind} · ${target.name} · ${target.config}`
+          : `${target.kind} · ${target.config}`;
+        markdown.push(`- **${name}**: ${detail}`);
+      }
+      markdown.push("");
+    }
+    markdown.push(
+      "- `--config=debuggame` (aliases: `dbggame`, `DebugGame`) — Unreal DebugGame",
+      "",
+    );
+    if (Object.keys(targets).length === 0) return { markdown };
+    return {
+      markdown,
+      info: { targets: maskedTree(targets, input.cfg, "plugins.ue.targets") },
+    };
   }
 
   @handler({

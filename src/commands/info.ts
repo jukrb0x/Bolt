@@ -1,5 +1,7 @@
 import { defineCommand } from "citty";
+import path from "path";
 import pc from "picocolors";
+import { aiContextPlugins, collectAiContext } from "../ai-context";
 import { loadProjectConfigOrExit } from "../project-config";
 import {
   JSON_SCHEMA,
@@ -9,7 +11,7 @@ import {
   loadConfigForJson,
 } from "../json-envelope";
 import { maskedTree, maskedVars } from "../plan-preview";
-import { resolveUeTargets } from "../plugins/ue";
+import { PluginRegistry } from "../plugin-registry";
 import { builtinPlugins } from "../plugins";
 
 function row(label: string, value: string) {
@@ -30,29 +32,40 @@ export default defineCommand({
       installJsonStdoutGuard();
       const { configPath, cfg } = await loadConfigForJson(JSON_SCHEMA.info);
       const builtins = new Set(Object.keys(builtinPlugins));
+      const registry = new PluginRegistry();
+      for (const plugin of Object.values(builtinPlugins)) registry.register(plugin);
+      const data = {
+        version: cfg.version,
+        project: { name: cfg.project.name },
+        vars: maskedVars(cfg),
+        plugins: (cfg.plugins ?? []).map((plugin) => ({
+          namespace: plugin.namespace,
+          source: plugin.path ? "path" : builtins.has(plugin.namespace) ? "builtin" : "project",
+          ...(plugin.path ? { path: plugin.path } : {}),
+          ...(plugin.config
+            ? { config: maskedTree(plugin.config, cfg, `plugins.${plugin.namespace}`) }
+            : {}),
+        })),
+        tasks: Object.keys(cfg.tasks),
+        flows: Object.entries(cfg.flows).map(([name, flow]) => ({
+          name,
+          steps: flow.steps,
+        })),
+      };
+      // info does not import path plugins. Built-ins are what it can call;
+      // aiContextPlugins appends a path plugin when that registry already has it.
+      Object.assign(
+        data,
+        collectAiContext(aiContextPlugins(cfg, registry), {
+          cfg,
+          configDir: path.dirname(configPath),
+        }).info,
+      );
       emitJsonAndExit({
         schema: JSON_SCHEMA.info,
         exitCode: 0,
         config: configRef(configPath),
-        data: {
-          version: cfg.version,
-          project: { name: cfg.project.name },
-          vars: maskedVars(cfg),
-          targets: maskedTree(resolveUeTargets(cfg.plugins), cfg, "plugins.ue.targets"),
-          plugins: (cfg.plugins ?? []).map((plugin) => ({
-            namespace: plugin.namespace,
-            source: plugin.path ? "path" : builtins.has(plugin.namespace) ? "builtin" : "project",
-            ...(plugin.path ? { path: plugin.path } : {}),
-            ...(plugin.config
-              ? { config: maskedTree(plugin.config, cfg, `plugins.${plugin.namespace}`) }
-              : {}),
-          })),
-          tasks: Object.keys(cfg.tasks),
-          flows: Object.entries(cfg.flows).map(([name, flow]) => ({
-            name,
-            steps: flow.steps,
-          })),
-        },
+        data,
       });
     }
 

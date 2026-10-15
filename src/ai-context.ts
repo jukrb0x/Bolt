@@ -6,7 +6,6 @@ import type { BoltConfig } from "./config";
 import { getParamMap, type BoltPlugin } from "./plugin";
 import type { PluginRegistry } from "./plugin-registry";
 import { builtinPlugins } from "./plugins";
-import { resolveUeTargets } from "./plugins/ue";
 import { resolveRunPlan, type PlanNode } from "./run-plan";
 import { buildStaticAiRegistry } from "./static-plugin-manifest";
 
@@ -63,6 +62,67 @@ function describeInvalidPlan(messages: string[]): string {
   return messages.join("; ");
 }
 
+export interface AiContextInput {
+  cfg: BoltConfig;
+  configDir: string;
+}
+
+export interface AiContextParts {
+  markdown: string[];
+  info: Record<string, unknown>;
+}
+
+function isInfoRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Call `aiContext` when the method exists. Order is the caller's.
+ * Missing `info`, or an empty object, does not write keys. Later `info` objects
+ * overwrite the same key (`Object.assign`).
+ */
+export function collectAiContext(
+  plugins: readonly BoltPlugin[],
+  input: AiContextInput,
+): AiContextParts {
+  const markdown: string[] = [];
+  const info: Record<string, unknown> = {};
+  for (const plugin of plugins) {
+    if (typeof plugin.aiContext !== "function") continue;
+    const result = plugin.aiContext(input);
+    if (!isInfoRecord(result)) continue;
+    if (Array.isArray(result.markdown)) {
+      for (const line of result.markdown) {
+        if (typeof line === "string") markdown.push(line);
+      }
+    }
+    if (!isInfoRecord(result.info) || Object.keys(result.info).length === 0) continue;
+    Object.assign(info, result.info);
+  }
+  return { markdown, info };
+}
+
+/**
+ * Built-in plugins in list order, then `plugins[]` entries that name a path and
+ * resolved to some other instance. A path plugin that shadows a built-in is
+ * called after that built-in, so its `info` keys win.
+ */
+export function aiContextPlugins(cfg: BoltConfig, registry: PluginRegistry): BoltPlugin[] {
+  const builtins = Object.values(builtinPlugins);
+  const builtinIds = new Set<BoltPlugin>(builtins);
+  const externals: BoltPlugin[] = [];
+  const seen = new Set<string>();
+  for (const entry of cfg.plugins ?? []) {
+    if (!entry.path) continue;
+    if (seen.has(entry.namespace)) continue;
+    const plugin = registry.get(entry.namespace);
+    if (!plugin || builtinIds.has(plugin)) continue;
+    seen.add(entry.namespace);
+    externals.push(plugin);
+  }
+  return [...builtins, ...externals];
+}
+
 /** Describe a task from the same effective plan used for execution and inspection. */
 function describeTask(
   name: string,
@@ -95,7 +155,7 @@ export function generateAiContext(
   lines.push(``);
   lines.push(`# Bolt — ${cfg.project.name}`);
   lines.push(``);
-  lines.push(`Bolt is a CLI tool for Unreal Engine workflow automation.`);
+  lines.push(`Bolt is a CLI tool for workflow automation.`);
   lines.push(`Run commands from the directory containing bolt.yaml (or any child directory).`);
   lines.push(``);
   lines.push(`Model: a **task** is a named list of steps; a **flow** is an ordered set of`);
@@ -157,18 +217,12 @@ export function generateAiContext(
   }
 
   lines.push(...renderPlugins(catalog));
-
-  // --- Targets (ue plugin; config is already canonical) ---
-  const targets = resolveUeTargets(cfg.plugins);
-  if (Object.keys(targets).length > 0) {
-    lines.push(`## Targets`);
-    lines.push(``);
-    for (const [name, t] of Object.entries(targets)) {
-      const detail = t.name ? `${t.kind} · ${t.name} · ${t.config}` : `${t.kind} · ${t.config}`;
-      lines.push(`- **${name}**: ${detail}`);
-    }
-    lines.push(``);
-  }
+  lines.push(
+    ...collectAiContext(aiContextPlugins(cfg, registry), {
+      cfg,
+      configDir: path.dirname(configPath),
+    }).markdown,
+  );
 
   // --- Flags ---
   lines.push(`## Flags`);
@@ -179,7 +233,6 @@ export function generateAiContext(
   lines.push(
     `- \`--key=value\` — pass parameters to the run (e.g. \`--target=client --config=debug\`)`,
   );
-  lines.push(`- \`--config=debuggame\` (aliases: \`dbggame\`, \`DebugGame\`) — Unreal DebugGame`);
   lines.push(``);
 
   lines.push(`## Notifications`);

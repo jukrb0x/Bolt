@@ -1,3 +1,5 @@
+import type { BoltConfig } from "./config";
+
 type Context = Record<string, Record<string, string>>;
 
 /** One piece of an interpolated string, with where the value came from. */
@@ -139,6 +141,39 @@ export function maskLocalTree(value: unknown, localPaths: ReadonlySet<string>, a
     return out;
   }
   return value;
+}
+
+function maskTreeContext(cfg: BoltConfig): InterpContext {
+  return {
+    project: cfg.project as unknown as Record<string, string>,
+    vars: cfg.vars,
+    env: process.env as Record<string, string>,
+    params: {},
+    localVars: new Set(cfg.localVarKeys ?? []),
+  };
+}
+
+/** Mask local-origin leaves and env interpolations. Object keys are sorted. */
+export function maskedTree(value: unknown, cfg: BoltConfig, at: string): unknown {
+  const local = new Set(cfg.localPluginPaths ?? []);
+  const walk = (current: unknown, pathName: string): unknown => {
+    if (pathName && local.has(pathName)) return `«local:${pathName}»`;
+    if (typeof current === "string" && current.includes("${{")) {
+      return maskSegments(interpolateSegments(current, maskTreeContext(cfg)));
+    }
+    if (Array.isArray(current))
+      return current.map((item, index) => walk(item, `${pathName}.${index}`));
+    if (current && typeof current === "object") {
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(current as Record<string, unknown>).sort()) {
+        const next = pathName ? `${pathName}.${key}` : key;
+        out[key] = walk((current as Record<string, unknown>)[key], next);
+      }
+      return out;
+    }
+    return current;
+  };
+  return walk(value, at);
 }
 
 /** Same walk as maskLocalTree, but local leaves become sha256 of their canonical JSON. */

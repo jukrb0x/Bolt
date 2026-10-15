@@ -209,7 +209,6 @@ describe("CLI --json", () => {
         version: 1,
         project: { name: "Demo" },
         vars: {},
-        targets: {},
         plugins: [],
         tasks: ["hello"],
         flows: [{ name: "all", steps: ["hello"] }],

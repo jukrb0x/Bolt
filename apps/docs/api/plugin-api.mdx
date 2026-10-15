@@ -224,7 +224,7 @@ initDetect?(dir: string): { kind: string; summary: string } | null;
 
 A task `uses:` value of `namespace/handler` whose namespace is not a built-in and not a `plugins[]` entry is `CONFIG_PLUGIN_REQUIRED` (exit 3). The hint is `Add a plugins entry for "<namespace>" or install the plugin.` A built-in that is registered but missing from `bolt.yaml` writes its own hint. A return value that is not `ConfigIssue[]`, or a hook that throws, is `CONFIG_PLUGIN_HOOK`.
 
-`aiContext`, `aiPathRoots`, and `initDetect` are typed on the plugin. `bolt init` does not call `initDetect`. `aiPathRoots` does not replace the path checks bolt already applies to handlers such as `git/info`.
+`bolt ai` appends `aiContext().markdown` after the plugin catalog. `bolt info --json` shallow-merges `aiContext().info` into `data`. Built-ins run first, then `plugins[]` path plugins. A missing or empty `info` is skipped; the same key later overwrites. `aiPathRoots` and `initDetect` are typed on the plugin. `bolt init` does not call `initDetect`. `aiPathRoots` does not replace the path checks bolt already applies to handlers such as `git/info`.
 
 ## Brand
 

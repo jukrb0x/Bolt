@@ -15,7 +15,7 @@ Plugin API v2 adds handler results that bolt acts on, `ctx.emit` events, capabil
 | A returned `fail`, `warn`, `data`, or diagnostics bolt acts on            | v2                             |
 | Config hooks (`validateConfig`, `aiContext`, `aiPathRoots`, `initDetect`) | v2                             |
 
-Config hooks need `apiVersion: 2`. Bolt calls a hook when the method exists. `bolt check` warns `Set apiVersion = 2 on plugin <namespace>` when a hook is present and `apiVersion` is not 2. `validateConfig` runs during config load. `aiContext`, `aiPathRoots`, and `initDetect` are on the type surface; `bolt init` does not call `initDetect`. See [Config hooks](/api/plugin-api#config-hooks-plugin-api-v2).
+Config hooks need `apiVersion: 2`. Bolt calls a hook when the method exists. `bolt check` warns `Set apiVersion = 2 on plugin <namespace>` when a hook is present and `apiVersion` is not 2. `validateConfig` runs during config load. `aiContext` runs for `bolt ai` and `bolt info --json`. `aiPathRoots` and `initDetect` are on the type surface; `bolt init` does not call `initDetect`. See [Config hooks](/api/plugin-api#config-hooks-plugin-api-v2).
 
 ## 2. Minimum bolt
 

@@ -17,6 +17,8 @@ Config failures from this path exit 3:
 
 `aiContext`, `aiPathRoots`, and `initDetect` are part of the plugin API v2 types. `bolt init` does not call `initDetect`. Hooks require `apiVersion` 2. Bolt still calls a hook when the method exists. `bolt check` warns `Set apiVersion = 2 on plugin <namespace>` when a hook is present without plugin API v2.
 
+`bolt ai` appends each plugin's `aiContext().markdown` after the plugin catalog. `bolt info --json` shallow-merges each plugin's `aiContext().info` into `data` (`Object.assign`). A missing or empty `info` is skipped. The same key later in the list replaces the earlier value. Order is built-ins, then `plugins[]` path plugins. `targets` is present only when a plugin contributes it. The core AI tagline does not name an engine. `bolt info` still does not import an unbuilt path plugin.
+
 The `ue` and `svn` built-ins declare plugin API v2.
 
 ### Confirm gate (BOLT-M1 Phase 2b)

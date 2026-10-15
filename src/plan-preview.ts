@@ -26,6 +26,8 @@ import { builtinPlugins } from "./plugins";
 import { readProvenance, type PlanNode, type RunPlan } from "./run-plan";
 import { VERSION } from "./version";
 
+export { maskedTree } from "./interpolate";
+
 function rank(ai: AiMode): number {
   if (ai === false) return 2;
   if (ai === "confirm") return 1;
@@ -575,29 +577,6 @@ function envCtx(cfg: BoltConfig) {
     params: {},
     localVars: new Set(cfg.localVarKeys ?? []),
   };
-}
-
-/** Mask local-origin leaves and env interpolations in a plugin config or targets object. */
-export function maskedTree(value: unknown, cfg: BoltConfig, at: string): unknown {
-  const local = new Set(cfg.localPluginPaths ?? []);
-  const walk = (current: unknown, pathName: string): unknown => {
-    if (pathName && local.has(pathName)) return `«local:${pathName}»`;
-    if (typeof current === "string" && current.includes("${{")) {
-      return maskSegments(interpolateSegments(current, envCtx(cfg)));
-    }
-    if (Array.isArray(current))
-      return current.map((item, index) => walk(item, `${pathName}.${index}`));
-    if (current && typeof current === "object") {
-      const out: Record<string, unknown> = {};
-      for (const key of Object.keys(current as Record<string, unknown>).sort()) {
-        const next = pathName ? `${pathName}.${key}` : key;
-        out[key] = walk((current as Record<string, unknown>)[key], next);
-      }
-      return out;
-    }
-    return current;
-  };
-  return walk(value, at);
 }
 
 export function configDirFrom(configPath: string): string {

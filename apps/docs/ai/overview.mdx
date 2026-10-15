@@ -115,7 +115,7 @@ An agent following the Bolt skill works in five steps:
   </Step>
   <Step title="Discover">
     `bolt status --json` reports setup and policy. `bolt list --json` and `bolt info --json` return tasks,
-    flows, plugins, and targets. `bolt ai --json` returns the handler catalog. The agent picks names only
+    flows, and plugins. `targets` is included when a plugin contributes it. `bolt ai --json` returns the handler catalog. The agent picks names only
     from this output. These commands do not take `--agent`.
   </Step>
   <Step title="Preview">
