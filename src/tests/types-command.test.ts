@@ -19,6 +19,7 @@ test("types are the bolt.d.ts embedded in this process", () => {
   const declaration = readFileSync(path.join(root, "bolt.d.ts"), "utf8");
   const body = pluginDeclarationBody(declaration);
   expect(body).toContain("export declare function definePlugin");
+  expect(declaration).toContain("Plugin API v2 is frozen");
   expect(body).toContain("PLUGIN_API_VERSION");
   expect(body).not.toContain('declare module "boltstack"');
 });

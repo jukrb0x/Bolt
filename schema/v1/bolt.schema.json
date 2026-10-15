@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "bolt.yaml",
-  "description": "Bolt pipeline contract. version is 1. Unreal engine, project, uproject, and targets belong under the ue plugin config.",
+  "description": "Bolt pipeline contract. version is 1. Plugin config is opaque: each plugin validates its own config.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "project"],
@@ -67,110 +67,6 @@
     }
   },
   "$defs": {
-    "repo": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["path"],
-      "properties": {
-        "path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "vcs": {
-          "enum": ["git", "svn"],
-          "default": "git"
-        },
-        "url": {
-          "type": "string"
-        },
-        "branch": {
-          "type": "string"
-        }
-      }
-    },
-    "engineRepo": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["path"],
-      "properties": {
-        "path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "vcs": {
-          "enum": ["git", "svn"],
-          "default": "git"
-        },
-        "url": {
-          "type": "string"
-        },
-        "branch": {
-          "type": "string"
-        },
-        "version": {
-          "enum": [4, 5, "4", "5"],
-          "description": "Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist."
-        }
-      }
-    },
-    "ueTarget": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind"],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": ["editor", "program", "game", "client", "server"]
-        },
-        "name": {
-          "type": "string"
-        },
-        "config": {
-          "type": "string",
-          "pattern": "^\\s*(?:[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Mm][Ee][Nn][Tt]|[Dd][Ee][Vv]|[Dd][Ee][Bb][Uu][Gg]|[Dd][Bb][Gg]|[Dd][Ee][Bb][Uu][Gg][Gg][Aa][Mm][Ee]|[Dd][Bb][Gg][Gg][Aa][Mm][Ee]|[Ss][Hh][Ii][Pp][Pp][Ii][Nn][Gg]|[Tt][Ee][Ss][Tt])\\s*$",
-          "description": "Build configuration. Same names bolt check accepts, in any case, with surrounding space allowed."
-        }
-      }
-    },
-    "ueConfig": {
-      "description": "Unreal metadata. Valid only under plugins[].config when namespace is ue, never as a root bolt.yaml field.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["engine", "project", "uproject"],
-      "properties": {
-        "engine": {
-          "$ref": "#/$defs/engineRepo"
-        },
-        "project": {
-          "$ref": "#/$defs/repo"
-        },
-        "editor_target": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_]+$",
-          "description": "Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version."
-        },
-        "uproject": {
-          "type": "string",
-          "minLength": 1
-        },
-        "targets": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/ueTarget"
-          },
-          "default": {}
-        }
-      }
-    },
-    "svnConfig": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "use_tortoise": {
-          "type": "boolean"
-        }
-      }
-    },
     "step": {
       "oneOf": [
         {
@@ -262,61 +158,21 @@
       }
     },
     "plugin": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["namespace", "config"],
-          "properties": {
-            "namespace": {
-              "type": "string",
-              "const": "ue"
-            },
-            "path": {
-              "type": "string"
-            },
-            "config": {
-              "$ref": "#/$defs/ueConfig"
-            }
-          }
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace"],
+      "properties": {
+        "namespace": {
+          "type": "string"
         },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["namespace"],
-          "properties": {
-            "namespace": {
-              "type": "string",
-              "const": "svn"
-            },
-            "path": {
-              "type": "string"
-            },
-            "config": {
-              "$ref": "#/$defs/svnConfig"
-            }
-          }
+        "path": {
+          "type": "string"
         },
-        {
+        "config": {
           "type": "object",
-          "additionalProperties": false,
-          "required": ["namespace"],
-          "properties": {
-            "namespace": {
-              "type": "string",
-              "not": {
-                "enum": ["ue", "svn"]
-              }
-            },
-            "path": {
-              "type": "string"
-            },
-            "config": {
-              "type": "object"
-            }
-          }
+          "description": "Opaque plugin config. Core does not interpret these fields. The plugin validates them."
         }
-      ]
+      }
     },
     "wecom": {
       "type": "object",

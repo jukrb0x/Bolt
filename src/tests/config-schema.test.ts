@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { parse } from "yaml";
@@ -31,13 +31,18 @@ test("bolt.yaml schema is version 1 and has no root targets", () => {
   expect(project.required).toEqual(["name"]);
   expect(Object.keys(project.properties)).toEqual(["name"]);
 
-  const defs = schema.$defs as Record<string, { properties: Record<string, unknown> }>;
-  expect(Object.keys(defs.ueConfig.properties).sort()).toEqual(
-    ["editor_target", "engine", "project", "targets", "uproject"].sort(),
-  );
-  expect(defs.ueConfig.properties.targets).toBeDefined();
-  const target = defs.ueTarget as { properties: { kind: { enum: string[] } } };
-  expect(target.properties.kind.enum).toEqual(["editor", "program", "game", "client", "server"]);
+  const defs = schema.$defs as Record<string, unknown>;
+  for (const dropped of ["ueConfig", "ueTarget", "svnConfig", "engineRepo", "repo"]) {
+    expect(defs[dropped]).toBeUndefined();
+  }
+  const plugin = defs.plugin as {
+    oneOf?: unknown;
+    properties: { namespace: { const?: unknown }; config: { type: string } };
+  };
+  expect(plugin.oneOf).toBeUndefined();
+  expect(plugin.properties.namespace.const).toBeUndefined();
+  expect(plugin.properties.config.type).toBe("object");
+  expect(JSON.stringify(schema)).not.toContain("Unreal Engine");
 });
 
 test("committed schema matches the schema the running bolt writes", () => {
@@ -113,22 +118,6 @@ const documents: Array<{ name: string; yaml: string; ok: boolean }> = [
     ].join("\n"),
   },
   {
-    name: "invalid ue target kind",
-    ok: false,
-    yaml: [
-      "version: 1",
-      "project: { name: MyProject }",
-      "plugins:",
-      "  - namespace: ue",
-      "    config:",
-      "      engine: { path: e }",
-      "      project: { path: p }",
-      "      uproject: p.uproject",
-      "      targets:",
-      "        editor: { kind: invalid_kind }",
-    ].join("\n"),
-  },
-  {
     name: "svn flag under the svn plugin",
     ok: true,
     yaml: [
@@ -137,17 +126,6 @@ const documents: Array<{ name: string; yaml: string; ok: boolean }> = [
       "plugins:",
       "  - namespace: svn",
       "    config: { use_tortoise: false }",
-    ].join("\n"),
-  },
-  {
-    name: "svn flag with the wrong type",
-    ok: false,
-    yaml: [
-      "version: 1",
-      "project: { name: MyProject }",
-      "plugins:",
-      "  - namespace: svn",
-      '    config: { use_tortoise: "yes" }',
     ].join("\n"),
   },
   {
@@ -235,6 +213,95 @@ test("bolt.local.yaml schema accepts plugin overrides and rejects v2.0 keys", ()
     schemaErrors(schema, parse("plugins:\n  ue: { targets: { editor: { config: debug } } }\n")),
   ).toHaveLength(0);
   expect(
-    schemaErrors(schema, parse("plugins: { svn: { use_tortoise: yes-please } }\n")).length,
-  ).toBeGreaterThan(0);
+    schemaErrors(schema, parse("plugins: { svn: { use_tortoise: yes-please } }\n")),
+  ).toHaveLength(0);
+  const plugins = (schema.properties as { plugins: { properties?: unknown } }).plugins;
+  expect(plugins.properties).toBeUndefined();
+});
+
+const pluginOwned = [
+  {
+    name: "invalid ue target kind",
+    yaml: [
+      "version: 1",
+      "project: { name: MyProject }",
+      "plugins:",
+      "  - namespace: ue",
+      "    config:",
+      "      engine: { path: e }",
+      "      project: { path: p }",
+      "      uproject: p.uproject",
+      "      targets:",
+      "        editor: { kind: invalid_kind }",
+    ].join("\n"),
+  },
+  {
+    name: "svn flag with the wrong type",
+    yaml: [
+      "version: 1",
+      "project: { name: MyProject }",
+      "plugins:",
+      "  - namespace: svn",
+      '    config: { use_tortoise: "yes" }',
+    ].join("\n"),
+  },
+];
+
+for (const document of pluginOwned) {
+  test(`core schema leaves ${document.name} to the plugin`, async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "bolt-schema-"));
+    const file = path.join(dir, "bolt.yaml");
+    writeFileSync(file, document.yaml);
+    const checked = await checkConfig(file);
+    expect(schemaErrors(boltConfigJsonSchema(), parse(document.yaml))).toEqual([]);
+    expect(checked.ok).toBe(false);
+    expect(checked.errors.some((error) => error.code === "CONFIG_PLUGIN_INVALID")).toBe(true);
+  });
+}
+
+const CORE_UE_TERMS = [
+  "plugins/ue",
+  "ueConfigSchema",
+  "resolveUeTargets",
+  "ueMetadataErrors",
+  "tasksReferenceUe",
+  "toUnrealBuildConfig",
+  "AI_UE_INI",
+  "ueProjectRoot",
+  "debuggame",
+  "Unreal Engine",
+];
+
+function coreSourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "plugins" || entry.name === "tests") continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...coreSourceFiles(full));
+      continue;
+    }
+    if (entry.name === "legacy-config.ts") continue;
+    out.push(full);
+  }
+  return out;
+}
+
+test("core source has no ue schema or build-config terms", () => {
+  const src = path.join(root, "src");
+  const hits: string[] = [];
+  for (const file of coreSourceFiles(src)) {
+    const text = readFileSync(file, "utf8");
+    for (const term of CORE_UE_TERMS) {
+      if (text.includes(term)) hits.push(`${path.relative(root, file)}: ${term}`);
+    }
+  }
+  expect(hits).toEqual([]);
+});
+
+test("AI_PATH_RESTRICTED still covers git/info and svn/info", () => {
+  const runner = readFileSync(path.join(root, "src/runner.ts"), "utf8");
+  expect(runner).toContain("AI_PATH_RESTRICTED");
+  expect(runner).toContain('["git/info", ["path"]]');
+  expect(runner).toContain('["svn/info", ["path"]]');
 });

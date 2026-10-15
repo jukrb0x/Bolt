@@ -5,6 +5,14 @@ description: 'Plugins import boltstack and zod. The running bolt process injects
 
 Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and the plugin's declared `apiVersion`. It defaults to `1`. This bolt accepts plugin API `1` and `2` (`SUPPORTED_PLUGIN_API_VERSIONS`; `PLUGIN_API_VERSION` is `2`, the highest). Plugin API v2 adds [handler results](#handler-results-plugin-api-v2), [capability tags](#capability-tags-plugin-api-v2), `ctx.emit`, and [config hooks](#config-hooks-plugin-api-v2). See [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2).
 
+## Frozen
+
+Plugin API v2 is frozen. Until a plugin API v3, which requires a bolt major version, this surface is append-only. That covers `bolt.d.ts` (handler results, capability tags, `ctx.emit`, and the config hooks `validateConfig`, `aiContext`, `aiPathRoots`, and `initDetect`), this page, and the migrating guide. Existing fields, hook signatures, and `HandlerResult.status` values keep their meaning. New optional fields may be added.
+
+Removing or reinterpreting an existing field, making `emit` required with no transition, changing `HandlerResult.status`, or changing a hook signature incompatibly requires plugin API v3.
+
+`bolt version --json` lists `2` in `plugin_api` and `plugin-api-2` in `capabilities`. It does not list a `config-hooks` capability. Config hooks are part of plugin API v2, not a separate capability.
+
 The runtime manifest is not authored as YAML. `defineHandler` and `@handler` fill it in memory when the plugin is defined. Separately, `bolt ai` reads the serializable catalog file `bolt.plugin.json` (see [Plugin System](/guides/plugin-system)); refresh it with `bolt plugin build`.
 
 ## definePlugin
@@ -38,14 +46,14 @@ export default definePlugin({
 });
 ```
 
-| Field         | Required | Notes                                                                         |
-| ------------- | -------- | ----------------------------------------------------------------------------- |
-| `namespace`   | yes      | Used as `uses: namespace/handler`                                             |
-| `version`     | yes      | Plugin version string, not the CLI version                                    |
-| `description` | yes      | Plugin summary                                                                |
-| `apiVersion`  | no       | `1` or `2`. Omitted means `1`. Declare `2` for capability tags and results    |
-| `metadata`    | no       | Zod schema for this plugin's `bolt.yaml` config. The runner does not check it |
-| `handlers`    | yes      | At least one `defineHandler()` result                                         |
+| Field         | Required | Notes                                                                                                                                                          |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `namespace`   | yes      | Used as `uses: namespace/handler`                                                                                                                              |
+| `version`     | yes      | Plugin version string, not the CLI version                                                                                                                     |
+| `description` | yes      | Plugin summary                                                                                                                                                 |
+| `apiVersion`  | no       | `1` or `2`. Omitted means `1`. Declare `2` for capability tags and results                                                                                     |
+| `metadata`    | no       | Zod schema for this plugin's opaque `config`. Core JSON Schema does not describe those fields. `loadConfig` checks `metadata` when the plugin entry is present |
+| `handlers`    | yes      | At least one `defineHandler()` result                                                                                                                          |
 
 `definePlugin` used to return a descriptor for `withDescriptor`. It now returns the plugin object.
 
@@ -271,7 +279,7 @@ interface BoltLogger {
 
 ## bolt.yaml
 
-Core keys are generic. `version` is `1`. There is no root `targets` field.
+Core keys are generic. `version` is `1`. There is no root `targets` field. `plugins[].config` is opaque in the core schema. The plugin's `metadata` schema and `validateConfig` validate it.
 
 ```yaml
 version: 1

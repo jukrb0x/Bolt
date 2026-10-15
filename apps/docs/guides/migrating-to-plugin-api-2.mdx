@@ -146,3 +146,13 @@ Several built handlers and no choice exits `3` with `CAPABILITY_AMBIGUOUS`. No h
 Built-in `git/pull` and `svn/update` both provide `vcs.sync`. A project that keeps `uses: git/pull` does not need this map. No Unreal project is required to choose between git and svn.
 
 `capabilitySelectionHash` is the digest `plan_hash` will take as `capability_selection` when BOLT-AI-2 lands. This release does not change `plan_hash`.
+
+## Frozen
+
+Plugin API v2 is frozen. Until a plugin API v3, which requires a bolt major version, this API is append-only. That includes the types in `bolt.d.ts`, this guide, and the [Plugin API](/api/plugin-api) page. Existing fields, hook signatures, and `HandlerResult.status` values keep their meaning. New optional fields may be added.
+
+A plugin API v3 is required to remove or reinterpret an existing field, to make `emit` required with no transition, to change `HandlerResult.status`, or to change a hook signature incompatibly.
+
+`bolt version --json` lists `2` in `plugin_api` and `plugin-api-2` in `capabilities`. It does not list a `config-hooks` capability. Config hooks are part of plugin API v2, not a separate capability flag.
+
+A plugin written to this page keeps working on a bolt that lists `plugin-api-2`. A later bolt may add optional fields. It will not change the fields this page already describes without a plugin API v3.

@@ -4,7 +4,7 @@ import {
   BuildConfigSchema,
   normalizeBuildConfig,
   toUnrealBuildConfig,
-} from "../build-config";
+} from "../plugins/ue-build-config";
 
 describe("normalizeBuildConfig", () => {
   test.each<[string, BuildConfig]>([

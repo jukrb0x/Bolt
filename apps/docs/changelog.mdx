@@ -5,6 +5,14 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Plugin API v2 freeze
+
+Plugin API v2 is frozen. Until a plugin API v3 and a bolt major version, the public surface is append-only: `bolt.d.ts`, the plugin API page, and the migrating guide. Existing fields, hook signatures, and `HandlerResult.status` values keep their meaning. New optional fields may be added. Removing a field, changing what a field means, making `emit` required with no transition, changing `HandlerResult.status`, or changing a hook signature incompatibly requires plugin API v3.
+
+`bolt version --json` still lists `plugin_api` values `1` and `2` and the capability `plugin-api-2`. It does not list `config-hooks`. Config hooks stay part of plugin API v2.
+
+Core JSON Schema treats every `plugins[].config` value, and every `bolt.local.yaml` plugin override, as an opaque object. Plugin-specific shapes are no longer part of the core schema. Each plugin still validates its own config with its `metadata` schema and `validateConfig`. Build-configuration names used by the `ue` plugin live with that plugin.
+
 ### Plugin config hooks
 
 `validateConfig` runs from `loadConfig` and `bolt check` after the core schema succeeds. Bolt calls it on every built-in, even when `bolt.yaml` has no entry for that plugin, and on every external plugin that config loaded. A plugin `metadata` Zod schema is checked only when that namespace has a `plugins` entry. Rules about tasks and other fields belong in `validateConfig`.
@@ -31,7 +39,7 @@ Built-in handler `ai` flags are signed off. Read-only handlers stay `ai: true`: 
 
 `bolt ai --json` prints one `bolt.catalog/v1` document and does not write `.bolt/ai-context.md`. `data.plugins` is the catalog (handlers with `ai: false` omitted). `--json` with `--stdout` is `USAGE` (exit 2). A missing or stale `bolt.plugin.json` is `CONFIG_INVALID` (exit 3) with hint `bolt plugin build <ns>`. `bolt status --json` lists `schemas.ai` as `v1`.
 
-Not in this release: MCP, NDJSON, doctor/why, HMAC `plan_hash`, clearing UE coupling, freezing API v2, Unity, and p4.
+Not in this release: MCP, NDJSON, doctor/why, HMAC `plan_hash`, Unity, p4, and moving git and svn calls out of the `ue` plugin.
 
 ### Agent execute (BOLT-M1 Phase 2a)
 

@@ -17,6 +17,9 @@ const stripped = content
 const wrapped = `/**
  * Type declarations for Bolt plugins.
  * Import as: import { PluginBase, handler } from "boltstack";
+ *
+ * Plugin API v2 is frozen. Until a plugin API v3, which requires a bolt major
+ * version, this module is append-only. See PLUGIN_API_VERSION.
  */
 
 declare module "boltstack" {

@@ -1,6 +1,9 @@
 /**
  * Type declarations for Bolt plugins.
  * Import as: import { PluginBase, handler } from "boltstack";
+ *
+ * Plugin API v2 is frozen. Until a plugin API v3, which requires a bolt major
+ * version, this module is append-only. See PLUGIN_API_VERSION.
  */
 
 declare module "boltstack" {
@@ -171,7 +174,14 @@ declare module "boltstack" {
     /** Plugin API version the plugin declared. Absent on plain object plugins (treated as 1). */
     pluginApi?: number;
   }
-  /** Highest plugin API version this bolt implements. Plugins declare their own version. */
+  /**
+   * Highest plugin API version this bolt implements. Plugins declare their own version.
+   *
+   * Plugin API v2 is frozen. Until a plugin API v3, which requires a bolt major
+   * version, this module is append-only: existing fields, hook signatures, and
+   * HandlerResult.status values keep their meaning. bolt version --json lists
+   * plugin-api-2. This freeze does not add a config-hooks capability.
+   */
   export declare const PLUGIN_API_VERSION: 2;
   /** Every plugin API version this bolt accepts. */
   export declare const SUPPORTED_PLUGIN_API_VERSIONS: readonly number[];

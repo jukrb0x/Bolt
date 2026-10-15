@@ -168,7 +168,14 @@ export interface PluginManifest {
   pluginApi?: number;
 }
 
-/** Highest plugin API version this bolt implements. Plugins declare their own version. */
+/**
+ * Highest plugin API version this bolt implements. Plugins declare their own version.
+ *
+ * Plugin API v2 is frozen. Until a plugin API v3, which requires a bolt major
+ * version, this module is append-only: existing fields, hook signatures, and
+ * HandlerResult.status values keep their meaning. bolt version --json lists
+ * plugin-api-2. This freeze does not add a config-hooks capability.
+ */
 export declare const PLUGIN_API_VERSION: 2;
 /** Every plugin API version this bolt accepts. */
 export declare const SUPPORTED_PLUGIN_API_VERSIONS: readonly number[];

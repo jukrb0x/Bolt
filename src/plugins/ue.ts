@@ -9,8 +9,12 @@ import { declaredPluginConfig, run, execRaw as exec } from "./helpers";
 import gitPlugin, { gitInfo } from "./git";
 import svnPlugin, { svnInfo } from "./svn";
 import * as ueIni from "./ue-ini";
-import { BuildConfigSchema, normalizeBuildConfig, toUnrealBuildConfig } from "../build-config";
-import type { BuildConfig } from "../build-config";
+import {
+  BuildConfigSchema,
+  normalizeBuildConfig,
+  toUnrealBuildConfig,
+  type BuildConfig,
+} from "./ue-build-config";
 
 /** ue/info ignores result data, so print the git/svn info warn summary itself. */
 async function infoWithWarning(

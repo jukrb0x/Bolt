@@ -11,8 +11,8 @@ const GITIGNORE_LINES = [".bolt/.cache", "bolt.local.yaml"];
 const STARTER_YAML = `# yaml-language-server: $schema=./.bolt/bolt.schema.json
 # bolt.yaml — pipeline contract (commit this)
 #
-# Generic metadata only. Unreal Engine settings belong to the ue plugin.
-# See the ue plugin example (src/plugins/ue.example.yaml in the bolt repo).
+# version is 1. project is a name. Plugin config belongs under plugins[]
+# and is validated by that plugin.
 
 version: 1
 

@@ -5,7 +5,7 @@ description: "Generated field reference for bolt.yaml (schema/v1/bolt.schema.jso
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
-Bolt pipeline contract. version is 1. Unreal engine, project, uproject, and targets belong under the ue plugin config.
+Bolt pipeline contract. version is 1. Plugin config is opaque: each plugin validates its own config.
 
 Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main/schema/v1/bolt.schema.json). Draft: `http://json-schema.org/draft-07/schema#`.
 
@@ -27,18 +27,6 @@ Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main
 Unknown top-level fields are rejected.
 
 ## Definitions
-
-### engineRepo
-
-Type: `object`
-
-| Field     | Type                   | Required | Default | Notes                                                                                                                  |
-| --------- | ---------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `path`    | `string`               | yes      |         | minLength: 1                                                                                                           |
-| `vcs`     | `"git" \| "svn"`       |          | `"git"` |                                                                                                                        |
-| `url`     | `string`               |          |         |                                                                                                                        |
-| `branch`  | `string`               |          |         |                                                                                                                        |
-| `version` | `4 \| 5 \| "4" \| "5"` |          |         | Unreal Engine major version. Omit to detect it from Engine/Build/Build.version, then from which editor binaries exist. |
 
 ### flow
 
@@ -64,44 +52,13 @@ Type: `object`
 
 ### plugin
 
-Type: `object \| object \| object`
-
-One of:
-
-1. `object`
-
-| Field       | Type                               | Required | Default | Notes |
-| ----------- | ---------------------------------- | -------- | ------- | ----- |
-| `namespace` | `"ue"`                             | yes      |         |       |
-| `path`      | `string`                           |          |         |       |
-| `config`    | `ueConfig` ([ueConfig](#ueconfig)) | yes      |         |       |
-
-2. `object`
-
-| Field       | Type                                  | Required | Default | Notes |
-| ----------- | ------------------------------------- | -------- | ------- | ----- |
-| `namespace` | `"svn"`                               | yes      |         |       |
-| `path`      | `string`                              |          |         |       |
-| `config`    | `svnConfig` ([svnConfig](#svnconfig)) |          |         |       |
-
-3. `object`
-
-| Field       | Type     | Required | Default | Notes |
-| ----------- | -------- | -------- | ------- | ----- |
-| `namespace` | `string` | yes      |         |       |
-| `path`      | `string` |          |         |       |
-| `config`    | `object` |          |         |       |
-
-### repo
-
 Type: `object`
 
-| Field    | Type             | Required | Default | Notes        |
-| -------- | ---------------- | -------- | ------- | ------------ |
-| `path`   | `string`         | yes      |         | minLength: 1 |
-| `vcs`    | `"git" \| "svn"` |          | `"git"` |              |
-| `url`    | `string`         |          |         |              |
-| `branch` | `string`         |          |         |              |
+| Field       | Type     | Required | Default | Notes                                                                                  |
+| ----------- | -------- | -------- | ------- | -------------------------------------------------------------------------------------- |
+| `namespace` | `string` | yes      |         |                                                                                        |
+| `path`      | `string` |          |         |                                                                                        |
+| `config`    | `object` |          |         | Opaque plugin config. Core does not interpret these fields. The plugin validates them. |
 
 ### step
 
@@ -136,14 +93,6 @@ One of:
 
 Type: `step[]`
 
-### svnConfig
-
-Type: `object`
-
-| Field          | Type      | Required | Default | Notes |
-| -------------- | --------- | -------- | ------- | ----- |
-| `use_tortoise` | `boolean` |          |         |       |
-
 ### telegram
 
 Type: `object`
@@ -153,30 +102,6 @@ Type: `object`
 | `type`      | `"telegram"` | yes      |         |       |
 | `bot_token` | `string`     | yes      |         |       |
 | `chat_id`   | `string`     | yes      |         |       |
-
-### ueConfig
-
-Type: `object`
-
-Unreal metadata. Valid only under plugins[].config when namespace is ue, never as a root bolt.yaml field.
-
-| Field           | Type                                            | Required | Default | Notes                                                                                                                                           |
-| --------------- | ----------------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine`        | `engineRepo` ([engineRepo](#enginerepo))        | yes      |         |                                                                                                                                                 |
-| `project`       | `repo` ([repo](#repo))                          | yes      |         |                                                                                                                                                 |
-| `editor_target` | `string`                                        |          |         | Editor target and executable base name, e.g. UnrealEditor or UE4Editor. Overrides the name implied by engine.version.. pattern: ^[A-Za-z0-9_]+$ |
-| `uproject`      | `string`                                        | yes      |         | minLength: 1                                                                                                                                    |
-| `targets`       | `map<string, ueTarget>` ([ueTarget](#uetarget)) |          | `{}`    |                                                                                                                                                 |
-
-### ueTarget
-
-Type: `object`
-
-| Field    | Type                                                      | Required | Default | Notes                                                                                                                                                                                                                                                                                                                                           |
-| -------- | --------------------------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kind`   | `"editor" \| "program" \| "game" \| "client" \| "server"` | yes      |         |                                                                                                                                                                                                                                                                                                                                                 |
-| `name`   | `string`                                                  |          |         |                                                                                                                                                                                                                                                                                                                                                 |
-| `config` | `string`                                                  |          |         | Build configuration. Same names bolt check accepts, in any case, with surrounding space allowed.. pattern: ^\\s*(?:[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Mm][Ee][Nn][Tt]\|[Dd][Ee][Vv]\|[Dd][Ee][Bb][Uu][Gg]\|[Dd][Bb][Gg]\|[Dd][Ee][Bb][Uu][Gg][Gg][Aa][Mm][Ee]\|[Dd][Bb][Gg][Gg][Aa][Mm][Ee]\|[Ss][Hh][Ii][Pp][Pp][Ii][Nn][Gg]\|[Tt][Ee][Ss][Tt])\\s*$ |
 
 ### wecom
 
