@@ -299,7 +299,7 @@ function findZeroByteDlls(dir: string): string[] {
   return results;
 }
 
-class UEPlugin extends PluginBase.withDescriptor({
+export class UEPlugin extends PluginBase.withDescriptor({
   namespace: "ue",
   version: "1.0.0",
   description: "Unreal Engine build and editor automation",

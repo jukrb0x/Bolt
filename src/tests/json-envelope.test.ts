@@ -253,8 +253,13 @@ describe("CLI --json", () => {
       expect(checkBody.config).toEqual({ path: path.join(dir, "bolt.yaml"), local: null });
       const checkData = checkBody.data as { valid: boolean };
       expect(checkData.valid).toBe(false);
-      for (const item of checkBody.errors as unknown[]) assertIssue(item);
-      const invalid = checkBody.errors[0] as { code: string; message: string; hint?: string };
+      const checkErrors = checkBody.errors as Array<{
+        code: string;
+        message: string;
+        hint?: string;
+      }>;
+      for (const item of checkErrors) assertIssue(item);
+      const invalid = checkErrors[0];
       expect(invalid.code).toBe("CONFIG_INVALID");
       expect(invalid.message).toContain(":");
       expect("hint" in invalid).toBe(false);
