@@ -12,7 +12,7 @@ import {
 import { envAgentOn } from "../agent-mode";
 import { statusPlugins } from "../plan-preview";
 
-/** Commands that accept `--json`. `run` is bolt.run/v1. `ai` stays out until bolt ai --json. */
+/** Commands that accept `--json`. `ai` is `bolt.catalog/v1`. */
 const SCHEMAS = {
   list: "v1",
   info: "v1",
@@ -20,6 +20,7 @@ const SCHEMAS = {
   inspect: "v1",
   status: "v1",
   run: "v1",
+  ai: "v1",
 } as const;
 
 function statusData(cfg: Awaited<ReturnType<typeof loadConfigForJson>>["cfg"], configPath: string) {

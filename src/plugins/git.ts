@@ -75,7 +75,7 @@ const plugin = definePlugin({
   apiVersion: 2,
   handlers: {
     pull: defineHandler(
-      { ai: false, capability: "vcs.sync", description: "git pull ${path}" },
+      { ai: "confirm", capability: "vcs.sync", description: "git pull ${path}" },
       async (params, ctx) => {
         const p = resolvePath(params);
         const branch = params.branch ?? "main";

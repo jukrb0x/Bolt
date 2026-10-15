@@ -5,6 +5,18 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Confirm gate (BOLT-M1 Phase 2b)
+
+Built-in handler `ai` flags are signed off. Read-only handlers stay `ai: true`: `ue/info`, `ue/ini_get`, `ue/ini_read_all`, `git/info`, `svn/info`. There is no JSON read handler. These move to `"confirm"`: `ue/build`, `ue/build_engine`, `ue/build_program`, `ue/start`, `ue/generate_project`, `ue/setup`, `ue/update_engine`, `ue/update_project`, `ue/ini_set`, `ue/ini_override`, `git/pull`, `svn/update`, `fs/copy`, `fs/move`, `fs/mkdir`, `json/set`, `json/merge`. `git/status` and `svn/status` stay `"confirm"`. These stay `false`: `ue/kill`, `ue/svn_revert`, `ue/svn_cleanup`, `ue/fix_dll`, `ue/fillddc` (runs the editor to fill the DDC; stricter than confirm), `ue/ini_remove` (deletes a key), `fs/delete`, `git/checkout`, `git/clone`, `svn/cleanup`, `svn/revert`, `svn/commit`, `svn/add`. That changes `.bolt/ai-context.md` and its context hash. Run `bolt ai` again.
+
+`bolt.local.yaml` `ai.run: never` refuses every agent-mode execute with `AGENT_EXECUTION_DISABLED` (exit 4), including a `"confirm"` plan that passes `--confirmed-by-user`. Omitted `ai.run` means `confirm` and does not block an `ai: true` plan. A `"confirm"` plan without `--confirmed-by-user` is `CONFIRM_REQUIRED` (exit 4). The hint is `Re-run with --confirmed-by-user after the user approves.` A human `bolt run` with none of `--json`, `--agent`, `--execute`, `--plan`, or `--confirmed-by-user` is still the text path and ignores `ai.run`.
+
+`bolt version --json` appends the capability `confirm` after `agent` and `execute`. It does not remove those. The official skill may execute: `ai: true` when `agent` and `execute` are listed, and `"confirm"` only when `confirm` is listed and the user has approved that plan. It must not skip confirmation. Client allowlists must still not auto-allow `--execute` or `--confirmed-by-user`.
+
+`bolt ai --json` prints one `bolt.catalog/v1` document and does not write `.bolt/ai-context.md`. `data.plugins` is the catalog (handlers with `ai: false` omitted). `--json` with `--stdout` is `USAGE` (exit 2). A missing or stale `bolt.plugin.json` is `CONFIG_INVALID` (exit 3) with hint `bolt plugin build <ns>`. `bolt status --json` lists `schemas.ai` as `v1`.
+
+Not in this release: MCP, NDJSON, doctor/why, HMAC `plan_hash`, clearing UE coupling, freezing API v2, Unity, and p4.
+
 ### Agent execute (BOLT-M1 Phase 2a)
 
 `bolt run` accepts `--agent`, `--json`, `--execute`, `--plan=<plan_hash>`, and `--confirmed-by-user`. `--agent` is also on when `BOLT_AGENT` is `1` or `true` after trimming (any case). `--execute`, `--plan`, and `--confirmed-by-user` imply agent mode even without `--agent`. On `bolt run`, agent mode prints JSON. A human `bolt run` with none of those flags is unchanged, including a text `--dry-run`.

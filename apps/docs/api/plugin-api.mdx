@@ -57,12 +57,12 @@ A plugin that exposes a `manifest` getter without `Symbol.for("boltstack.plugin"
 defineHandler(meta, fn);
 ```
 
-| Field         | Default | Notes                                                        |
-| ------------- | ------- | ------------------------------------------------------------ |
-| `description` | none    | Task line. `${name}` is replaced from params                 |
-| `ai`          | `false` | `false`, `true`, or `"confirm"`. `"confirm"` does not prompt |
-| `params`      | none    | Flat zod object. Checked before `fn` runs                    |
-| `capability`  | none    | Tag or tags, e.g. `"doctor"`. Requires `apiVersion: 2`       |
+| Field         | Default | Notes                                                                                                                             |
+| ------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | none    | Task line. `${name}` is replaced from params                                                                                      |
+| `ai`          | `false` | `false`, `true`, or `"confirm"`. A human `bolt run` does not prompt. Agent execute of `"confirm"` requires `--confirmed-by-user`. |
+| `params`      | none    | Flat zod object. Checked before `fn` runs                                                                                         |
+| `capability`  | none    | Tag or tags, e.g. `"doctor"`. Requires `apiVersion: 2`                                                                            |
 
 Allowed param fields: `z.string()`, `z.enum()`, `z.coerce.number()`, `z.coerce.boolean()`, with `.optional()`, `.default()`, and `.describe()` only.
 

@@ -28,7 +28,7 @@ test("string @handler on ue produces a manifest and does not invent params", () 
   expect(ue.manifest.description).toBe("Unreal Engine build and editor automation");
   expect(ue.manifest.handlers.build).toEqual({
     description: "Build target: ${target} with config: ${config}",
-    ai: false,
+    ai: "confirm",
   });
   expect(ue.manifest.handlers.ini_get).toEqual({ ai: true });
   expect(ue.manifest.handlers.ini_read_all.ai).toBe(true);
@@ -42,21 +42,23 @@ test("string @handler on ue produces a manifest and does not invent params", () 
   expect(reg.get("ue")!.manifest!.handlers.kill.ai).toBe(false);
 });
 
-test("object plugins are reflected as ai false with no params", () => {
+test("plain object plugins are reflected as ai false with no params", () => {
   const reg = new PluginRegistry();
-  for (const plugin of [fsPlugin, jsonPlugin]) reg.register(plugin);
-
-  for (const plugin of [fsPlugin, jsonPlugin]) {
-    const manifest = reg.get(plugin.namespace)?.manifest;
-    expect(manifest?.namespace).toBe(plugin.namespace);
-    expect(Object.keys(manifest?.handlers ?? {}).sort()).toEqual(
-      Object.keys(plugin.handlers).sort(),
-    );
-    for (const entry of Object.values(manifest?.handlers ?? {})) {
-      expect(entry).toEqual({ ai: false });
-    }
-  }
+  const plugin = {
+    namespace: "plain",
+    handlers: { copy: async () => {}, drop: async () => {} },
+  };
+  reg.register(plugin);
+  expect(reg.get("plain")?.manifest).toEqual({
+    namespace: "plain",
+    version: "",
+    description: "",
+    handlers: { copy: { ai: false }, drop: { ai: false } },
+  });
   expect("deps" in (fsPlugin.manifest ?? {})).toBe(false);
+  expect(fsPlugin.manifest?.handlers.copy?.ai).toBe("confirm");
+  expect(fsPlugin.manifest?.handlers.delete?.ai).toBe(false);
+  expect(jsonPlugin.manifest?.handlers.set?.ai).toBe("confirm");
 });
 
 test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tags", () => {
@@ -73,14 +75,14 @@ test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tag
   expect(gitPlugin.apiVersion).toBe(2);
   expect(svnPlugin.apiVersion).toBe(2);
   expect(summary("git")).toEqual({
-    pull: { ai: false, capabilities: ["vcs.sync"] },
+    pull: { ai: "confirm", capabilities: ["vcs.sync"] },
     status: { ai: "confirm", capabilities: undefined },
     info: { ai: true, capabilities: ["vcs.info"] },
     checkout: { ai: false, capabilities: undefined },
     clone: { ai: false, capabilities: undefined },
   });
   expect(summary("svn")).toEqual({
-    update: { ai: false, capabilities: ["vcs.sync"] },
+    update: { ai: "confirm", capabilities: ["vcs.sync"] },
     cleanup: { ai: false, capabilities: undefined },
     revert: { ai: false, capabilities: undefined },
     info: { ai: true, capabilities: ["vcs.info"] },

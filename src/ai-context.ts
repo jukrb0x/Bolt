@@ -238,6 +238,11 @@ function clean(value: unknown): string | undefined {
   return text ? text : undefined;
 }
 
+/** Plugin catalog written by `bolt ai`. Handlers with `ai: false` are omitted. */
+export function catalogPlugins(registry: PluginRegistry): CatalogPlugin[] {
+  return pluginCatalog(registry);
+}
+
 function pluginCatalog(registry: PluginRegistry): CatalogPlugin[] {
   const plugins: CatalogPlugin[] = [];
   for (const namespace of registry.listNamespaces()) {

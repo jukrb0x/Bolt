@@ -76,7 +76,9 @@ test("version --json appends agent and execute", async () => {
     const run = await bolt(["version", "--json"], dir);
     expect(run.code).toBe(0);
     const info = JSON.parse(run.out) as { capabilities: string[] };
-    expect(info.capabilities.slice(-2)).toEqual(["agent", "execute"]);
+    expect(info.capabilities).toContain("agent");
+    expect(info.capabilities).toContain("execute");
+    expect(info.capabilities.at(-1)).toBe("confirm");
     expect(info.capabilities).toContain("plugin-manifest");
   } finally {
     rmSync(dir, { recursive: true, force: true });

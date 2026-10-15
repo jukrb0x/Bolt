@@ -75,11 +75,11 @@ runs. There are two error shapes:
 
 Declared on purpose and accepted: `bolt version --json` (flat version object),
 `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`,
-`bolt status --json`, and `bolt run --json` (one shared JSON envelope on stdout; logs
-go to stderr), `bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`, and on
+`bolt status --json`, `bolt run --json`, and `bolt ai --json` (one shared JSON envelope on stdout; logs
+go to stderr; `bolt ai --json` is `bolt.catalog/v1`), `bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`, and on
 `bolt run` only: `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. On
 `bolt inspect`, undeclared `--dry-run` / `--simulate` still say `Unknown flag` with the
-inspect-is-already-a-preview note. `bolt ai --json` is still reserved. `--agent` on any
+inspect-is-already-a-preview note. `bolt ai --json` prints one `bolt.catalog/v1` document and writes nothing. `--agent` on any
 command other than `bolt run` is still reserved. `BOLT_AGENT=1` turns on agent mode for
 `bolt run` without a flag; `bolt status` reports that as `agent_mode` and does not
 accept `--agent`.

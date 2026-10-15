@@ -1,24 +1,30 @@
 ---
 title: "json plugin"
-description: ""
+description: "Built-in JSON file handlers."
 ---
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
+Built-in JSON file handlers.
+
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `json`    |         | 2        |
+| `json`    | `1.0.0` | 2        |
 
 ## Handlers
 
 ### json/merge
 
-Step: `uses: json/merge`. AI: `false` (not exposed to AI).
+Shallow-merge a JSON patch file
+
+Step: `uses: json/merge`. AI: `"confirm"` (AI may call it after user confirmation).
 
 _No declared parameter schema._
 
 ### json/set
 
-Step: `uses: json/set`. AI: `false` (not exposed to AI).
+Set a value in a JSON file
+
+Step: `uses: json/set`. AI: `"confirm"` (AI may call it after user confirmation).
 
 _No declared parameter schema._

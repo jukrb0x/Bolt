@@ -172,15 +172,18 @@ describe("CLI-1 integration via main.ts", () => {
     }
   });
 
-  test("ai --json writes nothing", async () => {
+  test("ai --json prints the catalog and writes nothing", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-cli1-ai-"));
     writeFileSync(
       path.join(dir, "bolt.yaml"),
-      `project:\n  name: t\ntasks:\n  a:\n    - run: echo a\n`,
+      `version: 1\nproject:\n  name: t\ntasks:\n  a:\n    - run: echo a\n`,
     );
     const r = await bolt(["ai", "--json"], { cwd: dir });
-    expect(r.code).toBe(2);
-    expect(r.err).toContain("reserved by bolt");
+    expect(r.code).toBe(0);
+    expect(r.err).not.toContain("reserved by bolt");
+    const body = JSON.parse(r.out) as { schema: string; ok: boolean };
+    expect(body.schema).toBe("bolt.catalog/v1");
+    expect(body.ok).toBe(true);
     expect(existsSync(path.join(dir, ".bolt", "ai-context.md"))).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });

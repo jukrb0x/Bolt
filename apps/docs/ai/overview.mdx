@@ -5,17 +5,16 @@ description: "How coding agents drive Bolt: a Bolt skill that calls the CLI, and
 
 Coding agents such as Cursor and Claude Code use Bolt through the same `bolt` CLI that people use. A
 **Bolt skill** tells the agent which commands to run and in what order. With `--json`, `version` prints a
-flat object and `list`, `info`, `check`, `inspect`, `status`, and `run` each print one JSON document.
-`bolt ai` does not accept `--json`.
+flat object and `list`, `info`, `check`, `inspect`, `status`, `run`, and `ai` each print one JSON document.
 
 Bolt does not run an MCP server or any other service for agents. There is one interface, the CLI, and
 the same permissions and allowlists you already use for shell commands apply to it.
 
 <Warning>
-  **Status.** Agent preview and execute for `ai: true` plans are in this release (`bolt version
-  --json` lists `agent` and `execute`). The shipped skill does not use `--execute`: Phase 2b
-  confirm-tier sign-off is not done. `bolt ai --json`, `--agent` on commands other than `bolt run`,
-  MCP, and NDJSON are not implemented. Sections below marked **Planned** are not implemented yet.
+  **Status.** The five-step agent loop is in this release: discover, preview, confirm, execute.
+  `bolt version --json` lists `agent`, `execute`, and `confirm`. The shipped skill
+  (`skills/boltstack/SKILL.md`) may execute. It must not skip confirmation. `--agent` on commands
+  other than `bolt run`, MCP, and NDJSON are not implemented.
 </Warning>
 
 ## Available today
@@ -25,24 +24,35 @@ the same permissions and allowlists you already use for shell commands apply to 
 Every plugin handler declares whether agents may use it. Plugin authors set this with
 `@handler({ ai })` or `defineHandler({ ai })`. See the [Plugin API](/api/plugin-api) for details.
 
+Built-in sign-off for this release:
+
+| `ai`        | Handlers                                                                                                                                                                                                                                                                                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `true`      | `ue/info`, `ue/ini_get`, `ue/ini_read_all`, `git/info`, `svn/info`. There is no JSON read handler.                                                                                                                                                                                                                                                        |
+| `"confirm"` | Builds (`ue/build`, `ue/build_engine`, `ue/build_program`), `ue/start`, `ue/generate_project`, `ue/setup`, ini writes (`ue/ini_set`, `ue/ini_override`), updates (`ue/update_engine`, `ue/update_project`, `git/pull`, `svn/update`), `git/status`, `svn/status`, file writes (`fs/copy`, `fs/move`, `fs/mkdir`), JSON writes (`json/set`, `json/merge`). |
+| `false`     | `ue/kill`, `ue/svn_revert`, `ue/svn_cleanup`, `ue/fix_dll`, `ue/fillddc`, `ue/ini_remove`, `fs/delete`, `git/checkout`, `git/clone`, `svn/cleanup`, `svn/revert`, `svn/commit`, `svn/add`.                                                                                                                                                                |
+
+`ue/fillddc` and `ue/ini_remove` stay `false` because they were not in the confirm list: filling the DDC runs the editor, and removing an ini key deletes a setting. `fs/move` is a write (`"confirm"`). `fs/delete` stays `false`.
+
 ### `bolt ai`
 
 [`bolt ai`](/reference/cli/ai) writes `.bolt/ai-context.md`: the project's tasks, flows, targets, and the
 plugins and handlers an agent may use. Handlers that agents may not use are left out, and handlers that need
 your confirmation are marked as such. The file header carries a context hash computed from `bolt.yaml` and
-the plugin catalog. `bolt.local.yaml` is not an input. Use `bolt ai --stdout` to print it instead of
-writing the file. Both forms assemble the catalog from built-ins (in-process) plus each project/user/path
+the plugin catalog. `bolt.local.yaml` is not an input. Use `bolt ai --stdout` to print the markdown instead of
+writing the file. `bolt ai --json` prints one `bolt.catalog/v1` document (`data.plugins`) and writes nothing.
+Both forms assemble the catalog from built-ins (in-process) plus each project/user/path
 plugin's `bolt.plugin.json` — they do not import or execute project/user plugin code and do not write
-`.bolt/.cache/`. Missing or stale manifests exit `3`; refresh with `bolt plugin build <ns>`. Default `bolt ai`
-still writes `.bolt/ai-context.md` and must not be auto-allowed. `bolt ai --stdout` is print-only and may be
-auto-allowed.
+`.bolt/.cache/`. Missing or stale manifests exit `3` (`CONFIG_INVALID`, hint `bolt plugin build <ns>`).
+Default `bolt ai` still writes `.bolt/ai-context.md` and must not be auto-allowed. `bolt ai --stdout` and
+`bolt ai --json` are print-only and may be auto-allowed. `--json` with `--stdout` is `USAGE` (exit 2).
 
 ### The current skill
 
-The repository ships a skill at `skills/boltstack/SKILL.md`. It has the agent load `.bolt/ai-context.md`,
-use only the tasks and flows listed there, preview with `--dry-run` first, ask before running `--simulate` or `kill`
-tasks, respect fail-fast, and leave `bolt.yaml` and `bolt.local.yaml` alone. It does not use `--execute`.
-Phase 2b is not done.
+The repository ships a skill at `skills/boltstack/SKILL.md`. It checks `bolt version --json`, discovers
+with `--json`, previews with `bolt run --dry-run … --json`, asks before a `"confirm"` plan, and executes
+with `--execute --plan=<plan_hash>` plus `--confirmed-by-user` only after a yes. It does not execute
+`ai: false` plans. It leaves `bolt.yaml` and `bolt.local.yaml` alone.
 
 <Note>
   `bolt run --dry-run` is a static preview. It reads `bolt.yaml`, resolves the plan, and prints each step
@@ -54,55 +64,45 @@ Phase 2b is not done.
 Every command rejects unknown and undeclared reserved flags with exit code `2` before anything runs.
 Unknown-flag errors may include did-you-mean and a `Flags:` / `--help` line; reserved errors
 are only the "reserved by bolt and not supported yet. Remove it…" line. `bolt run` declares
-`--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. Other commands still reject
-those names, except `--json` on `version`, `list`, `info`, `check`, `inspect`, and `status`.
-Undeclared `--dry-run` / `--simulate` on other commands are unknown flags, not reserved.
-Reserved names cannot be used as task params on `run` / `inspect`. `bolt ai --json` does not
-write `.bolt/ai-context.md`; it exits `2`. The skill ignores `agent` and `execute` until Phase 2b.
+`--json`, `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. `bolt ai` declares `--json`
+and `--stdout`. Other commands still reject those names, except `--json` on `version`, `list`, `info`,
+`check`, `inspect`, and `status`. Undeclared `--dry-run` / `--simulate` on other commands are unknown
+flags, not reserved. Reserved names cannot be used as task params on `run` / `inspect`. `--agent` on
+any command other than `bolt run` is still reserved.
 
 </Note>
 
 ## Safety model
 
-Available today: `bolt run --dry-run` is a static preview that runs no plugins, hooks, handlers, or
-processes and writes no files. `bolt run --simulate` runs plugin code and is not a safe preview.
+`bolt run --dry-run` is a static preview that runs no plugins, hooks, handlers, or processes and writes
+no files. `bolt run --simulate` runs plugin code and is not a safe preview.
 
-Agent execute refuses a plan that changed between preview and execution (`PLAN_MISMATCH`), a plan
-whose effective `ai` is `false` (`AI_FORBIDDEN`), a `confirm` plan without `--confirmed-by-user`
-(`CONFIRM_REQUIRED`), `ai.run: never` (`AGENT_EXECUTION_DISABLED`), and an unbuilt or tampered
-plugin artefact. `bolt version --json` lists `handler-results`, `capability-tags`, `plugin-api-2`,
-`plugin-manifest`, `agent`, and `execute`. It does not list `static-dry-run` or `confirm`.
+Agent execute refuses, in this order, before it imports plugin code: an unbuilt plugin
+(`PLUGIN_NOT_BUILT`), a missing or tampered artefact (`PLAN_MISMATCH`), `ai.run: never`
+(`AGENT_EXECUTION_DISABLED`), a hash that does not match `--plan` (`PLAN_MISMATCH`), effective `ai`
+`false` (`AI_FORBIDDEN`), and effective `ai` `"confirm"` without `--confirmed-by-user`
+(`CONFIRM_REQUIRED`). All of those exit 4. `bolt version --json` lists `handler-results`,
+`capability-tags`, `plugin-api-2`, `plugin-manifest`, `agent`, `execute`, and `confirm`. It does not
+list `static-dry-run`.
 
-Bolt will not be able to stop an agent that ignores the skill. It will not be able to verify that
-`--confirmed-by-user` reflects a real yes, and it does not sandbox plugin code. The real boundary is your
-agent client's command allowlist:
+A human `bolt run` with none of `--json`, `--agent`, `--execute`, `--plan`, or `--confirmed-by-user`
+stays the text path. `ai.run` does not apply there.
 
-- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt status`, `bolt ai --stdout`, and only the prefix
-  `bolt run --dry-run`. `bolt status` is read-only.
-- Never auto-allow any other `bolt run`, `bolt plugin build`, `bolt self-update`, `bolt init`,
-  `bolt migrate`, or default `bolt ai` (it writes `.bolt/ai-context.md`). `bolt ai --json` exits `2` and writes nothing.
-  Never auto-allow `bolt run --simulate` (it runs plugin code). `bolt plugin build` executes plugin code
-  to refresh `bolt.plugin.json` and must stay off the allowlist.
-- On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or
-  `bolt.exe` in the repository cannot take its place.
-- Do not auto-allow `bolt run --execute` or `--confirmed-by-user`. The skill has no execute path
-  until Phase 2b. `agent` and `execute` in `bolt version --json` describe the CLI, not the skill.
+Bolt will not stop an agent that ignores the skill. It will not verify that `--confirmed-by-user`
+reflects a real yes, and it does not sandbox plugin code. The real boundary is your agent client's
+command allowlist:
 
-## Planned: skills that call the CLI with `--json`
+- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt status`, `bolt ai --stdout`, `bolt ai --json`, and only the prefix `bolt run --dry-run`. `bolt status` is read-only.
+- Never auto-allow any other `bolt run`, `bolt plugin build`, `bolt self-update`, `bolt init`, `bolt migrate`, or default `bolt ai` (it writes `.bolt/ai-context.md`). Never auto-allow `bolt run --simulate` (it runs plugin code). `bolt plugin build` executes plugin code to refresh `bolt.plugin.json` and must stay off the allowlist.
+- On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or `bolt.exe` in the repository cannot take its place.
+- Do not auto-allow `bolt run --execute` or `--confirmed-by-user`. The skill may pass them only after it shows you the plan and you approve. The allowlist is what enforces that.
+
+## The loop
 
 `bolt status` is read-only (`bolt status --json` is `bolt.status/v1`). It does not take `--agent`.
-`agent_mode` follows `BOLT_AGENT`. `--json` on `list`, `info`, `check`, `inspect`, `status`, and
-`run` prints the shared envelope below. `bolt version --json` stays a flat object. `bolt ai` does
-not accept `--json`. Discover-with-`--agent` on `list` and `info` is still planned.
-
-### The loop (Planned)
-
-<Info>
-  Preview and execute work on `bolt run` for an effective `ai: true` plan. `bolt version --json`
-  lists `agent` and `execute`. `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt
-  inspect --json`, and `bolt status --json` print the shared envelope. They do not take `--agent`.
-  The shipped skill still must not execute. Phase 2b confirm-tier sign-off is not done.
-</Info>
+`agent_mode` follows `BOLT_AGENT`. `--json` on `list`, `info`, `check`, `inspect`, `status`, `run`,
+and `ai` prints the shared envelope below, except `bolt version --json`, which stays a flat object.
+`bolt ai --json` uses schema `bolt.catalog/v1`.
 
 An agent following the Bolt skill works in five steps:
 
@@ -110,39 +110,32 @@ An agent following the Bolt skill works in five steps:
   <Step title="Check capabilities">
     `bolt version --json` returns the binary's version and a list of capabilities. The skill decides what
     it may do from the capabilities, never from the version number. A binary that prints plain text has
-    no capabilities, so the agent stays read-only and hands commands to you.
+    no capabilities, so the agent stays read-only and hands commands to you. `agent` and `execute` allow
+    an effective `ai: true` plan. `confirm` as well allows a `"confirm"` plan after you say yes.
   </Step>
   <Step title="Discover">
-    `bolt status --agent --json` reports setup and policy. `bolt list --agent --json` and
-    `bolt info --agent --json` return tasks, flows, plugins, and targets. The agent picks names only from
-    this output.
+    `bolt status --json` reports setup and policy. `bolt list --json` and `bolt info --json` return tasks,
+    flows, plugins, and targets. `bolt ai --json` returns the handler catalog. The agent picks names only
+    from this output. These commands do not take `--agent`.
   </Step>
   <Step title="Preview">
-    `bolt run --dry-run <names…> [--key=value] --agent --json` resolves the plan without running anything.
+    `bolt run --dry-run <names…> [--key=value] --json` resolves the plan without running anything.
     It returns the steps, whether an agent may run the plan, and a `plan_hash`.
   </Step>
   <Step title="Confirm">
-    If the plan needs confirmation, the agent shows you the plan and asks. If agents may not run it, the
-    agent gives you the command to run yourself.
+    If the plan's effective `ai` is `"confirm"`, the agent shows you the plan and asks. It must not skip
+    this step. If agents may not run the plan, the agent gives you the command to run yourself.
   </Step>
   <Step title="Execute">
-    `bolt run <same names and params> --execute --plan=<plan_hash> --agent --json`, plus
-    `--confirmed-by-user` after you said yes. Bolt re-resolves the plan and refuses if it no longer
-    matches the hash.
+    `bolt run <same names and params> --execute --plan=<plan_hash> --json`, plus
+    `--confirmed-by-user` after you said yes to a `"confirm"` plan. Bolt re-resolves the plan and refuses
+    if it no longer matches the hash. `ai.run: never` refuses every agent execute.
   </Step>
 </Steps>
 
-### JSON output (Planned)
+### JSON output
 
-<Info>
-  `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt inspect --json`,
-  `bolt status --json`, and `bolt run --json` print this envelope. `bolt version --json` still
-  prints its own flat object. `bolt inspect --json`, `bolt info --json`, and a `bolt run` preview
-  render `${{ env.NAME }}` as `«env:NAME»` and a `bolt.local.yaml` value as `«local:…»`.
-  `bolt ai --json` is not implemented.
-</Info>
-
-With `--json` on `list`, `info`, `check`, `inspect`, `status`, and `run`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
+With `--json` on `list`, `info`, `check`, `inspect`, `status`, `run`, and `ai`, stdout carries exactly one JSON document. Logs go to stderr. Every document has the same
 envelope:
 
 ```json
@@ -159,28 +152,23 @@ envelope:
 
 - `ok` is `false` exactly when the exit code is non-zero. Errors carry a stable `code`, and agents
   branch on the code and exit status, not on message text.
-- Each command has a versioned schema (`bolt.list/v1`, `bolt.inspect/v1`, `bolt.run/v1`, …). Within
-  `v1`, changes are additive only.
+- Each command has a versioned schema (`bolt.list/v1`, `bolt.inspect/v1`, `bolt.run/v1`,
+  `bolt.catalog/v1`, …). Within `v1`, changes are additive only.
 - Values from environment variables appear as `«env:NAME»`, and values set in `bolt.local.yaml`
   appear as `«local:NAME»`, on `inspect`, `info`, and a `run` preview. That keeps secrets out of
   agent transcripts. It does not hide them from an agent that can read your files.
 
-`--json` today: `version` (flat), `list`, `info`, `check`, `inspect`, `status`, `run` (envelope). Still planned: `ai`.
+`bolt ai --json` `data` is `{ plugins: [...] }`, the same catalog `bolt ai` writes into the context
+file. Handlers with `ai: false` are omitted. `"confirm"` and `true` handlers include `ai`.
 
 ### Which plans an agent may run
 
-<Info>
-  `bolt inspect --json` and `bolt run --dry-run --json` report an effective `ai` (`false` stricter
-  than `confirm` stricter than `true`) and `ai_reasons`. `ai.run: never` refuses agent execute. The
-  default `confirm` does not block an `ai: true` plan. A non-builtin `ai: true` handler is capped at
-  `confirm` unless its namespace is in `ai.trust_plugins`. Shadowing a built-in namespace forces
-  `ai: false`. `--confirmed-by-user` is mechanical. Built-in confirm-tier sign-off is Phase 2b.
-</Info>
-
-Each plan gets an effective agent mode derived from its steps, and the strictest step wins. Shell
-(`run:`) steps and local actions are `confirm`. Read-only built-ins an agent may run as `true` include
-`ue/info`, `ue/ini_get`, `ue/ini_read_all`, `git/info`, and `svn/info`. Destructive built-ins stay
-`false`. The `ai` flag still controls what `bolt ai` writes to `.bolt/ai-context.md`.
+`bolt inspect --json` and `bolt run --dry-run --json` report an effective `ai` (`false` stricter
+than `confirm` stricter than `true`) and `ai_reasons`. `ai.run: never` refuses agent execute
+(`AGENT_EXECUTION_DISABLED`). The default `confirm` does not block an `ai: true` plan. A non-builtin
+`ai: true` handler is capped at `confirm` unless its namespace is in `ai.trust_plugins`. Shadowing a
+built-in namespace forces `ai: false`. `--confirmed-by-user` is a mechanical check: Bolt does not
+prove a person saw the plan. Shell `run:` steps and local actions are `"confirm"`.
 
 ## Related
 

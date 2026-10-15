@@ -106,17 +106,17 @@ reference from the project's `bolt.yaml`:
 
 An agent skill (shipped via `.claude-plugin/plugin.json`) that instructs LLMs to:
 
-1. Locate `bolt.yaml` (Bolt walks upward from cwd).
-2. Read `.bolt/ai-context.md`; if missing or the hash is stale, run `bolt ai`
-   and re-read.
-3. Use **only** commands present in the context — never guess.
-4. Follow safety rules (`--dry-run` first, confirm any `kill` task, respect
-   fail-fast flow aborts, don't edit `bolt.yaml`/`bolt.local.yaml` unprompted).
+1. Read `bolt version --json` and pick a tier from `agent`, `execute`, and `confirm`.
+2. Discover with `bolt list|info|status|inspect --json` or `bolt ai --json`.
+3. Preview with `bolt run --dry-run … --json`. Use only names from that output.
+4. Ask before a `"confirm"` plan. Do not skip confirmation. Execute with
+   `--execute --plan=<hash>` and `--confirmed-by-user` only after a yes.
+   `ai: false` plans, including `kill`, are handed to the user.
 
 ### `.claude-plugin/plugin.json`
 
 Registers the `boltstack` skill for Claude/agent plugin hosts. Note: its
-`version` (1.3.0) lags the root package version — bump on skill changes.
+`version` (1.4.0) lags the root package version — bump on skill changes.
 
 ---
 

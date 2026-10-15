@@ -90,7 +90,7 @@ bolt run daily --dry-run
 
 ### 3. Check Exit Codes
 
-Bolt exits non-zero when a run fails. Check it in scripts: `0` success, `1` task failure, `2` usage error, `3` config error (`bolt.yaml` missing, unreadable, or invalid), `4` denied (agent execute refusals, including `AI_FORBIDDEN`). `70` is an internal crash and `130` is an interrupt. See [exit codes](/cli/run#exit-codes).
+Bolt exits non-zero when a run fails. Check it in scripts: `0` success, `1` task failure, `2` usage error, `3` config error (`bolt.yaml` missing, unreadable, or invalid), `4` denied on agent execute (`PLUGIN_NOT_BUILT`, `PLAN_MISMATCH`, `AGENT_EXECUTION_DISABLED`, `AI_FORBIDDEN`, `CONFIRM_REQUIRED`). `70` is an internal crash and `130` is an interrupt. See [exit codes](/cli/run#exit-codes).
 
 ```bash
 bolt run daily

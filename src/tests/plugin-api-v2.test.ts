@@ -180,6 +180,7 @@ test("bolt version --json lists plugin_api and capabilities", async () => {
     "plugin-manifest",
     "agent",
     "execute",
+    "confirm",
   ]);
 });
 

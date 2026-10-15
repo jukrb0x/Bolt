@@ -75,7 +75,7 @@ export default definePlugin({
 });
 ```
 
-`definePlugin` stamps `Symbol.for("boltstack.plugin")` and `apiVersion`. Omit `apiVersion` and the host stamps `1`, so the plugin also loads on older bolts. Declare `apiVersion: 2` for capability tags and results that bolt acts on; see [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2). Any other number is rejected. The manifest is the object built from each `defineHandler`: description template, `ai` (default `false`), and the flat zod params. `"confirm"` is metadata only. `bolt run` does not prompt.
+`definePlugin` stamps `Symbol.for("boltstack.plugin")` and `apiVersion`. Omit `apiVersion` and the host stamps `1`, so the plugin also loads on older bolts. Declare `apiVersion: 2` for capability tags and results that bolt acts on; see [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2). Any other number is rejected. The manifest is the object built from each `defineHandler`: description template, `ai` (default `false`), and the flat zod params. A human `bolt run` does not prompt. Agent execute of a `"confirm"` plan requires `--confirmed-by-user`.
 
 Params are a flat `z.object` of `z.string()`, `z.enum()`, `z.coerce.number()`, and `z.coerce.boolean()`, plus `.optional()`, `.default()`, and `.describe()`. Bolt checks them before the handler runs. `${input}` in `description` is replaced with the step's `with:` value.
 

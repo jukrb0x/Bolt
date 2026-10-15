@@ -297,8 +297,8 @@ Both are plugin API v2 plugins. Generated pages list every handler: [git](/refer
 | --------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `git/info`, `svn/info`                                                            | `true`      | `vcs.info` | Read-only. Relative `path` resolves against the project directory; outside it, human runs warn and AI invocations are rejected (`AI_FORBIDDEN`, exit 4) |
 | `git/status`, `svn/status`                                                        | `"confirm"` |            | `git status` runs the repository's `core.fsmonitor` command, so it is not AI-callable                                                                   |
-| `git/pull`, `svn/update`                                                          | `false`     | `vcs.sync` | Change the working copy                                                                                                                                 |
-| `git/checkout`, `git/clone`, `svn/cleanup`, `svn/revert`, `svn/commit`, `svn/add` | `false`     |            | Change the working copy or the remote                                                                                                                   |
+| `git/pull`, `svn/update`                                                          | `"confirm"` | `vcs.sync` | Update the working copy. An agent may run them after `--confirmed-by-user`.                                                                             |
+| `git/checkout`, `git/clone`, `svn/cleanup`, `svn/revert`, `svn/commit`, `svn/add` | `false`     |            | Change the working copy or the remote. Stricter than an update, so they stay `false`.                                                                   |
 
 `git/info` and `svn/info` return their fields as result data (`commit`, `branch`; `url`, `revision`, `last_changed_rev`). `ue/info` still prints engine and project info for paths outside the project.
 

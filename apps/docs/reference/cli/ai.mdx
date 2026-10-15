@@ -13,8 +13,9 @@ Generate .bolt/ai-context.md for LLM tool integration
 bolt ai [options]
 ```
 
-| Argument   | Type    | Alias | Required | Default | Description                                |
-| ---------- | ------- | ----- | -------- | ------- | ------------------------------------------ |
-| `--stdout` | boolean |       |          | `false` | Print to stdout instead of writing to file |
+| Argument   | Type    | Alias | Required | Default | Description                                       |
+| ---------- | ------- | ----- | -------- | ------- | ------------------------------------------------- |
+| `--stdout` | boolean |       |          | `false` | Print to stdout instead of writing to file        |
+| `--json`   | boolean |       |          | `false` | Print one bolt.catalog/v1 JSON document on stdout |
 
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

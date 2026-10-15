@@ -307,7 +307,10 @@ export class UEPlugin extends PluginBase.withDescriptor({
 }) {
   namespace = "ue";
 
-  @handler("Build target: ${target} with config: ${config}")
+  @handler({
+    ai: "confirm",
+    description: "Build target: ${target} with config: ${config}",
+  })
   async build(params: Record<string, string>, ctx: BoltPluginContext) {
     const targetName = params.target;
     if (!targetName || targetName.trim() === "") {
@@ -357,7 +360,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     }
   }
 
-  @handler("Update engine repository")
+  @handler({ ai: "confirm", description: "Update engine repository" })
   async update_engine(params: Record<string, string>, ctx: BoltPluginContext) {
     const repo = ueConfig(ctx).engine;
     const vcs = repo.vcs ?? "git";
@@ -368,7 +371,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     }
   }
 
-  @handler("Update project repository")
+  @handler({ ai: "confirm", description: "Update project repository" })
   async update_project(params: Record<string, string>, ctx: BoltPluginContext) {
     const repo = ueConfig(ctx).project;
     const vcs = repo.vcs ?? "svn";
@@ -390,7 +393,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     await svnPlugin.handlers["revert"]({ path: p }, ctx);
   }
 
-  @handler("Run engine Setup.bat")
+  @handler({ ai: "confirm", description: "Run engine Setup.bat" })
   async setup(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ueConfig(ctx).engine.path;
     const setupBat = setupScript(uePath);
@@ -403,7 +406,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     await run(cmd, ctx);
   }
 
-  @handler("Generate project files")
+  @handler({ ai: "confirm", description: "Generate project files" })
   async generate_project(params: Record<string, string>, ctx: BoltPluginContext) {
     const uePath = ueConfig(ctx).engine.path;
     const projFile = ueConfig(ctx).uproject;
@@ -413,7 +416,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     );
   }
 
-  @handler("Launch ${target} (${config})")
+  @handler({ ai: "confirm", description: "Launch ${target} (${config})" })
   async start(params: Record<string, string>, ctx: BoltPluginContext) {
     const cfg = ueConfig(ctx);
     const uePath = cfg.engine.path;
@@ -501,7 +504,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     );
   }
 
-  @handler("Set INI ${file} [${section}] ${key}")
+  @handler({ ai: "confirm", description: "Set INI ${file} [${section}] ${key}" })
   async ini_set(params: Record<string, string>, ctx: BoltPluginContext) {
     const {
       file,
@@ -567,7 +570,7 @@ export class UEPlugin extends PluginBase.withDescriptor({
     }
   }
 
-  @handler("Override INI ${file} with ${override-file}")
+  @handler({ ai: "confirm", description: "Override INI ${file} with ${override-file}" })
   async ini_override(params: Record<string, string>, ctx: BoltPluginContext) {
     const { file, "override-file": overrideFile } = params;
     const projectPath = ueConfig(ctx).project.path;
@@ -603,12 +606,12 @@ export class UEPlugin extends PluginBase.withDescriptor({
     }
   }
 
-  @handler("Build engine from source")
+  @handler({ ai: "confirm", description: "Build engine from source" })
   async build_engine(params: Record<string, string>, ctx: BoltPluginContext) {
     await this.build({ ...params, target: "engine" }, ctx);
   }
 
-  @handler("Build program ${target}")
+  @handler({ ai: "confirm", description: "Build program ${target}" })
   async build_program(params: Record<string, string>, ctx: BoltPluginContext) {
     if (!params.target || params.target.trim() === "") {
       throw new Error(`No target specified. Use: bolt run <task> --target=<Name>`);

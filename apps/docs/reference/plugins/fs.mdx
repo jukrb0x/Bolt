@@ -1,23 +1,29 @@
 ---
 title: "fs plugin"
-description: ""
+description: "Built-in file handlers."
 ---
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
+Built-in file handlers.
+
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `fs`      |         | 4        |
+| `fs`      | `1.0.0` | 4        |
 
 ## Handlers
 
 ### fs/copy
 
-Step: `uses: fs/copy`. AI: `false` (not exposed to AI).
+Copy a file inside the project
+
+Step: `uses: fs/copy`. AI: `"confirm"` (AI may call it after user confirmation).
 
 _No declared parameter schema._
 
 ### fs/delete
+
+Delete a file or directory inside the project
 
 Step: `uses: fs/delete`. AI: `false` (not exposed to AI).
 
@@ -25,12 +31,16 @@ _No declared parameter schema._
 
 ### fs/mkdir
 
-Step: `uses: fs/mkdir`. AI: `false` (not exposed to AI).
+Create a directory inside the project
+
+Step: `uses: fs/mkdir`. AI: `"confirm"` (AI may call it after user confirmation).
 
 _No declared parameter schema._
 
 ### fs/move
 
-Step: `uses: fs/move`. AI: `false` (not exposed to AI).
+Move a file inside the project
+
+Step: `uses: fs/move`. AI: `"confirm"` (AI may call it after user confirmation).
 
 _No declared parameter schema._

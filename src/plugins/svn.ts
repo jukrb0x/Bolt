@@ -95,7 +95,7 @@ const plugin = definePlugin({
   apiVersion: 2,
   handlers: {
     update: defineHandler(
-      { ai: false, capability: "vcs.sync", description: "svn update ${path}" },
+      { ai: "confirm", capability: "vcs.sync", description: "svn update ${path}" },
       async (params, ctx) => {
         const p = resolvePath(params);
         ctx.logger.cmd(`svn update "${p}" --non-interactive --trust-server-cert`);

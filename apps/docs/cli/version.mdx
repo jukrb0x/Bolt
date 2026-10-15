@@ -45,12 +45,13 @@ bolt version --json
     "plugin-api-2",
     "plugin-manifest",
     "agent",
-    "execute"
+    "execute",
+    "confirm"
   ]
 }
 ```
 
-`plugin_api` lists every plugin API version this bolt accepts. `capabilities` is append-only. Plugin authors check for `plugin-api-2` before declaring `apiVersion: 2`. `plugin-manifest` means this bolt writes content-addressed plugin manifests (`bolt plugin build`, and a human `bolt run`). `agent` and `execute` mean `bolt run` can preview and execute an `ai: true` plan (`--agent` / `--execute --plan=<hash>`). They do not mean confirm-tier handlers have been signed off. An older bolt prints only the version string instead of JSON; treat it as plugin API v1 only.
+`plugin_api` lists every plugin API version this bolt accepts. `capabilities` is append-only. Plugin authors check for `plugin-api-2` before declaring `apiVersion: 2`. `plugin-manifest` means this bolt writes content-addressed plugin manifests (`bolt plugin build`, and a human `bolt run`). `agent` and `execute` mean `bolt run` can preview and execute an `ai: true` plan (`--agent` / `--execute --plan=<hash>`). `confirm` means a `"confirm"` plan runs when `--confirmed-by-user` is passed, and built-in confirm-tier handlers are signed off. An older bolt prints only the version string instead of JSON; treat it as plugin API v1 only.
 
 ## See Also
 
