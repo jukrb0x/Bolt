@@ -3,7 +3,7 @@ title: "Plugin API"
 description: 'Plugins import boltstack and zod. The running bolt process injects one instance of each. definePlugin and PluginBase stamp Symbol.for("boltstack.plugin") and the declared apiVersion (1 by default)...'
 ---
 
-Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and the plugin's declared `apiVersion`. It defaults to `1`. This bolt accepts plugin API `1` and `2` (`SUPPORTED_PLUGIN_API_VERSIONS`; `PLUGIN_API_VERSION` is `2`, the highest). Plugin API v2 adds [handler results](#handler-results-plugin-api-v2), [capability tags](#capability-tags-plugin-api-v2), and `ctx.emit`. See [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2).
+Plugins import `boltstack` and `zod`. The running `bolt` process injects one instance of each. `definePlugin` and `PluginBase` stamp `Symbol.for("boltstack.plugin")` and the plugin's declared `apiVersion`. It defaults to `1`. This bolt accepts plugin API `1` and `2` (`SUPPORTED_PLUGIN_API_VERSIONS`; `PLUGIN_API_VERSION` is `2`, the highest). Plugin API v2 adds [handler results](#handler-results-plugin-api-v2), [capability tags](#capability-tags-plugin-api-v2), `ctx.emit`, and [config hooks](#config-hooks-plugin-api-v2). See [Migrating to plugin API v2](/guides/migrating-to-plugin-api-2).
 
 The runtime manifest is not authored as YAML. `defineHandler` and `@handler` fill it in memory when the plugin is defined. Separately, `bolt ai` reads the serializable catalog file `bolt.plugin.json` (see [Plugin System](/guides/plugin-system)); refresh it with `bolt plugin build`.
 
@@ -183,6 +183,48 @@ export default class DeployPlugin extends PluginBase.withDescriptor({
 `@handler("...")` still works. The object form takes `description`, `ai`, `params`, `alias`, and `capability`. A class plugin declares plugin API v2 with the instance field `apiVersion = 2;`. A `static apiVersion` is not read by bolt: it is an error when it differs from the instance field and a warning when it matches. Only decorated methods become handlers. `onInit`, `onBeforeStep`, and `onAfterStep` are lifecycle hooks on the instance. They are not copied into the manifest.
 
 The host compiles class files with legacy decorators. It does not read the project's `tsconfig`.
+
+## Config hooks (plugin API v2)
+
+Config hooks are part of the plugin API v2 public surface. Set `apiVersion` to `2` before implementing one. Bolt calls a hook when the method exists, including on a plugin that left `apiVersion` at `1`. `bolt check` warns in that case: `Set apiVersion = 2 on plugin <namespace>`.
+
+```typescript
+interface ConfigIssue {
+  path: string;
+  message: string;
+  code?: string;
+  hint?: string;
+}
+
+validateConfig?(input: {
+  namespace: string;
+  config: unknown | undefined; // omitted when the plugins entry has no config
+  present: boolean; // false when plugins[] has no entry for this namespace
+  tasks: Record<string, unknown>;
+  configPath: string;
+}): ConfigIssue[];
+
+aiContext?(input: { cfg: BoltPluginConfig; configDir: string }): {
+  markdown?: string[];
+  info?: Record<string, unknown>;
+};
+
+aiPathRoots?(input: { cfg: BoltPluginConfig; configDir: string }): Array<{
+  refs: string[];
+  params: string[];
+  root: string;
+  label: string;
+}>;
+
+/** Reserved. bolt init does not call this. */
+initDetect?(dir: string): { kind: string; summary: string } | null;
+```
+
+`validateConfig` runs from `loadConfig` and `bolt check` after the core schema succeeds. Bolt calls it on every built-in, whether or not `bolt.yaml` has an entry for it, and on every external plugin this config loaded. `present` is false and `config` is undefined when `plugins[]` has no entry. A plugin that exposes `metadata` (a Zod schema) is checked only when `present` is true. A schema failure is `CONFIG_PLUGIN_INVALID` (exit 3) at `plugins.<namespace>.config…`. Domain rules, such as tasks that reference the plugin, belong in `validateConfig`, not in that schema.
+
+A task `uses:` value of `namespace/handler` whose namespace is not a built-in and not a `plugins[]` entry is `CONFIG_PLUGIN_REQUIRED` (exit 3). The hint is `Add a plugins entry for "<namespace>" or install the plugin.` A built-in that is registered but missing from `bolt.yaml` writes its own hint. A return value that is not `ConfigIssue[]`, or a hook that throws, is `CONFIG_PLUGIN_HOOK`.
+
+`aiContext`, `aiPathRoots`, and `initDetect` are typed on the plugin. `bolt init` does not call `initDetect`. `aiPathRoots` does not replace the path checks bolt already applies to handlers such as `git/info`.
 
 ## Brand
 

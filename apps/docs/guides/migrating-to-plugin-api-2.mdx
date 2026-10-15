@@ -1,18 +1,21 @@
 ---
 title: "Migrating to plugin API v2"
-description: "When to declare apiVersion 2, how results, events, and capability tags behave, and what older bolts do with your plugin."
+description: "When to declare apiVersion 2, how results, events, capability tags, and config hooks behave, and what older bolts do with your plugin."
 ---
 
-Plugin API v2 adds three things: handler results that bolt acts on, `ctx.emit` events, and capability tags. Existing plugins keep working unchanged. A plugin without `apiVersion` is plugin API v1.
+Plugin API v2 adds handler results that bolt acts on, `ctx.emit` events, capability tags, and config hooks. Existing plugins keep working unchanged. A plugin without `apiVersion` is plugin API v1.
 
 ## 1. Do you need v2?
 
-| You want                                                       | Plugin API                     |
-| -------------------------------------------------------------- | ------------------------------ |
-| Progress or log events                                         | v1 is enough. Use `ctx.emit?.` |
-| Return values only for your own tests                          | v1 is enough                   |
-| `capability` tags                                              | v2                             |
-| A returned `fail`, `warn`, `data`, or diagnostics bolt acts on | v2                             |
+| You want                                                                  | Plugin API                     |
+| ------------------------------------------------------------------------- | ------------------------------ |
+| Progress or log events                                                    | v1 is enough. Use `ctx.emit?.` |
+| Return values only for your own tests                                     | v1 is enough                   |
+| `capability` tags                                                         | v2                             |
+| A returned `fail`, `warn`, `data`, or diagnostics bolt acts on            | v2                             |
+| Config hooks (`validateConfig`, `aiContext`, `aiPathRoots`, `initDetect`) | v2                             |
+
+Config hooks need `apiVersion: 2`. Bolt calls a hook when the method exists. `bolt check` warns `Set apiVersion = 2 on plugin <namespace>` when a hook is present and `apiVersion` is not 2. `validateConfig` runs during config load. `aiContext`, `aiPathRoots`, and `initDetect` are on the type surface; `bolt init` does not call `initDetect`. See [Config hooks](/api/plugin-api#config-hooks-plugin-api-v2).
 
 ## 2. Minimum bolt
 

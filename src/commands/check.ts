@@ -54,6 +54,7 @@ export default defineCommand({
           issue(
             error.code ?? "CONFIG_INVALID",
             error.path ? `${error.path}: ${error.message}` : error.message,
+            error.hint,
           ),
         ),
       });
@@ -79,6 +80,7 @@ export default defineCommand({
     console.log(pc.red(`✗ bolt.yaml has ${result.errors.length} error(s):\n`));
     for (const err of result.errors) {
       console.log(`  ${pc.cyan(err.path.padEnd(36))}${pc.red(err.message)}`);
+      if (err.hint) console.log(`  ${"".padEnd(36)}${err.hint}`);
     }
     if (result.legacy.length > 0) {
       console.log(pc.yellow("\nThis looks like a bolt v2.0 config:\n"));

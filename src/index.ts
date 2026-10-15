@@ -10,6 +10,9 @@ export type { BoltConfig, PluginEntry, Project, Flow, Step } from "./config";
 export type {
   AiMode,
   BoltPlugin,
+  ConfigIssue,
+  ValidateConfigInput,
+  PluginConfigHooks,
   BoltPluginHandler,
   BoltPluginContext,
   BoltPluginContextV2,

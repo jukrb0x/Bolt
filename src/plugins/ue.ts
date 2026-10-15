@@ -1,5 +1,5 @@
 import { PluginBase, handler } from "../plugin";
-import type { BoltPluginContext, HandlerResult } from "../plugin";
+import type { BoltPluginContext, ConfigIssue, HandlerResult, ValidateConfigInput } from "../plugin";
 import path from "path";
 import { existsSync, readdirSync, readFileSync, statSync, renameSync, mkdirSync } from "fs";
 import { z } from "zod";
@@ -79,21 +79,6 @@ export interface UeConfig {
 
 function resolveAgainst(configDir: string, value: string): string {
   return path.isAbsolute(value) ? value : path.resolve(configDir, value);
-}
-
-export function ueMetadataErrors(plugins: unknown): Array<{ path: string; message: string }> {
-  if (!Array.isArray(plugins)) return [];
-  const entry = plugins.find(
-    (item) =>
-      !!item && typeof item === "object" && (item as { namespace?: unknown }).namespace === "ue",
-  ) as { config?: unknown } | undefined;
-  if (!entry) return [];
-  const result = ueConfigSchema.safeParse(entry.config);
-  if (result.success) return [];
-  return result.error.issues.map((issue) => ({
-    path: ["plugins", "ue", "config", ...issue.path.map(String)].join("."),
-    message: issue.message,
-  }));
 }
 
 export function tasksReferenceUe(tasks: unknown): boolean {
@@ -306,6 +291,20 @@ export class UEPlugin extends PluginBase.withDescriptor({
   metadata: ueConfigSchema,
 }) {
   namespace = "ue";
+  override apiVersion = 2;
+
+  /** Tasks that call ue/ need a plugins entry. Metadata shape is the Zod schema, not this hook. */
+  validateConfig(input: ValidateConfigInput): ConfigIssue[] {
+    if (input.present || !tasksReferenceUe(input.tasks)) return [];
+    return [
+      {
+        path: `plugins.${input.namespace}`,
+        message: "ue metadata is required when a task uses a ue/ handler",
+        code: "CONFIG_PLUGIN_REQUIRED",
+        hint: "Add plugins: [{ namespace: ue, config: { engine, project, uproject } }]",
+      },
+    ];
+  }
 
   @handler({
     ai: "confirm",

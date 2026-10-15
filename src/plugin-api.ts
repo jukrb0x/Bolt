@@ -173,7 +173,48 @@ export declare const PLUGIN_API_VERSION: 2;
 /** Every plugin API version this bolt accepts. */
 export declare const SUPPORTED_PLUGIN_API_VERSIONS: readonly number[];
 
-export interface BoltPlugin {
+/** One problem reported by `validateConfig`. */
+export interface ConfigIssue {
+  path: string;
+  message: string;
+  code?: string;
+  hint?: string;
+}
+
+/** Argument to `validateConfig`. Bolt calls the method when it exists, not only for apiVersion 2. */
+export interface ValidateConfigInput {
+  namespace: string;
+  /** This namespace's yaml `config`. Undefined when the entry is missing or has no config. */
+  config: unknown | undefined;
+  /** True when `plugins[]` has an entry for this namespace (builtin config or a path plugin). */
+  present: boolean;
+  tasks: Record<string, unknown>;
+  configPath: string;
+}
+
+/**
+ * Plugin API v2 config hooks. Implement them on a plugin that sets `apiVersion` to 2.
+ * Bolt calls a hook when the method exists. `bolt check` warns when a hook is present
+ * and `apiVersion` is not 2. `initDetect` is reserved: `bolt init` does not call it.
+ * `aiContext` and `aiPathRoots` are part of this type surface.
+ */
+export interface PluginConfigHooks {
+  validateConfig?(input: ValidateConfigInput): ConfigIssue[];
+  aiContext?(input: { cfg: BoltPluginConfig; configDir: string }): {
+    markdown?: string[];
+    info?: Record<string, unknown>;
+  };
+  /** Roots for a later path confinement. Not a replacement for core path restrictions. */
+  aiPathRoots?(input: { cfg: BoltPluginConfig; configDir: string }): Array<{
+    refs: string[];
+    params: string[];
+    root: string;
+    label: string;
+  }>;
+  initDetect?(dir: string): { kind: string; summary: string } | null;
+}
+
+export interface BoltPlugin extends PluginConfigHooks {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
   /** Declared plugin API version (1 or 2). Plain handler maps omit it and are treated as 1. */
@@ -255,6 +296,20 @@ export declare abstract class PluginBase implements BoltPlugin {
     params: Record<string, string>,
     ctx: BoltPluginContext,
   ): Promise<void>;
+  /** Requires `apiVersion` 2. Called from config load when the method exists. */
+  validateConfig?(input: ValidateConfigInput): ConfigIssue[];
+  aiContext?(input: { cfg: BoltPluginConfig; configDir: string }): {
+    markdown?: string[];
+    info?: Record<string, unknown>;
+  };
+  aiPathRoots?(input: { cfg: BoltPluginConfig; configDir: string }): Array<{
+    refs: string[];
+    params: string[];
+    root: string;
+    label: string;
+  }>;
+  /** Reserved. `bolt init` does not call this. */
+  initDetect?(dir: string): { kind: string; summary: string } | null;
 
   static withDescriptor<TMeta = unknown>(
     meta: PluginMeta<TMeta>,
@@ -297,16 +352,20 @@ export declare function definePlugin<TMeta = unknown>(def: {
   description: string;
   /**
    * Plugin API version this plugin is written against. Omitted means 1.
-   * Declare 2 for capability tags and returned results; check that
+   * Declare 2 for capability tags, returned results, and config hooks; check that
    * `bolt version --json` lists "plugin-api-2" first.
    */
   apiVersion?: 1 | 2;
   metadata?: import("zod").ZodType<TMeta>;
   handlers: Record<string, HandlerDef<any>>;
+  validateConfig?: PluginConfigHooks["validateConfig"];
+  aiContext?: PluginConfigHooks["aiContext"];
+  aiPathRoots?: PluginConfigHooks["aiPathRoots"];
+  initDetect?: PluginConfigHooks["initDetect"];
 }): BoltPlugin & { manifest: PluginManifest };
 
 /** Optional lifecycle hooks for class-based plugins. Not part of PluginManifest. */
-export interface PluginLifecycleHooks {
+export interface PluginLifecycleHooks extends PluginConfigHooks {
   onInit?(ctx: BoltPluginContext): Promise<void>;
   onBeforeStep?(
     handlerName: string,

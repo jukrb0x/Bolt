@@ -5,6 +5,20 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Plugin config hooks
+
+`validateConfig` runs from `loadConfig` and `bolt check` after the core schema succeeds. Bolt calls it on every built-in, even when `bolt.yaml` has no entry for that plugin, and on every external plugin that config loaded. A plugin `metadata` Zod schema is checked only when that namespace has a `plugins` entry. Rules about tasks and other fields belong in `validateConfig`.
+
+Config failures from this path exit 3:
+
+- `CONFIG_PLUGIN_INVALID` — the metadata schema failed. The path is `plugins.<namespace>.config…`.
+- `CONFIG_PLUGIN_REQUIRED` — a task uses `namespace/handler` and that plugin is not available. The `ue` plugin asks for `engine`, `project`, and `uproject` when a task uses `ue/…` and `plugins` has no `ue` entry. Any other missing namespace uses the hint `Add a plugins entry for "<namespace>" or install the plugin.`
+- `CONFIG_PLUGIN_HOOK` — `validateConfig` threw or did not return `ConfigIssue[]`.
+
+`aiContext`, `aiPathRoots`, and `initDetect` are part of the plugin API v2 types. `bolt init` does not call `initDetect`. Hooks require `apiVersion` 2. Bolt still calls a hook when the method exists. `bolt check` warns `Set apiVersion = 2 on plugin <namespace>` when a hook is present without plugin API v2.
+
+The `ue` and `svn` built-ins declare plugin API v2.
+
 ### Confirm gate (BOLT-M1 Phase 2b)
 
 Built-in handler `ai` flags are signed off. Read-only handlers stay `ai: true`: `ue/info`, `ue/ini_get`, `ue/ini_read_all`, `git/info`, `svn/info`. There is no JSON read handler. These move to `"confirm"`: `ue/build`, `ue/build_engine`, `ue/build_program`, `ue/start`, `ue/generate_project`, `ue/setup`, `ue/update_engine`, `ue/update_project`, `ue/ini_set`, `ue/ini_override`, `git/pull`, `svn/update`, `fs/copy`, `fs/move`, `fs/mkdir`, `json/set`, `json/merge`. `git/status` and `svn/status` stay `"confirm"`. These stay `false`: `ue/kill`, `ue/svn_revert`, `ue/svn_cleanup`, `ue/fix_dll`, `ue/fillddc` (runs the editor to fill the DDC; stricter than confirm), `ue/ini_remove` (deletes a key), `fs/delete`, `git/checkout`, `git/clone`, `svn/cleanup`, `svn/revert`, `svn/commit`, `svn/add`. That changes `.bolt/ai-context.md` and its context hash. Run `bolt ai` again.

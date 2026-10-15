@@ -88,7 +88,7 @@ test("version --json appends agent and execute", async () => {
 test("implied agent flags preview or refuse without executing", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-2a-flags-"));
   const marker = path.join(dir, "ran.txt");
-  project(dir, "tasks:\n  hi:\n    - run: echo hi > ran.txt\n  die:\n    - uses: ue/kill\n");
+  project(dir, "tasks:\n  hi:\n    - run: echo hi > ran.txt\n  die:\n    - run: echo die\n");
   const env = { HOME: path.join(dir, "home"), USERPROFILE: path.join(dir, "home") };
   try {
     const preview = await bolt(["run", "--dry-run", "hi", "--json"], dir, env);
@@ -152,7 +152,7 @@ test("stage 1 refusals do not import, in the required order", async () => {
   writePlugin(pluginDir, truePlugin(top, ran));
   project(
     dir,
-    "tasks:\n  go:\n    - uses: demo/go\n  die:\n    - uses: ue/kill\n  hi:\n    - run: echo hi > ran.txt\n",
+    "tasks:\n  go:\n    - uses: demo/go\n  die:\n    - uses: fs/delete\n      with: { path: gone.txt }\n  hi:\n    - run: echo hi > ran.txt\n",
   );
   try {
     const unbuilt = await bolt(["run", "go", "--execute", "--plan=00", "--json"], dir, env);

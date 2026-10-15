@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import os from "os";
 import path from "path";
 import { createRuntime, type Runtime } from "./runtime";
-import { svnMetadataErrors } from "./plugins/svn";
-import { tasksReferenceUe, ueMetadataErrors } from "./plugins/ue";
+import type { BoltPlugin, ConfigIssue, ValidateConfigInput } from "./plugin";
+import { PluginRegistry } from "./plugin-registry";
+import { builtinPlugins } from "./plugins";
 import { findLegacyKeys, unknownProjectRefs } from "./legacy-config";
 import {
   assessCapabilities,
@@ -372,6 +374,15 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     shared.capabilities,
     local.capabilities,
   );
+  const loaded = await loadValidationPlugins(shared.plugins, configDir);
+  const pluginIssues = pluginMetadataErrors(
+    { plugins: shared.plugins, tasks: shared.tasks },
+    loaded,
+    filepath,
+  );
+  if (pluginIssues.length > 0) {
+    throw new Error(`bolt.yaml invalid (${formatConfigIssues(pluginIssues)})`);
+  }
 
   return {
     version: CONFIG_VERSION,
@@ -394,27 +405,284 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
 
 export interface ConfigCheckResult {
   ok: boolean;
-  errors: Array<{ path: string; message: string; code?: string }>;
+  errors: ConfigIssue[];
 }
 
-/** Plugin metadata failures. Core schema errors stay in BoltConfigSchema. */
-export function pluginMetadataErrors(parsed: unknown): Array<{ path: string; message: string }> {
+const CONFIG_HOOKS = ["validateConfig", "aiContext", "aiPathRoots", "initDetect"] as const;
+
+interface DeclaredPlugin {
+  namespace: string;
+  config?: unknown;
+  /** True when the yaml entry has a `config` key. An omitted config stays undefined. */
+  hasConfig: boolean;
+}
+
+interface ParseableSchema {
+  safeParse(data: unknown): {
+    success: boolean;
+    error?: { issues: Array<{ path: Array<string | number>; message: string }> };
+  };
+}
+
+function declaredPlugins(plugins: unknown): DeclaredPlugin[] {
+  if (!Array.isArray(plugins)) return [];
+  const out: DeclaredPlugin[] = [];
+  for (const item of plugins) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as { namespace?: unknown; config?: unknown };
+    if (typeof record.namespace !== "string" || record.namespace === "") continue;
+    const declared: DeclaredPlugin = {
+      namespace: record.namespace,
+      hasConfig: Object.prototype.hasOwnProperty.call(record, "config"),
+    };
+    if (declared.hasConfig) declared.config = record.config;
+    out.push(declared);
+  }
+  return out;
+}
+
+function metadataSchema(plugin: BoltPlugin): ParseableSchema | undefined {
+  const schema = (plugin as { metadata?: unknown }).metadata ?? plugin.manifest?.metadata;
+  if (
+    schema &&
+    typeof schema === "object" &&
+    typeof (schema as { safeParse?: unknown }).safeParse === "function"
+  ) {
+    return schema as ParseableSchema;
+  }
+  return undefined;
+}
+
+function isConfigIssue(value: unknown): value is ConfigIssue {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record.path !== "string" || typeof record.message !== "string") return false;
+  if (record.code !== undefined && typeof record.code !== "string") return false;
+  if (record.hint !== undefined && typeof record.hint !== "string") return false;
+  return true;
+}
+
+/** `namespace/handler`. Relative paths and any other shape are not handler refs. */
+function handlerNamespace(uses: string): string | undefined {
+  if (uses.startsWith("./") || uses.startsWith("../")) return undefined;
+  const slash = uses.indexOf("/");
+  if (slash <= 0 || slash !== uses.lastIndexOf("/")) return undefined;
+  const namespace = uses.slice(0, slash);
+  const handler = uses.slice(slash + 1);
+  if (!namespace || !handler) return undefined;
+  return namespace;
+}
+
+function hasPluginEntry(root: string): boolean {
+  return existsSync(path.join(root, "index.ts")) || existsSync(path.join(root, "index.js"));
+}
+
+/** Namespaces bolt would load from `.bolt/plugins` without importing them. */
+function discoveredNamespaces(configDir: string): Set<string> {
+  const found = new Set<string>();
+  for (const dir of [
+    path.join(configDir, ".bolt", "plugins"),
+    path.join(os.homedir(), ".bolt", "plugins"),
+  ]) {
+    if (!existsSync(dir)) continue;
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const root = path.join(dir, name);
+      try {
+        if (!statSync(root).isDirectory() || !hasPluginEntry(root)) continue;
+      } catch {
+        continue;
+      }
+      found.add(name);
+    }
+  }
+  return found;
+}
+
+function referencedNamespaces(tasks: unknown): string[] {
+  if (!tasks || typeof tasks !== "object") return [];
+  const seen: string[] = [];
+  const have = new Set<string>();
+  for (const steps of Object.values(tasks as Record<string, unknown>)) {
+    if (!Array.isArray(steps)) continue;
+    for (const step of steps) {
+      if (!step || typeof step !== "object") continue;
+      const uses = (step as { uses?: unknown }).uses;
+      if (typeof uses !== "string") continue;
+      const namespace = handlerNamespace(uses);
+      if (!namespace || have.has(namespace)) continue;
+      have.add(namespace);
+      seen.push(namespace);
+    }
+  }
+  return seen;
+}
+
+function hookIssues(plugin: BoltPlugin, input: ValidateConfigInput): ConfigIssue[] {
+  if (typeof plugin.validateConfig !== "function") return [];
+  let returned: unknown;
+  try {
+    returned = plugin.validateConfig(input);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return [
+      {
+        path: `plugins.${plugin.namespace}`,
+        message: `validateConfig threw: ${message}`,
+        code: "CONFIG_PLUGIN_HOOK",
+      },
+    ];
+  }
+  if (!Array.isArray(returned) || !returned.every(isConfigIssue)) {
+    return [
+      {
+        path: `plugins.${plugin.namespace}`,
+        message: "validateConfig must return ConfigIssue[]",
+        code: "CONFIG_PLUGIN_HOOK",
+      },
+    ];
+  }
+  return returned;
+}
+
+function pluginHasConfigHook(plugin: BoltPlugin): boolean {
+  const record = plugin as unknown as Record<string, unknown>;
+  return CONFIG_HOOKS.some((name) => typeof record[name] === "function");
+}
+
+/** `bolt check` warns. The hook still runs. */
+function pluginHookApiWarnings(plugins: readonly BoltPlugin[]): string[] {
+  const warnings: string[] = [];
+  for (const plugin of plugins) {
+    if (pluginHasConfigHook(plugin) && plugin.apiVersion !== 2) {
+      warnings.push(`Set apiVersion = 2 on plugin ${plugin.namespace}`);
+    }
+  }
+  return warnings;
+}
+
+/**
+ * Builtins, plus `plugins[]` entries that declare `path` and actually load.
+ * A missing or broken file is skipped. The yaml entry still counts as declared,
+ * so core does not report that namespace as unregistered.
+ */
+async function loadValidationPlugins(
+  entries: readonly { namespace: string; path?: string; config?: unknown }[],
+  configDir: string,
+): Promise<BoltPlugin[]> {
+  const byNs = new Map<string, BoltPlugin>();
+  for (const plugin of Object.values(builtinPlugins)) byNs.set(plugin.namespace, plugin);
+  for (const entry of entries) {
+    if (!entry.path) continue;
+    const loaded = await loadPathPlugin(entry, configDir);
+    if (loaded) byNs.set(entry.namespace, loaded);
+  }
+  return [...byNs.values()];
+}
+
+async function loadPathPlugin(
+  entry: { namespace: string; path?: string; config?: unknown },
+  configDir: string,
+): Promise<BoltPlugin | undefined> {
+  if (!entry.path) return undefined;
+  const reg = new PluginRegistry();
+  const resolved = path.resolve(configDir, entry.path);
+  try {
+    if (entry.config !== undefined) {
+      await reg.loadAndInstantiate(
+        entry.namespace,
+        resolved,
+        entry.config,
+        undefined,
+        configDir,
+        "path",
+      );
+    } else {
+      await reg.loadFromPath(entry.namespace, resolved, configDir, "path");
+    }
+  } catch {
+    return undefined;
+  }
+  return reg.get(entry.namespace);
+}
+
+function formatConfigIssues(issues: ConfigIssue[]): string {
+  return issues
+    .map((issue) => {
+      const hint = issue.hint ? ` (${issue.hint})` : "";
+      const code = issue.code ? ` [${issue.code}]` : "";
+      return `${issue.path}: ${issue.message}${hint}${code}`;
+    })
+    .join("; ");
+}
+
+/**
+ * Metadata Zod failures, `validateConfig` results, and the unregistered-namespace check.
+ * Core schema errors stay in BoltConfigSchema. Domain rules stay in the plugin hook.
+ */
+export function pluginMetadataErrors(
+  parsed: unknown,
+  plugins: readonly BoltPlugin[] = Object.values(builtinPlugins),
+  configPath = "",
+): ConfigIssue[] {
   if (!parsed || typeof parsed !== "object") return [];
   const record = parsed as { plugins?: unknown; tasks?: unknown };
-  const errors = [...ueMetadataErrors(record.plugins), ...svnMetadataErrors(record.plugins)];
-  const hasUe = Array.isArray(record.plugins)
-    ? record.plugins.some(
-        (item) =>
-          !!item &&
-          typeof item === "object" &&
-          (item as { namespace?: unknown }).namespace === "ue",
-      )
-    : false;
-  if (tasksReferenceUe(record.tasks) && !hasUe) {
+  const entries = declaredPlugins(record.plugins);
+  const tasks =
+    record.tasks && typeof record.tasks === "object"
+      ? (record.tasks as Record<string, unknown>)
+      : {};
+  const errors: ConfigIssue[] = [];
+  const registered = new Set<string>();
+
+  for (const plugin of plugins) {
+    registered.add(plugin.namespace);
+    const entry = entries.find((item) => item.namespace === plugin.namespace);
+    const present = entry !== undefined;
+    const config = present && entry.hasConfig ? entry.config : undefined;
+    if (present) {
+      const schema = metadataSchema(plugin);
+      if (schema) {
+        const result = schema.safeParse(config === undefined ? {} : config);
+        if (!result.success) {
+          for (const issue of result.error?.issues ?? []) {
+            const rest = issue.path.map(String).filter((part) => part !== "");
+            errors.push({
+              path: ["plugins", plugin.namespace, "config", ...rest].join("."),
+              message: issue.message,
+              code: "CONFIG_PLUGIN_INVALID",
+            });
+          }
+        }
+      }
+    }
+    errors.push(
+      ...hookIssues(plugin, {
+        namespace: plugin.namespace,
+        config,
+        present,
+        tasks,
+        configPath,
+      }),
+    );
+  }
+
+  const declared = new Set(entries.map((entry) => entry.namespace));
+  const discovered = configPath
+    ? discoveredNamespaces(path.dirname(path.resolve(configPath)))
+    : new Set<string>();
+  for (const namespace of referencedNamespaces(tasks)) {
+    if (registered.has(namespace) || declared.has(namespace) || discovered.has(namespace)) continue;
     errors.push({
-      path: "plugins.ue",
-      message:
-        "ue metadata is required when a task uses a ue/ handler (plugins: namespace ue, with engine, project, uproject, targets)",
+      path: `plugins.${namespace}`,
+      message: `tasks use "${namespace}/…" but plugin "${namespace}" is not registered`,
+      code: "CONFIG_PLUGIN_REQUIRED",
+      hint: `Add a plugins entry for "${namespace}" or install the plugin.`,
     });
   }
   return errors;
@@ -432,7 +700,7 @@ export async function checkConfig(
   runtime?: Runtime,
 ): Promise<ConfigCheckResultWithLegacy> {
   const rt = runtime ?? createRuntime();
-  const errors: Array<{ path: string; message: string; code?: string }> = [];
+  const errors: ConfigIssue[] = [];
 
   let raw: string;
   try {
@@ -506,12 +774,23 @@ export async function checkConfig(
       })),
     );
   }
-  errors.push(
-    ...pluginMetadataErrors(merged).map((e) => ({
-      ...e,
-      path: labelOverridePath(e.path, parsed, localOverrides),
-    })),
-  );
+  let hookWarnings: string[] = [];
+  if (result.success) {
+    const loaded = await loadValidationPlugins(result.data.plugins, configDir);
+    hookWarnings = pluginHookApiWarnings(loaded);
+    errors.push(
+      ...pluginMetadataErrors(
+        { plugins: result.data.plugins, tasks: result.data.tasks },
+        loaded,
+        filepath,
+      ).map((issue) => ({
+        path: labelOverridePath(issue.path, parsed, localOverrides),
+        message: issue.message,
+        ...(issue.code ? { code: issue.code } : {}),
+        ...(issue.hint ? { hint: issue.hint } : {}),
+      })),
+    );
+  }
   for (const ref of unknownProjectRefs(parsed)) {
     errors.push({
       path: ref.path,
@@ -519,7 +798,7 @@ export async function checkConfig(
     });
   }
 
-  let warnings: string[] = [];
+  let warnings: string[] = hookWarnings;
   if (errors.length === 0 && result.success) {
     const { map, sources } = mergeCapabilityMaps(result.data.capabilities, localCapabilities);
     const report = assessCapabilities(
@@ -532,7 +811,7 @@ export async function checkConfig(
       configDir,
       { requested: capabilityUsesInTasks(result.data.tasks) },
     );
-    warnings = report.warnings;
+    warnings = [...hookWarnings, ...report.warnings];
     const known = new Set([
       "ue",
       "fs",

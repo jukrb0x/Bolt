@@ -12,21 +12,6 @@ export const svnConfigSchema = z
   })
   .strict();
 
-export function svnMetadataErrors(plugins: unknown): Array<{ path: string; message: string }> {
-  if (!Array.isArray(plugins)) return [];
-  const entry = plugins.find(
-    (item) =>
-      !!item && typeof item === "object" && (item as { namespace?: unknown }).namespace === "svn",
-  ) as { config?: unknown } | undefined;
-  if (!entry) return [];
-  const result = svnConfigSchema.safeParse(entry.config ?? {});
-  if (result.success) return [];
-  return result.error.issues.map((issue) => ({
-    path: ["plugins", "svn", "config", ...issue.path].filter((part) => part !== "").join("."),
-    message: issue.message,
-  }));
-}
-
 function tortoisePreference(ctx: BoltPluginContext): boolean | undefined {
   const raw = declaredPluginConfig(ctx, "svn");
   if (raw === undefined) return undefined;
@@ -93,6 +78,10 @@ const plugin = definePlugin({
   version: "1.0.0",
   description: "Built-in svn handlers.",
   apiVersion: 2,
+  metadata: svnConfigSchema,
+  validateConfig() {
+    return [];
+  },
   handlers: {
     update: defineHandler(
       { ai: "confirm", capability: "vcs.sync", description: "svn update ${path}" },

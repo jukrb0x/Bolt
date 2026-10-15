@@ -114,6 +114,46 @@ export interface HandlerOptions {
   capability?: Capability | Capability[];
 }
 
+/** One problem reported by `validateConfig` or by core metadata validation. */
+export interface ConfigIssue {
+  path: string;
+  message: string;
+  code?: string;
+  hint?: string;
+}
+
+/** Argument to `validateConfig`. Called when the method exists, not only for apiVersion 2. */
+export interface ValidateConfigInput {
+  namespace: string;
+  /** This namespace's yaml `config`. Undefined when the entry is missing or has no config. */
+  config: unknown | undefined;
+  /** True when `plugins[]` has an entry for this namespace (builtin config or a path plugin). */
+  present: boolean;
+  tasks: Record<string, unknown>;
+  configPath: string;
+}
+
+/**
+ * Plugin API v2 config hooks. Bolt calls a hook when the method exists.
+ * Docs require `apiVersion` 2; `bolt check` warns when a hook is present without it.
+ * `initDetect` is reserved: `bolt init` does not call it.
+ */
+export interface PluginConfigHooks {
+  validateConfig?(input: ValidateConfigInput): ConfigIssue[];
+  aiContext?(input: { cfg: BoltConfig; configDir: string }): {
+    markdown?: string[];
+    info?: Record<string, unknown>;
+  };
+  /** Roots for a later path confinement. Not a replacement for core `AI_PATH_RESTRICTED`. */
+  aiPathRoots?(input: { cfg: BoltConfig; configDir: string }): Array<{
+    refs: string[];
+    params: string[];
+    root: string;
+    label: string;
+  }>;
+  initDetect?(dir: string): { kind: string; summary: string } | null;
+}
+
 // ---------------------------------------------------------------------------
 // Legacy @param storage — reader kept so ai-context can still call getParamMap.
 // New params are zod schemas on the handler, not this map.
@@ -637,13 +677,13 @@ export function defineHandler<T = Record<string, string>, D extends JsonValue = 
   return def;
 }
 
-export interface DefinePluginOptions<TMeta = unknown> {
+export interface DefinePluginOptions<TMeta = unknown> extends PluginConfigHooks {
   namespace: string;
   version: string;
   description: string;
   /**
    * Plugin API version this plugin is written against: 1 or 2. Omitted means 1.
-   * Declare 2 to use capability tags and returned results.
+   * Declare 2 to use capability tags, returned results, and config hooks.
    */
   apiVersion?: 1 | 2;
   metadata?: ZodType<TMeta>;
@@ -716,6 +756,10 @@ export function definePlugin<TMeta = unknown>(
       return fillDescription(manifest.handlers[handlerName]?.description, params);
     },
   };
+  if (opts.validateConfig) plugin.validateConfig = opts.validateConfig;
+  if (opts.aiContext) plugin.aiContext = opts.aiContext;
+  if (opts.aiPathRoots) plugin.aiPathRoots = opts.aiPathRoots;
+  if (opts.initDetect) plugin.initDetect = opts.initDetect;
   markDefinedPlugin(plugin);
   brandPlugin(plugin, apiVersion);
   return plugin;
@@ -726,7 +770,7 @@ export function definePlugin<TMeta = unknown>(
 // ---------------------------------------------------------------------------
 
 /** Optional lifecycle hooks that class-based plugins can implement. */
-export interface PluginLifecycleHooks {
+export interface PluginLifecycleHooks extends PluginConfigHooks {
   onInit?(ctx: BoltPluginContext): Promise<void>;
   onBeforeStep?(
     handlerName: string,
@@ -740,7 +784,7 @@ export interface PluginLifecycleHooks {
   ): Promise<void>;
 }
 
-export interface BoltPlugin {
+export interface BoltPlugin extends PluginConfigHooks {
   namespace: string;
   handlers: Record<string, BoltPluginHandler>;
   /** Stamped by definePlugin() and PluginBase. Plain handler maps omit it. */
@@ -789,7 +833,7 @@ export abstract class PluginBase implements BoltPlugin {
   description = "";
   /** Plugin API version. Override with the instance field `apiVersion = 2;` (not `static`). */
   apiVersion: number = 1;
-  /** Zod schema this plugin owns. Not checked by the runner. */
+  /** Zod schema this plugin owns. Checked when a plugins[] entry for this namespace is present. */
   metadata?: ZodTypeAny;
   config?: unknown;
   /** Accepted by withDescriptor's constructor. The registry does not inject deps. */

@@ -25,6 +25,23 @@ export function typeChecks(): void {
   };
   mock.emit?.({ type: "progress", progress: { current: 1 } });
 
+  const issue: Api.ConfigIssue = {
+    path: "plugins.demo",
+    message: "missing",
+    code: "CONFIG_PLUGIN_REQUIRED",
+    hint: "add it",
+  };
+  const hooks: Api.BoltPlugin = {
+    namespace: "demo",
+    handlers: {},
+    apiVersion: 2,
+    validateConfig: () => [issue],
+    aiContext: () => ({ markdown: ["note"], info: { targets: {} } }),
+    aiPathRoots: () => [{ refs: ["ue/ini_get"], params: ["file"], root: "/", label: "project" }],
+    initDetect: (dir) => (dir ? { kind: "demo", summary: dir } : null),
+  };
+  void hooks;
+
   // V2 context: emit is required.
   const v2: Api.BoltPluginContextV2 = { ...mock, emit: () => {} };
   v2.emit({ type: "log", message: "hi" });
