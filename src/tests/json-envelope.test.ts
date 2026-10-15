@@ -306,28 +306,32 @@ describe("CLI --json", () => {
     }
   });
 
-  test("check, list, and info use CONFIG_UNREADABLE when bolt.yaml cannot be read", async () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-json-unreadable-"));
-    const file = path.join(dir, "bolt.yaml");
-    writeFileSync(file, YAML);
-    chmodSync(file, 0o000);
-    try {
-      for (const cmd of ["check", "list", "info"] as const) {
-        const run = await bolt([cmd, "--json"], dir);
-        expect(run.code).toBe(3);
-        const body = parseStdout(run.out);
-        expect(body.ok).toBe(false);
-        const err = (body.errors as Array<{ code: string; message: string; hint?: string }>)[0];
-        expect(err.code).toBe("CONFIG_UNREADABLE");
-        expect(err.message).toContain("Permission denied");
-        expect(err.hint ?? "").not.toBe("<file>");
-        expect(err.hint ?? "").not.toContain(file);
+  // chmod 000 does not deny reads on Windows, so the file stays readable and bolt exits 0.
+  test.skipIf(process.platform === "win32")(
+    "check, list, and info use CONFIG_UNREADABLE when bolt.yaml cannot be read",
+    async () => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-json-unreadable-"));
+      const file = path.join(dir, "bolt.yaml");
+      writeFileSync(file, YAML);
+      chmodSync(file, 0o000);
+      try {
+        for (const cmd of ["check", "list", "info"] as const) {
+          const run = await bolt([cmd, "--json"], dir);
+          expect(run.code).toBe(3);
+          const body = parseStdout(run.out);
+          expect(body.ok).toBe(false);
+          const err = (body.errors as Array<{ code: string; message: string; hint?: string }>)[0];
+          expect(err.code).toBe("CONFIG_UNREADABLE");
+          expect(err.message).toContain("Permission denied");
+          expect(err.hint ?? "").not.toBe("<file>");
+          expect(err.hint ?? "").not.toContain(file);
+        }
+      } finally {
+        chmodSync(file, 0o644);
+        rmSync(dir, { recursive: true, force: true });
       }
-    } finally {
-      chmodSync(file, 0o644);
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 
   test("text output is unchanged when --json is absent", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-json-text-"));
