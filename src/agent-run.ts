@@ -338,7 +338,7 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
     });
   }
 
-  const loaded = await loadVerifiedPlugins(preview.participants, Object.values(builtinPlugins));
+  const loaded = await loadVerifiedPlugins(preview.participants, [...builtinPlugins]);
   if (!loaded.ok) {
     emitJsonAndExit({
       schema,

@@ -54,16 +54,16 @@ test("core config validation does not special-case ue or svn metadata", () => {
   expect(src).not.toMatch(/from ["']\.\/plugins\/svn["']/);
 });
 
-test("ai-context calls aiContext; init and the runner leave the other hooks unused", () => {
+test("ai-context calls aiContext; the runner calls aiPathRoots; init does not call initDetect", () => {
   expect(readFileSync(path.join(REPO_ROOT, "src/commands/init.ts"), "utf8")).not.toMatch(
     /initDetect/,
   );
   const aiContext = readFileSync(path.join(REPO_ROOT, "src/ai-context.ts"), "utf8");
   expect(aiContext).toMatch(/\.aiContext\b/);
   expect(aiContext).not.toMatch(/\.aiPathRoots\b|initDetect/);
-  expect(readFileSync(path.join(REPO_ROOT, "src/runner.ts"), "utf8")).not.toMatch(
-    /\.aiPathRoots\b/,
-  );
+  const runner = readFileSync(path.join(REPO_ROOT, "src/runner.ts"), "utf8");
+  expect(runner).toMatch(/\.aiPathRoots\b/);
+  expect(runner).not.toMatch(/initDetect/);
 });
 
 test("a config with no plugin entries still loads", async () => {

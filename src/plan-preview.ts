@@ -370,7 +370,7 @@ export function previewPlan(opts: {
   home?: string;
 }): InspectPreview {
   const home = opts.home ?? userHome();
-  const builtins = builtinPlugins as Record<string, BoltPlugin>;
+  const builtins = Object.fromEntries(builtinPlugins.map((plugin) => [plugin.namespace, plugin]));
   const discovered = new Map(
     discoverPlugins(opts.configDir, opts.cfg.plugins, home).map((item) => [item.namespace, item]),
   );

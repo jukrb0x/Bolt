@@ -212,7 +212,7 @@ function aiLabel(ai: HandlerManifest["ai"]): string {
 
 function pluginPages(): string[] {
   const reg = new PluginRegistry();
-  for (const plugin of Object.values(builtinPlugins)) reg.register(plugin);
+  for (const plugin of builtinPlugins) reg.register(plugin);
   const out: string[] = [];
   for (const ns of reg.listNamespaces().sort()) {
     const manifest = reg.get(ns)!.manifest!;

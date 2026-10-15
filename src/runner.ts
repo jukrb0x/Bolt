@@ -10,11 +10,7 @@ import {
 import { normalizeTextualBooleans, type BoltPlugin, type BoltPluginContext } from "./plugin";
 import { createRuntime, type Runtime } from "./runtime";
 import type { SpawnOptions } from "./runtime/types";
-import uePlugin, { ueConfigSchema } from "./plugins/ue";
-import fsPlugin from "./plugins/fs";
-import jsonPlugin from "./plugins/json";
-import gitPlugin from "./plugins/git";
-import svnPlugin from "./plugins/svn";
+import { builtinPlugins } from "./plugins";
 import path from "path";
 import { LOCAL_RUNNERS } from "./local-runners";
 import type { ZodTypeAny } from "zod";
@@ -39,20 +35,14 @@ export interface StepResult extends HandlerResult {
   step: string;
 }
 
-const BUILTINS: Record<string, BoltPlugin> = {
-  ue: uePlugin,
-  fs: fsPlugin,
-  json: jsonPlugin,
-  git: gitPlugin,
-  svn: svnPlugin,
-};
+const BUILTINS = new Set<BoltPlugin>(builtinPlugins);
 
 /** The param schema for a handler: its manifest schema, or the built-in table. */
 function stepParamSchema(plugin: BoltPlugin, operation: string): ZodTypeAny | undefined {
   const declared = plugin.manifest?.handlers[operation]?.params as ZodTypeAny | undefined;
   if (declared) return declared;
   // Only the real built-in object, not a user plugin that shadows the namespace.
-  if (BUILTINS[plugin.namespace] !== plugin) return undefined;
+  if (!BUILTINS.has(plugin)) return undefined;
   return BUILTIN_PARAM_SCHEMAS[plugin.namespace]?.[operation];
 }
 
@@ -122,9 +112,8 @@ interface RunnerOptions {
  * are not restricted here: git/info and svn/info warn; fs/* and json/* keep
  * main's literal check.
  *
- * `ue/ini_get` and `ue/ini_read_all` are not in this map. Their `file` is joined
- * onto the UE plugin's `project.path`, which is not `configDir`. See
- * {@link AI_UE_INI_FILE}.
+ * Plugin `aiPathRoots` rows are merged into this table before an AI handler
+ * runs. They do not replace these rows.
  */
 const AI_PATH_RESTRICTED = new Map<string, string[]>([
   ["git/info", ["path"]],
@@ -137,8 +126,31 @@ const AI_PATH_RESTRICTED = new Map<string, string[]>([
   ["json/merge", ["file", "patch"]],
 ]);
 
-/** Read-only ini handlers. `file` must stay inside the UE project directory. */
-const AI_UE_INI_FILE = new Set(["ue/ini_get", "ue/ini_read_all"]);
+interface AiPathRule {
+  params: string[];
+  root: string;
+  label: string;
+}
+
+interface AiPathRootEntry {
+  refs: string[];
+  params: string[];
+  root: string;
+  label: string;
+}
+
+function isAiPathRootEntry(value: unknown): value is AiPathRootEntry {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as AiPathRootEntry;
+  return (
+    Array.isArray(entry.refs) &&
+    entry.refs.every((ref) => typeof ref === "string") &&
+    Array.isArray(entry.params) &&
+    entry.params.every((param) => typeof param === "string") &&
+    typeof entry.root === "string" &&
+    typeof entry.label === "string"
+  );
+}
 
 /** Errors the runner already printed (step failure), so callers do not print them twice. */
 const reportedErrors = new WeakSet<object>();
@@ -185,6 +197,8 @@ export function resolveLocalAction(actionPath: string): string {
 
 export class Runner {
   private registry?: PluginRegistry;
+  /** AI path rules for this run: core rows plus plugin `aiPathRoots`, built once. */
+  private aiConfinement?: Map<string, AiPathRule[]>;
   /** Set when a task fails and the plan stops. */
   failedTask?: string;
   private runtime: Runtime;
@@ -215,11 +229,7 @@ export class Runner {
   private async ensureRegistry(): Promise<PluginRegistry> {
     if (this.registry) return this.registry;
     this.registry = await buildRegistry(this.cfg, this.opts.configDir ?? process.cwd(), [
-      uePlugin,
-      fsPlugin,
-      jsonPlugin,
-      gitPlugin,
-      svnPlugin,
+      ...builtinPlugins,
     ]);
     for (const warning of this.registry.warnings) this.opts.logger?.warn(warning);
     if (this.opts.refreshPluginCache) {
@@ -449,19 +459,12 @@ export class Runner {
     if (!handler) throw new Error(`Unknown op "${operation}" in plugin "${namespace}"`);
 
     const params = parseStepParams(plugin, ref, operation, node.params);
-    if (this.opts.aiInvocation && AI_PATH_RESTRICTED.has(ref)) {
-      for (const key of AI_PATH_RESTRICTED.get(ref) ?? []) {
-        this.assertAiPathInProject(ref, key, params[key]);
+    if (this.opts.aiInvocation) {
+      for (const rule of this.confinement().get(ref) ?? []) {
+        for (const key of rule.params) {
+          this.assertAiPathInRoot(ref, key, params[key], rule.root, rule.label);
+        }
       }
-    }
-    if (this.opts.aiInvocation && AI_UE_INI_FILE.has(ref)) {
-      this.assertAiPathInRoot(
-        ref,
-        "file",
-        params.file,
-        this.ueProjectRoot(),
-        "UE project directory",
-      );
     }
     const step = [...trail, ref].join(" > ");
     // One context object per step, shared by the hooks and the handler as before.
@@ -552,28 +555,34 @@ export class Runner {
     }
   }
 
-  /** Core-side AI rejection for {@link AI_PATH_RESTRICTED} handlers. */
-  private assertAiPathInProject(ref: string, key: string, value: string | undefined): void {
-    const root = this.opts.configDir ?? process.cwd();
-    this.assertAiPathInRoot(ref, key, value, root, "project directory");
-  }
-
   /**
-   * UE `project.path`, resolved the same way `ue/ini_*` joins `file`. Missing or
-   * invalid config fails closed: an AI read must not guess the root.
+   * Core {@link AI_PATH_RESTRICTED} rows plus every plugin `aiPathRoots` result.
+   * Cached for the run, before the handler. An empty `root` fails closed.
    */
-  private ueProjectRoot(): string {
-    const entry = this.cfg.plugins?.find((item) => item.namespace === "ue");
-    const parsed = ueConfigSchema.safeParse(entry?.config);
-    if (!parsed.success) {
-      throw new BoltStepError(
-        "AI_FORBIDDEN",
-        `ue: project.path is missing or invalid, so an AI invocation cannot verify ini paths. Fix: set plugins.ue.config.project.path, or use a run: step.`,
-      );
-    }
+  private confinement(): Map<string, AiPathRule[]> {
+    if (this.aiConfinement) return this.aiConfinement;
+    const table = new Map<string, AiPathRule[]>();
     const configDir = this.opts.configDir ?? process.cwd();
-    const raw = parsed.data.project.path;
-    return path.isAbsolute(raw) ? raw : path.resolve(configDir, raw);
+    for (const [ref, params] of AI_PATH_RESTRICTED) {
+      table.set(ref, [{ params, root: configDir, label: "project directory" }]);
+    }
+    const input = { cfg: this.cfg, configDir };
+    for (const ns of this.registry?.listNamespaces() ?? []) {
+      const plugin = this.registry?.get(ns);
+      if (!plugin || typeof plugin.aiPathRoots !== "function") continue;
+      const returned = plugin.aiPathRoots(input);
+      if (!Array.isArray(returned)) continue;
+      for (const entry of returned) {
+        if (!isAiPathRootEntry(entry)) continue;
+        for (const ref of entry.refs) {
+          const rules = table.get(ref) ?? [];
+          rules.push({ params: entry.params, root: entry.root, label: entry.label });
+          table.set(ref, rules);
+        }
+      }
+    }
+    this.aiConfinement = table;
+    return table;
   }
 
   /** Symlink-resolved confinement. `label` is the directory the message names. */
@@ -585,6 +594,12 @@ export class Runner {
     label: string,
   ): void {
     if (!value) return; // the handler reports the missing param
+    if (!root) {
+      throw new BoltStepError(
+        "AI_FORBIDDEN",
+        `${ref}: ${key} "${value}" cannot be verified to be inside the ${label}. Fix: declare a path root for this handler, or use a run: step.`,
+      );
+    }
     try {
       safePath(value, root);
     } catch (error) {

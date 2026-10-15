@@ -243,7 +243,8 @@ export function loadCapabilityIndex(
   const registry = new PluginRegistry();
   const built: BuiltHandler[] = [];
   const unbuilt: UnbuiltPlugin[] = [];
-  const builtins = opts.builtins ?? (builtinPlugins as Record<string, BoltPlugin>);
+  const builtins =
+    opts.builtins ?? Object.fromEntries(builtinPlugins.map((plugin) => [plugin.namespace, plugin]));
   for (const plugin of Object.values(builtins)) {
     registry.register(plugin, "builtin");
     remember(built, plugin);

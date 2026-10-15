@@ -576,7 +576,7 @@ async function loadValidationPlugins(
   configDir: string,
 ): Promise<BoltPlugin[]> {
   const byNs = new Map<string, BoltPlugin>();
-  for (const plugin of Object.values(builtinPlugins)) byNs.set(plugin.namespace, plugin);
+  for (const plugin of builtinPlugins) byNs.set(plugin.namespace, plugin);
   for (const entry of entries) {
     if (!entry.path) continue;
     const loaded = await loadPathPlugin(entry, configDir);
@@ -627,7 +627,7 @@ function formatConfigIssues(issues: ConfigIssue[]): string {
  */
 export function pluginMetadataErrors(
   parsed: unknown,
-  plugins: readonly BoltPlugin[] = Object.values(builtinPlugins),
+  plugins: readonly BoltPlugin[] = builtinPlugins,
   configPath = "",
 ): ConfigIssue[] {
   if (!parsed || typeof parsed !== "object") return [];

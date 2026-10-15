@@ -108,7 +108,7 @@ export function collectAiContext(
  * called after that built-in, so its `info` keys win.
  */
 export function aiContextPlugins(cfg: BoltConfig, registry: PluginRegistry): BoltPlugin[] {
-  const builtins = Object.values(builtinPlugins);
+  const builtins = builtinPlugins;
   const builtinIds = new Set<BoltPlugin>(builtins);
   const externals: BoltPlugin[] = [];
   const seen = new Set<string>();
@@ -488,7 +488,7 @@ export function contextHashForProject(
   configPath: string,
   configDir: string,
 ): string {
-  const registry = buildStaticAiRegistry(cfg, configDir, Object.values(builtinPlugins), {
+  const registry = buildStaticAiRegistry(cfg, configDir, [...builtinPlugins], {
     lenient: true,
   });
   return computeContextHash(readFileSync(configPath, "utf8"), registry);

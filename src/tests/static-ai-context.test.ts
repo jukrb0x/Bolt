@@ -71,10 +71,10 @@ test("builtin-only static registry matches live generateAiContext hash and body"
   const dir = tempDir("bolt-ai3-golden-");
   const configPath = writeYaml(dir);
   const live = new PluginRegistry();
-  for (const p of Object.values(builtinPlugins)) live.register(p);
+  for (const p of builtinPlugins) live.register(p);
   const liveCtx = generateAiContext(cfg, configPath, live);
 
-  const staticReg = buildStaticAiRegistry({ plugins: [] }, dir, Object.values(builtinPlugins));
+  const staticReg = buildStaticAiRegistry({ plugins: [] }, dir, [...builtinPlugins]);
   const staticCtx = generateAiContext(cfg, configPath, staticReg);
 
   expect(hashOf(staticCtx)).toBe(hashOf(liveCtx));

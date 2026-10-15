@@ -10,7 +10,7 @@ export default defineCommand({
   async run() {
     const { configPath, cfg } = await loadProjectConfigOrExit();
     const configDir = path.dirname(configPath);
-    const registry = await buildRegistry(cfg, configDir, Object.values(builtinPlugins));
+    const registry = await buildRegistry(cfg, configDir, [...builtinPlugins]);
 
     const namespaces = registry.listNamespaces();
     if (namespaces.length === 0) {

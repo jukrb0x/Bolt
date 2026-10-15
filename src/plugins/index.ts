@@ -1,4 +1,5 @@
 // src/plugins/index.ts
+import type { BoltPlugin } from "../plugin";
 import gitPlugin from "./git";
 import svnPlugin from "./svn";
 import uePlugin from "./ue";
@@ -12,14 +13,14 @@ export const ue = uePlugin;
 export const fs = fsPlugin;
 export const json = jsonPlugin;
 
-// Export collection for registry
-export const builtinPlugins = {
-  git: gitPlugin,
-  svn: svnPlugin,
-  ue: uePlugin,
-  fs: fsPlugin,
-  json: jsonPlugin,
-};
+/** Built-in plugins in registration order. */
+export const builtinPlugins: readonly BoltPlugin[] = [
+  gitPlugin,
+  svnPlugin,
+  uePlugin,
+  fsPlugin,
+  jsonPlugin,
+];
 
 // Re-export types
 export type { BoltPlugin, BoltPluginHandler, BoltPluginContext } from "../plugin";

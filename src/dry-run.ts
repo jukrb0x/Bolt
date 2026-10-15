@@ -75,7 +75,8 @@ function paramText(params: Record<string, string>): string {
 }
 
 export function renderDryRun(cfg: BoltConfig, plan: RunPlan, opts: DryRunOptions): DryRunReport {
-  const builtins = opts.builtins ?? (builtinPlugins as Record<string, BoltPlugin>);
+  const builtins =
+    opts.builtins ?? Object.fromEntries(builtinPlugins.map((plugin) => [plugin.namespace, plugin]));
   const cwd = opts.cwd ?? process.cwd();
   const lines: string[] = [];
   const problems: string[] = [];

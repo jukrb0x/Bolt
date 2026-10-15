@@ -31,9 +31,9 @@ export default defineCommand({
     if (args?.json) {
       installJsonStdoutGuard();
       const { configPath, cfg } = await loadConfigForJson(JSON_SCHEMA.info);
-      const builtins = new Set(Object.keys(builtinPlugins));
+      const builtins = new Set(builtinPlugins.map((plugin) => plugin.namespace));
       const registry = new PluginRegistry();
-      for (const plugin of Object.values(builtinPlugins)) registry.register(plugin);
+      for (const plugin of builtinPlugins) registry.register(plugin);
       const data = {
         version: cfg.version,
         project: { name: cfg.project.name },

@@ -339,6 +339,26 @@ export class UEPlugin extends PluginBase.withDescriptor({
     };
   }
 
+  /** AI `ue/ini_get` and `ue/ini_read_all`: `file` stays inside `project.path`. */
+  aiPathRoots(input: { cfg: BoltConfig; configDir: string }): Array<{
+    refs: string[];
+    params: string[];
+    root: string;
+    label: string;
+  }> {
+    const raw = input.cfg.plugins?.find((entry) => entry.namespace === "ue")?.config;
+    const parsed = ueConfigSchema.safeParse(raw);
+    const projectPath = parsed.success ? parsed.data.project.path : "";
+    return [
+      {
+        refs: ["ue/ini_get", "ue/ini_read_all"],
+        params: ["file"],
+        root: projectPath ? resolveAgainst(input.configDir, projectPath) : "",
+        label: "UE project directory",
+      },
+    ];
+  }
+
   @handler({
     ai: "confirm",
     description: "Build target: ${target} with config: ${config}",

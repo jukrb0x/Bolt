@@ -46,7 +46,7 @@ export default defineCommand({
       const configDir = path.dirname(path.resolve(configPath));
       let registry;
       try {
-        registry = buildStaticAiRegistry(cfg, configDir, Object.values(builtinPlugins));
+        registry = buildStaticAiRegistry(cfg, configDir, [...builtinPlugins]);
       } catch (e: unknown) {
         if (e instanceof StaticManifestError) {
           emitJsonAndExit({
@@ -78,7 +78,7 @@ export default defineCommand({
 
     let registry;
     try {
-      registry = buildStaticAiRegistry(cfg, configDir, Object.values(builtinPlugins));
+      registry = buildStaticAiRegistry(cfg, configDir, [...builtinPlugins]);
     } catch (e: unknown) {
       if (e instanceof StaticManifestError) {
         console.error(e.message);

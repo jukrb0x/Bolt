@@ -24,11 +24,13 @@ describe("Library API", () => {
   });
 
   test("builtinPlugins contains all plugins", () => {
-    expect(builtinPlugins.git).toBeDefined();
-    expect(builtinPlugins.svn).toBeDefined();
-    expect(builtinPlugins.ue).toBeDefined();
-    expect(builtinPlugins.fs).toBeDefined();
-    expect(builtinPlugins.json).toBeDefined();
+    expect(builtinPlugins.map((plugin) => plugin.namespace).sort()).toEqual([
+      "fs",
+      "git",
+      "json",
+      "svn",
+      "ue",
+    ]);
   });
 
   test("plugins have handlers", () => {

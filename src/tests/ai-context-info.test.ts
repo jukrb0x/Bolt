@@ -9,6 +9,12 @@ import { PluginRegistry } from "../plugin-registry";
 import { builtinPlugins } from "../plugins";
 import { testCfg } from "./env";
 
+function builtin(namespace: string) {
+  const plugin = builtinPlugins.find((item) => item.namespace === namespace);
+  if (!plugin) throw new Error(`missing builtin ${namespace}`);
+  return plugin;
+}
+
 const REPO_ROOT = path.resolve(import.meta.dir, "../..");
 const MAIN = path.join(REPO_ROOT, "src/main.ts");
 
@@ -89,7 +95,7 @@ test("a configured ue plugin with no targets omits info.targets", () => {
       },
     ],
   };
-  const { info, markdown } = collectAiContext([builtinPlugins.ue], {
+  const { info, markdown } = collectAiContext([builtin("ue")], {
     cfg,
     configDir: "/tmp",
   });
@@ -124,8 +130,8 @@ test("aiContext runs by method presence, including apiVersion 1", () => {
 test("aiContext plugin order is builtins, then plugins[] path plugins", () => {
   const tail = plugin("tail", () => ({ info: { tail: true } }), 2);
   const registry = new PluginRegistry();
-  registry.register(builtinPlugins.json);
-  registry.register(builtinPlugins.git);
+  registry.register(builtin("json"));
+  registry.register(builtin("git"));
   registry.register(tail, "path");
   const cfg: BoltConfig = {
     ...bare,
@@ -147,7 +153,7 @@ test("a later path plugin overwrites the same info key the ue builtin contribute
   registry.register(shadow, "path");
   const plugins = aiContextPlugins(testCfg, registry);
   expect(plugins.map((item) => item.namespace)).toEqual(["git", "svn", "ue", "fs", "json", "ue"]);
-  expect(plugins[2]).toBe(builtinPlugins.ue);
+  expect(plugins[2]).toBe(builtin("ue"));
   expect(plugins[5]).toBe(shadow);
   const { info } = collectAiContext(plugins, {
     cfg: testCfg,
