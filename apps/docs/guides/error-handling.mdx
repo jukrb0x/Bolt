@@ -125,6 +125,8 @@ Bolt provides clear error messages with context.
 | `bolt.local.yaml` invalid                                | Local file has keys other than `vars`, or bad YAML | Keep only a `vars` map, or delete the file                                         |
 | `ue plugin config is missing`                            | A task uses `ue/` without ue metadata              | Add `plugins: [{ namespace: ue, config: { engine, project, uproject, targets } }]` |
 | `Unknown task "foo"` / `Unknown flow "foo"` (exit 2)     | Name not in this project's bolt.yaml               | Use the suggestion, or `bolt list`                                                 |
+| `DOCTOR_FAILED` / `WHY_FAILED` (exit 1)                      | `bolt doctor --fix` found an error check, or `bolt why --fail` found an error diagnostic | Read `bolt doctor --json` or `data.primary.fix`. Neither flag edits files |
+| `WHY_NO_SOURCE` (exit 1)                                     | `bolt why` has no `--log`, run id, or failed run log | `bolt why --log=<path>`                                                            |
 | `Command failed (exit N)`                                | Shell command returned non-zero                    | Check output; fix, or add `continue-on-error`                                      |
 | `Build timed out after Nh`                               | Run exceeded `timeout_hours`                       | Increase `timeout_hours` or optimize                                               |
 

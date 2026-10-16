@@ -21,6 +21,7 @@ test("builtin confirm tier is signed off", () => {
   expect(flags(ue)).toEqual({
     build: "confirm",
     build_engine: "confirm",
+    doctor_ddc: true,
     build_program: "confirm",
     fillddc: false,
     fix_dll: false,

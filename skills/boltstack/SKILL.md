@@ -21,7 +21,7 @@ Run `bolt version --json` first. Branch on capabilities, never on the version nu
 
 Do not skip confirmation. Discover, preview, confirm, then execute. A fresh preview before every execution.
 
-1. **Discover.** `bolt list --json`, `bolt info --json`, `bolt status --json`, and `bolt inspect <names> --json` (`bolt.list/v1`, `bolt.info/v1`, `bolt.status/v1`, `bolt.inspect/v1`). `bolt ai --json` prints `bolt.catalog/v1` (plugins and handlers; `ai: false` handlers are omitted) and writes nothing. `bolt ai --stdout` prints `.bolt/ai-context.md` and writes nothing. Use only names from this output. Do not guess a task.
+1. **Discover.** `bolt list --json`, `bolt info --json`, `bolt status --json`, and `bolt inspect <names> --json` (`bolt.list/v1`, `bolt.info/v1`, `bolt.status/v1`, `bolt.inspect/v1`). `bolt doctor --json` is `bolt.doctor/v1`. `bolt why --json` is `bolt.why/v1`. Error checks and diagnostics stay in `data`; the exit stays 0 unless `--fix` or `--fail` is set. `bolt ai --json` prints `bolt.catalog/v1` (plugins and handlers; `ai: false` handlers are omitted) and writes nothing. `bolt ai --stdout` prints `.bolt/ai-context.md` and writes nothing. Use only names from this output. Do not guess a task.
 2. **Preview.** `bolt run --dry-run <names…> [--key=value] --json`. Read `data.ai`, `data.ai_reasons`, and `data.plan_hash`. This is a static preview: no plugins, hooks, handlers, or file writes.
 3. **Confirm.** If `data.ai` is `"confirm"`, show the plan and ask the user. Wait for a yes to that plan. Do not skip confirmation. If `data.ai` is `false`, stop and hand the user the command. If `data.ai` is `true`, no extra yes is required for Bolt, but still show the plan.
 4. **Execute.** Only after that preview:
@@ -36,7 +36,7 @@ Do not skip confirmation. Discover, preview, confirm, then execute. A fresh prev
 
 The client allowlist is the real boundary. Bolt cannot tell a false `--confirmed-by-user` from a real yes.
 
-- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt status`, `bolt ai --stdout`, `bolt ai --json`, and only the prefix `bolt run --dry-run`.
+- Auto-allow `bolt version`, `bolt list`, `bolt info`, `bolt check`, `bolt inspect`, `bolt status`, `bolt doctor`, `bolt why`, `bolt ai --stdout`, `bolt ai --json`, and only the prefix `bolt run --dry-run`. `bolt doctor` and `bolt why` only read. Pass `--fix` or `--fail` only when the user wants a non-zero exit for an error check or diagnostic. Those flags do not edit files.
 - Never auto-allow any other `bolt run` (`--execute`, `--simulate`, `--confirmed-by-user`, or a run without the leading `--dry-run`), `bolt plugin build`, `bolt self-update`, `bolt init`, `bolt migrate`, or default `bolt ai` (it writes `.bolt/ai-context.md`).
 - On Windows, write rules with the absolute path `%USERPROFILE%\.bolt\bin\bolt.exe` so a `bolt.cmd` or `bolt.exe` in the repository cannot take its place.
 

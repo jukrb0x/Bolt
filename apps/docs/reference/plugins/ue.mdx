@@ -9,7 +9,7 @@ Unreal Engine build and editor automation
 
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `ue`      | `1.0.0` | 19       |
+| `ue`      | `1.0.0` | 20       |
 
 ## Handlers
 
@@ -34,6 +34,16 @@ _No declared parameter schema._
 Build program $&#123;target&#125;
 
 Step: `uses: ue/build_program`. AI: `"confirm"` (AI may call it after user confirmation).
+
+_No declared parameter schema._
+
+### ue/doctor_ddc
+
+Check the project DDC ini section against the engine flavor
+
+Step: `uses: ue/doctor_ddc`. AI: `true` (AI may call this handler).
+
+Capabilities: `doctor`.
 
 _No declared parameter schema._
 

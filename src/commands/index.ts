@@ -2,6 +2,8 @@ import runCmd from "./run";
 import listCmd from "./list";
 import infoCmd from "./info";
 import checkCmd from "./check";
+import doctorCmd from "./doctor";
+import whyCmd from "./why";
 import migrateCmd from "./migrate";
 import versionCmd from "./version";
 import updateCmd from "./update";
@@ -19,6 +21,8 @@ export const commands = {
   list: listCmd,
   info: infoCmd,
   check: checkCmd,
+  doctor: doctorCmd,
+  why: whyCmd,
   migrate: migrateCmd,
   config: configCmd,
   init: initCmd,
@@ -37,6 +41,8 @@ export const commandSources: Record<keyof typeof commands, string> = {
   list: "list.ts",
   info: "info.ts",
   check: "check.ts",
+  doctor: "doctor.ts",
+  why: "why.ts",
   migrate: "migrate.ts",
   config: "config.ts",
   init: "init.ts",

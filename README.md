@@ -275,6 +275,7 @@ For a multi-task invocation, the start notification is sent once. It shows the t
 | `ue/svn_revert`                                                                   | Revert SVN changes                          |
 | `ue/generate_project`                                                             | Regenerate project files                    |
 | `ue/fillddc`                                                                      | Fill Derived Data Cache                     |
+| `ue/doctor_ddc`                                                                   | Check the project DDC ini section           |
 | `ue/fix_dll`                                                                      | Remove zero-byte DLLs causing linker errors |
 | `ue/info`                                                                         | Print project and VCS info                  |
 | `ue/ini_set`, `ue/ini_get`, `ue/ini_remove`, `ue/ini_override`, `ue/ini_read_all` | Edit UE `.ini` config                       |

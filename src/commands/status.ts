@@ -17,6 +17,8 @@ const SCHEMAS = {
   list: "v1",
   info: "v1",
   check: "v1",
+  doctor: "v1",
+  why: "v1",
   inspect: "v1",
   status: "v1",
   run: "v1",

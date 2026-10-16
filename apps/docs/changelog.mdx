@@ -5,6 +5,28 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### doctor and why
+
+`bolt doctor` and `bolt why` fan out the existing `doctor` and `diagnose` capability tags. This slice does not add a capability tag. It does not diagnose packaging or cook logs, and it does not run a package step.
+
+Both commands print one JSON document when `--json` is set: `bolt.doctor/v1` or `bolt.why/v1`. The envelope fields match the other commands (`schema`, `bolt`, `ok`, `config`, `data`, `warnings`, `errors`). `ok` is true exactly when the process exits 0. `bolt status --json` lists `schemas.doctor` and `schemas.why` as `v1`.
+
+`bolt doctor` runs every built handler tagged `doctor`. A `capabilities:` entry for `doctor` (or any other fan-out tag in that map) warns once with `CAPABILITY_WARNING` and does not select a single handler. Every match still runs. Order is built-in list order, then `plugins[]` order, then any other built handler by ref. Core reads `data.checks` when the handler sets it, and otherwise maps `diagnostics[]` (`code` becomes `id`; there is no `pass` row on that path). Core sets `source` to `namespace/handler` and counts `summary` from `checks[].level`. A check with no usable `level` counts as `error` and adds warning `DOCTOR_CHECK_LEVEL`.
+
+`data.checks[].level` is `pass`, `info`, `warn`, or `error`. Those results stay in `data` and the exit stays 0, including when a handler returns `status: "fail"`. `--fix` does not edit files. It exits 1 with `DOCTOR_FAILED` only when `summary.error` is greater than 0. `--only=<id>` keeps a check whose id is equal, or whose id starts with that text plus a dot (`ue.ddc` matches `ue.ddc.installed_vs_source` and does not match `ue.ddcfoo`). An `--only` filter that matches nothing warns `DOCTOR_ONLY_UNKNOWN`, returns `checks: []`, and still exits 0 even with `--fix`. No built `doctor` handler warns `DOCTOR_NO_PROVIDERS` and exits 0. A handler that throws exits 1 with `RUN_FAILED`.
+
+`bolt why [run-id]` resolves a log, then runs every built `diagnose` handler. It does not print the log file. Diagnose handlers receive string params `log` (absolute path), `kind` (`run` or `explicit`), and `run_id` when one is known. Typed context fields for those values are not part of this slice. Core copies `diagnostics[]` (`level`, `fix`, and `source`) and sets `primary` to the first `level: "error"` item, otherwise the first item, otherwise `null`. The same fan-out order and `capabilities:` warning apply to `diagnose`. A handler `status: "fail"` stays in `data` and does not by itself exit 1.
+
+Log source order:
+
+1. `--log=<path>` — path relative to the current directory. `data.log.kind` is `explicit`. `run_id` is set only when that file is a `bolt_*.log` under the project's `.bolt/logs`.
+2. The positional run id — a file under `<project>/.bolt/logs`, in this order: `<id>`, `<id>.log`, `bolt_<id>.log`. The id cannot contain a slash or `..`.
+3. The newest failed run — `bolt_*.log` names in that directory, newest name first, whose text contains a line `<< <step>: FAILED (`.
+
+If none of those yield a file, the command does not call plugins. It exits 1 with `WHY_NO_SOURCE` and `data.log: null`. A resolved log with no built `diagnose` handler exits 0 with warning `WHY_NO_PROVIDERS`, `diagnostics: []`, and `primary: null`. `--fail` does not edit the log. It exits 1 with `WHY_FAILED` only when some diagnostic is `level: "error"`. Warn and info diagnostics stay exit 0.
+
+`ue/doctor_ddc` is a read-only `doctor` handler (`ai: true`). It reads `<project>/Config/DefaultEngine.ini` from the `ue` plugin config. An engine tree that contains `Engine/Build/InstalledBuild.txt` is installed; otherwise it is source. The check id is `ue.ddc.installed_vs_source`. If the ini sets a DDC graph only in the section the other flavor reads, the check is `level: "error"` with a non-empty `fix`. Moving that graph into the section this flavor reads makes the same check `pass`. With no `ue` config the handler skips and adds no check. It does not write the ini. `ue/doctor_toolchain` is not in this slice.
+
 ### Plugin API v2 freeze
 
 Plugin API v2 is frozen. Until a plugin API v3 and a bolt major version, the public surface is append-only: `bolt.d.ts`, the plugin API page, and the migrating guide. Existing fields, hook signatures, and `HandlerResult.status` values keep their meaning. New optional fields may be added. Removing a field, changing what a field means, making `emit` required with no transition, changing `HandlerResult.status`, or changing a hook signature incompatibly requires plugin API v3.

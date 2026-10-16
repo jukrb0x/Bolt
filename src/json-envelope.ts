@@ -10,6 +10,8 @@ export const JSON_SCHEMA = {
   list: "bolt.list/v1",
   info: "bolt.info/v1",
   check: "bolt.check/v1",
+  doctor: "bolt.doctor/v1",
+  why: "bolt.why/v1",
   inspect: "bolt.inspect/v1",
   status: "bolt.status/v1",
   run: "bolt.run/v1",

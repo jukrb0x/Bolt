@@ -1,0 +1,22 @@
+---
+title: "bolt doctor"
+description: "Run every built doctor handler and print checks"
+---
+
+{/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
+
+Source: [`src/commands/doctor.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/doctor.ts).
+
+Run every built doctor handler and print checks
+
+```bash
+bolt doctor [options]
+```
+
+| Argument | Type    | Alias | Required | Default | Description                                                    |
+| -------- | ------- | ----- | -------- | ------- | -------------------------------------------------------------- |
+| `--json` | boolean |       |          | `false` | Print one bolt.doctor/v1 JSON document on stdout               |
+| `--fix`  | boolean |       |          | `false` | Exit 1 when any check is level error. Does not edit files      |
+| `--only` | string  |       |          |         | Keep checks whose id equals this or starts with this and a dot |
+
+Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

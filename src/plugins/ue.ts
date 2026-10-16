@@ -1,5 +1,6 @@
 import { maskedTree } from "../interpolate";
-import { PluginBase, handler } from "../plugin";
+import { PluginBase, handler, skipped, warn } from "../plugin";
+import { DDC_CHECK_ID, doctorDdcCheck } from "./ue-doctor-ddc";
 import type { BoltConfig } from "../config";
 import type { BoltPluginContext, ConfigIssue, HandlerResult, ValidateConfigInput } from "../plugin";
 import path from "path";
@@ -361,6 +362,26 @@ export class UEPlugin extends PluginBase.withDescriptor({
         label: "UE project directory",
       },
     ];
+  }
+
+  @handler({
+    ai: true,
+    capability: "doctor",
+    description: "Check the project DDC ini section against the engine flavor",
+  })
+  async doctor_ddc(_params: Record<string, string>, ctx: BoltPluginContext) {
+    const raw = declaredPluginConfig(ctx, "ue");
+    if (raw === undefined) return skipped("ue config is not set");
+    let cfg: UeConfig;
+    try {
+      cfg = ueConfig(ctx);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return warn(message, {
+        data: { checks: [{ id: DDC_CHECK_ID, level: "warn", message }] },
+      });
+    }
+    return doctorDdcCheck({ enginePath: cfg.engine.path, projectPath: cfg.project.path });
   }
 
   @handler({

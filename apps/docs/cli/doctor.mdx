@@ -1,0 +1,56 @@
+---
+title: "bolt doctor"
+description: "Run every built doctor handler and print checks."
+---
+
+Run every built handler tagged `doctor` and print the checks.
+
+## Usage
+
+```bash
+bolt doctor [--json] [--fix] [--only=<check-id>]
+```
+
+## Description
+
+`bolt doctor` does not need a task or a flow. It loads built plugins the same way a human `bolt run` does, then calls every handler tagged `doctor`.
+
+Fan-out order is built-in list order, then `plugins[]` order, then any other built handler by ref. A `capabilities:` entry for `doctor` warns once and does not pick a single handler. Every match still runs.
+
+Core prefers each handler's `data.checks`. If that array is absent, it maps `diagnostics[]` (`code` becomes the check id; that path has no `pass` row). Core sets `source` to `namespace/handler` and counts `summary`.
+
+`--only` keeps a check whose id equals the value, or whose id starts with the value plus a dot. `ue.ddc` matches `ue.ddc.installed_vs_source` and does not match `ue.ddcfoo`. A filter that matches nothing warns `DOCTOR_ONLY_UNKNOWN` and returns no checks.
+
+`--fix` does not edit files. It only changes the exit code.
+
+Human output lists error and warn checks first, with `Fix:` when the check has one, then the other checks and a summary line. It does not dump file contents. `--json` prints one `bolt.doctor/v1` document and nothing else on stdout.
+
+`ue/doctor_ddc` checks whether `<project>/Config/DefaultEngine.ini` puts a DDC graph in the section this engine flavor reads. Installed engines are those with `Engine/Build/InstalledBuild.txt`. The handler does not write the ini. With no `ue` config it adds no check.
+
+## Options
+
+| Flag          | Description                                                           |
+| ------------- | --------------------------------------------------------------------- |
+| `--json`      | Print one `bolt.doctor/v1` document. `ok` is true when the exit is 0. |
+| `--fix`       | Exit 1 with `DOCTOR_FAILED` when `summary.error` is greater than 0.   |
+| `--only=<id>` | Keep checks with this id or this dot-segment prefix.                  |
+
+## Exit codes
+
+| Code | Description                                                                                               |
+| ---- | --------------------------------------------------------------------------------------------------------- |
+| 0    | The command finished. Error checks are in `data`. An empty `--only` result is still 0, even with `--fix`. |
+| 1    | `--fix` and `summary.error > 0` (`DOCTOR_FAILED`), or a handler threw (`RUN_FAILED`).                     |
+| 2    | Unknown flag or other usage error.                                                                        |
+| 3    | Config load failed.                                                                                       |
+
+No built `doctor` handler is a warning, `DOCTOR_NO_PROVIDERS`, and exit 0.
+
+## Examples
+
+```bash
+bolt doctor
+bolt doctor --json
+bolt doctor --only=ue.ddc --json
+bolt doctor --fix
+```

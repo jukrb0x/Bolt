@@ -1,7 +1,18 @@
 import { INTERNAL_EXIT_CODE, INTERRUPTED_EXIT_CODE } from "./exit-codes";
 import { buildEnvelope, installJsonStdoutGuard, writeJsonStdout } from "./json-envelope";
 
-const KNOWN = new Set(["list", "info", "check", "inspect", "status", "run", "ai", "version"]);
+const KNOWN = new Set([
+  "list",
+  "info",
+  "check",
+  "doctor",
+  "why",
+  "inspect",
+  "status",
+  "run",
+  "ai",
+  "version",
+]);
 
 function commandSchema(): string {
   const cmd = process.argv.slice(2).find((arg) => arg !== "--" && !arg.startsWith("-"));

@@ -29,6 +29,12 @@ For a raw (unlisted) target name: `Build.bat <target> <platform> <config> -proje
 
 `target: engine` is reserved and builds the engine from source (see `ue/build_engine`).
 
+### ue/doctor_ddc
+
+Read-only check (`ai: true`, capability `doctor`). `bolt doctor` runs it with every other built `doctor` handler. It reads `<project path>/Config/DefaultEngine.ini`. It does not write that file.
+
+An engine tree with `Engine/Build/InstalledBuild.txt` is treated as installed. Any other tree is source. Check id `ue.ddc.installed_vs_source` is `error`, with a non-empty `fix`, when the ini sets a DDC graph only in the section the other flavor reads. The same check is `pass` when that graph is in the section this flavor reads, or when the file sets no DDC graph. No `ue` plugin config skips the check.
+
 ### Engine version
 
 `ue/build_engine`, `ue/start`, `ue/fillddc`, and `ue/info` name the editor by engine major version: `UE4Editor` for UE4, `UnrealEditor` for UE5. Bolt decides the version in this order:

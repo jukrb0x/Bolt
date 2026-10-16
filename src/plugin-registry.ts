@@ -517,6 +517,7 @@ export async function buildRegistry(
   cfg: { plugins?: { namespace: string; path?: string; config?: Record<string, unknown> }[] },
   configDir: string,
   builtins: BoltPlugin[],
+  opts: { home?: string } = {},
 ): Promise<PluginRegistry> {
   const reg = new PluginRegistry();
 
@@ -524,7 +525,7 @@ export async function buildRegistry(
   for (const p of builtins) reg.register(p);
 
   // 2. User-scope: ~/.bolt/plugins/
-  const userPluginsDir = path.join(os.homedir(), ".bolt", "plugins");
+  const userPluginsDir = path.join(opts.home ?? os.homedir(), ".bolt", "plugins");
   await reg.loadDirectory(userPluginsDir, undefined, "user");
 
   // 3. Project-scope auto-discovery: <project_root>/.bolt/plugins/

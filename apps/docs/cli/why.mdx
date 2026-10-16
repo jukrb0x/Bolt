@@ -1,0 +1,58 @@
+---
+title: "bolt why"
+description: "Explain a failed run log with every built diagnose handler."
+---
+
+Resolve one log, then run every built handler tagged `diagnose`.
+
+## Usage
+
+```bash
+bolt why [run-id] [--json] [--log=<path>] [--fail]
+```
+
+## Description
+
+`bolt why` does not parse a cook log in core, and this slice does not ship a diagnose plugin. It resolves a log and fans out `diagnose`. With no built diagnose handler the command still exits 0: warning `WHY_NO_PROVIDERS`, `diagnostics: []`, `primary: null`.
+
+Log source order:
+
+1. `--log=<path>` — resolved from the current directory. `data.log.kind` is `explicit`. `run_id` is set only when the file is a `bolt_*.log` under the project's `.bolt/logs`.
+2. The positional run id — a file in `<project>/.bolt/logs`, trying `<id>`, then `<id>.log`, then `bolt_<id>.log`. The id cannot contain a slash or `..`.
+3. The newest failed run — `bolt_*.log` in that directory, newest name first, whose text contains a line `<< <step>: FAILED (`.
+
+If none of those is a file, plugins are not called. The command exits 1 with `WHY_NO_SOURCE` and `data.log` null.
+
+Each diagnose handler receives string params `log`, `kind` (`run` or `explicit`), and `run_id` when one is known. Core copies `diagnostics[]` in fan-out order and sets `source`. `primary` is the first `level: "error"` diagnostic, otherwise the first, otherwise `null`. A handler `status: "fail"` stays in `data` and does not by itself exit 1.
+
+`--fail` does not edit the log. It exits 1 with `WHY_FAILED` only when some diagnostic is `level: "error"`.
+
+Human output names the log and prints `primary` with `Fix:` when present. It does not print the log file. `--json` prints one `bolt.why/v1` document and nothing else on stdout.
+
+A `capabilities:` entry for `diagnose` warns once. Every matching handler still runs. Order is built-in list order, then `plugins[]` order, then any other built handler by ref.
+
+## Options
+
+| Flag           | Description                                                        |
+| -------------- | ------------------------------------------------------------------ |
+| `run-id`       | Run id under `.bolt/logs`. Used when `--log` is absent.            |
+| `--json`       | Print one `bolt.why/v1` document. `ok` is true when the exit is 0. |
+| `--log=<path>` | Read this file instead of a run id or the newest failed run.       |
+| `--fail`       | Exit 1 with `WHY_FAILED` when any diagnostic is `level: "error"`.  |
+
+## Exit codes
+
+| Code | Description                                                                                                           |
+| ---- | --------------------------------------------------------------------------------------------------------------------- |
+| 0    | The log was resolved and handlers finished, including when diagnostics contain errors.                                |
+| 1    | No log source (`WHY_NO_SOURCE`), `--fail` with an error diagnostic (`WHY_FAILED`), or a handler threw (`RUN_FAILED`). |
+| 2    | Unknown flag or other usage error.                                                                                    |
+| 3    | Config load failed.                                                                                                   |
+
+## Examples
+
+```bash
+bolt why --log=./cook.log --json
+bolt why --json
+bolt why bolt_2026-10-16T03-49-00 --fail
+```
