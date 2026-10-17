@@ -1,0 +1,28 @@
+LogInit: Display: Log file open
+LogCook: Display: Cook started for /Game/Maps/Town
+LogCook: Display: CookSettings for MemoryMinFreeVirtual 2048
+LogCook: Display: Running CookCommandlet
+LogCook: Display: Cooked packages 1 Packages Remain 3999 Total 4000
+LogCook: Display: Cooked packages 2 Packages Remain 3998 Total 4000
+LogCook: Display: Cooked packages 3 Packages Remain 3997 Total 4000
+LogCook: Display: Cooked packages 4 Packages Remain 3996 Total 4000
+LogCook: Display: Cooked packages 5 Packages Remain 3995 Total 4000
+Error: texture streaming pool over budget
+LogCook: Warning: package /Game/Maps/Town took a long time to save
+LogCook: Display: SENTINEL_COOK_NOISE_do_not_surface cooking package 12 of 4000
+LogCook: Display: Cooked packages 6 Packages Remain 3994 Total 4000
+LogCook: Display: Cooked packages 7 Packages Remain 3993 Total 4000
+LogCook: Display: Cooked packages 8 Packages Remain 3992 Total 4000
+LogCook: Display: Cooked packages 9 Packages Remain 3991 Total 4000
+LogCook: Display: Cooked packages 10 Packages Remain 3990 Total 4000
+LogCook: Display: Cooked packages 11 Packages Remain 3989 Total 4000
+LogCook: Display: Cooked packages 12 Packages Remain 3988 Total 4000
+LogCook: Error: Couldn't find file for package /Game/UI/MissingWidget requested by /Game/Maps/Town.
+LogCook: Display: Cooked packages 13 Packages Remain 3987 Total 4000
+LogInit: Display: still flushing logs after the cook error
+LogCook: Display: Cooked packages 14 Packages Remain 3986 Total 4000
+AutomationTool.exe terminated with exit code 25
+BUILD FAILED
+AutomationTool exiting with ExitCode=25 (Error_UnknownCookFailure)
+Error: Unknown Cook Failure
+Unknown Cook Failure

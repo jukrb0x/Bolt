@@ -1,6 +1,7 @@
 import { maskedTree } from "../interpolate";
 import { PluginBase, handler, skipped, warn } from "../plugin";
 import { DDC_CHECK_ID, doctorDdcCheck } from "./ue-doctor-ddc";
+import { diagnoseUatLog } from "./ue-diagnose-uat";
 import type { BoltConfig } from "../config";
 import type { BoltPluginContext, ConfigIssue, HandlerResult, ValidateConfigInput } from "../plugin";
 import path from "path";
@@ -382,6 +383,15 @@ export class UEPlugin extends PluginBase.withDescriptor({
       });
     }
     return doctorDdcCheck({ enginePath: cfg.engine.path, projectPath: cfg.project.path });
+  }
+
+  @handler({
+    ai: true,
+    capability: "diagnose",
+    description: "Explain a UAT or Cook log that ended as Unknown Cook Failure",
+  })
+  async diagnose_uat(params: Record<string, string>, _ctx: BoltPluginContext) {
+    return diagnoseUatLog(params.log ?? "");
   }
 
   @handler({

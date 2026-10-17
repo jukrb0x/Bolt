@@ -35,6 +35,12 @@ Read-only check (`ai: true`, capability `doctor`). `bolt doctor` runs it with ev
 
 An engine tree with `Engine/Build/InstalledBuild.txt` is treated as installed. Any other tree is source. Check id `ue.ddc.installed_vs_source` is `error`, with a non-empty `fix`, when the ini sets a DDC graph only in the section the other flavor reads. The same check is `pass` when that graph is in the section this flavor reads, or when the file sets no DDC graph. No `ue` plugin config skips the check.
 
+### ue/diagnose_uat
+
+Read-only check (`ai: true`, capability `diagnose`). `bolt why` runs it with every other built `diagnose` handler. It reads the `log` param (an absolute path). It does not need `ue` plugin config, and it does not cook or package.
+
+It returns one EXT-1 diagnostic when the log is a UAT or Cook failure. A missing package (`UE_COOK_MISSING_PACKAGE`), a shader compiler error (`UE_COOK_SHADER`), another `LogCook` error (`UE_COOK_ERROR`), or a fatal or assertion (`UE_COOK_FATAL`) is preferred over the AutomationTool wrapper `Unknown Cook Failure`. The diagnostic `message` names that cause and is shorter than the log. `fix` says what to change. `file` and `line` point at the cause line in the log. A line that only says `Error:` is not a cause. If the wrapper is present and none of those causes are, the code is `UE_COOK_UNKNOWN_ROOTCAUSE`. A log with no cook signal returns no diagnostic.
+
 ### Engine version
 
 `ue/build_engine`, `ue/start`, `ue/fillddc`, and `ue/info` name the editor by engine major version: `UE4Editor` for UE4, `UnrealEditor` for UE5. Bolt decides the version in this order:

@@ -508,7 +508,41 @@ test("why envelope, missing source, no diagnose provider, and --fail", async () 
     expect(data.log).toEqual({ path: log, kind: "explicit" });
     expect(
       (body.warnings as Array<{ code: string }>).some((item) => item.code === "WHY_NO_PROVIDERS"),
+    ).toBe(false);
+
+    plugin(
+      dir,
+      "ue-shadow",
+      `import { defineHandler, definePlugin } from "boltstack";
+export default definePlugin({
+  namespace: "ue",
+  version: "1.0.0",
+  description: "shadow",
+  apiVersion: 2,
+  handlers: {
+    info: defineHandler({ ai: true, description: "info" }, async () => ({ status: "ok" })),
+  },
+});
+`,
+    );
+    writeFileSync(
+      path.join(dir, "bolt.yaml"),
+      `${YAML_HEAD}plugins:
+  - namespace: ue
+    path: ./ue-shadow
+`,
+    );
+    const shadowed = await bolt(["why", "--log", log, "--json"], dir);
+    expect(shadowed.code).toBe(0);
+    const shadowBody = parseStdout(shadowed.out);
+    expect(shadowed.out).not.toContain("SENTINEL_RAW_LOG");
+    expect(
+      (shadowBody.warnings as Array<{ code: string }>).some(
+        (item) => item.code === "WHY_NO_PROVIDERS",
+      ),
     ).toBe(true);
+    expect((shadowBody.data as { diagnostics: unknown[]; primary: null }).diagnostics).toEqual([]);
+    expect((shadowBody.data as { primary: null }).primary).toBeNull();
 
     plugin(
       dir,

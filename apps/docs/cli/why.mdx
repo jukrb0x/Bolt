@@ -13,7 +13,9 @@ bolt why [run-id] [--json] [--log=<path>] [--fail]
 
 ## Description
 
-`bolt why` does not parse a cook log in core, and this slice does not ship a diagnose plugin. It resolves a log and fans out `diagnose`. With no built diagnose handler the command still exits 0: warning `WHY_NO_PROVIDERS`, `diagnostics: []`, `primary: null`.
+`bolt why` does not parse a cook log in core. It resolves a log and fans out `diagnose`. The built-in `ue/diagnose_uat` handler reads that log and returns one diagnostic when it is a UAT or Cook failure. A missing package, a shader compiler error, another cook error, or a fatal or assertion becomes `primary` (`code`, a short `message`, and a `fix`). The message is the cause, not the raw log. A line that only says `Error:` is ignored. `Unknown Cook Failure` is the AutomationTool wrapper around that cause. A log with no cook signal adds no diagnostic. The handler does not cook or package.
+
+With no built diagnose handler the command still exits 0: warning `WHY_NO_PROVIDERS`, `diagnostics: []`, `primary: null`. The `ue` plugin provides `diagnose` unless a path plugin replaces that namespace.
 
 Log source order:
 

@@ -7,7 +7,7 @@ description: "User-visible changes and migration notes."
 
 ### doctor and why
 
-`bolt doctor` and `bolt why` fan out the existing `doctor` and `diagnose` capability tags. This slice does not add a capability tag. It does not diagnose packaging or cook logs, and it does not run a package step.
+`bolt doctor` and `bolt why` fan out the existing `doctor` and `diagnose` capability tags. This slice does not add a capability tag. It does not run a package step.
 
 Both commands print one JSON document when `--json` is set: `bolt.doctor/v1` or `bolt.why/v1`. The envelope fields match the other commands (`schema`, `bolt`, `ok`, `config`, `data`, `warnings`, `errors`). `ok` is true exactly when the process exits 0. `bolt status --json` lists `schemas.doctor` and `schemas.why` as `v1`.
 
@@ -26,6 +26,8 @@ Log source order:
 If none of those yield a file, the command does not call plugins. It exits 1 with `WHY_NO_SOURCE` and `data.log: null`. A resolved log with no built `diagnose` handler exits 0 with warning `WHY_NO_PROVIDERS`, `diagnostics: []`, and `primary: null`. `--fail` does not edit the log. It exits 1 with `WHY_FAILED` only when some diagnostic is `level: "error"`. Warn and info diagnostics stay exit 0.
 
 `ue/doctor_ddc` is a read-only `doctor` handler (`ai: true`). It reads `<project>/Config/DefaultEngine.ini` from the `ue` plugin config. An engine tree that contains `Engine/Build/InstalledBuild.txt` is installed; otherwise it is source. The check id is `ue.ddc.installed_vs_source`. If the ini sets a DDC graph only in the section the other flavor reads, the check is `level: "error"` with a non-empty `fix`. Moving that graph into the section this flavor reads makes the same check `pass`. With no `ue` config the handler skips and adds no check. It does not write the ini. `ue/doctor_toolchain` is not in this slice.
+
+`ue/diagnose_uat` is a read-only `diagnose` handler (`ai: true`). It reads the log path `bolt why` already passes (`log`, plus `kind` and `run_id` when known) and does not need `ue` plugin config. One diagnostic is returned when the log is a UAT or Cook failure. A missing package, a shader compiler error, another `LogCook` error, or a fatal or assertion with a file and line becomes `primary`: a `code`, a short `message`, and a `fix`. The message is that cause. It is not the raw log, and a line that only says `Error:` is ignored. `Unknown Cook Failure` and `Error_UnknownCookFailure` are the AutomationTool wrapper. When a cause sits above that wrapper, the cause is the diagnostic. When the wrapper is the only cook signal, the code is `UE_COOK_UNKNOWN_ROOTCAUSE`. A log with no cook signal adds no diagnostic. This does not cook, package, or write a new failure log. Recent-failed-run lookup is unchanged: the newest `bolt_*.log` under `.bolt/logs` whose text contains `<< <step>: FAILED (`.
 
 ### Plugin API v2 freeze
 

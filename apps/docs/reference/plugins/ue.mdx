@@ -9,7 +9,7 @@ Unreal Engine build and editor automation
 
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `ue`      | `1.0.0` | 20       |
+| `ue`      | `1.0.0` | 21       |
 
 ## Handlers
 
@@ -34,6 +34,16 @@ _No declared parameter schema._
 Build program $&#123;target&#125;
 
 Step: `uses: ue/build_program`. AI: `"confirm"` (AI may call it after user confirmation).
+
+_No declared parameter schema._
+
+### ue/diagnose_uat
+
+Explain a UAT or Cook log that ended as Unknown Cook Failure
+
+Step: `uses: ue/diagnose_uat`. AI: `true` (AI may call this handler).
+
+Capabilities: `diagnose`.
 
 _No declared parameter schema._
 
