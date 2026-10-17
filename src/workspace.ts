@@ -1,13 +1,13 @@
 /**
- * Workspace model and dry-run plan aggregation (BOLT-A1a).
- * Core stores the model and orders plan rows. A plugin tagged `vcs.revision`
- * supplies action, target_rev, and will_touch. This module does not sync.
+ * Workspace model, plan aggregation, and sync policy (BOLT-A1a / A1b).
+ * Core stores the model and orders roots. A plugin tagged `vcs.revision`
+ * supplies the plan row and, on execute, performs the work-tree update.
  */
 import { existsSync } from "fs";
 import path from "path";
 import { z } from "zod";
-import { validateHandlerResult } from "./handler-result";
-import type { BoltPluginContext } from "./plugin";
+import { validateHandlerResult, type HandlerResult } from "./handler-result";
+import type { BoltPluginContext, BoltPluginHandler } from "./plugin";
 import type { PluginRegistry } from "./plugin-registry";
 
 export const SYNC_POLICIES = ["one-side-safe", "together", "pin-rev"] as const;
@@ -37,9 +37,21 @@ export interface PlanRow {
   will_touch: boolean;
 }
 
+export interface FailedRoot {
+  root: string;
+  code: string;
+}
+
 export interface WorkspaceSyncData {
   policy: SyncPolicy;
   plan: PlanRow[];
+}
+
+/** Execute payload. `plan` is the same row shape dry-run returns. */
+export interface WorkspaceSyncResult extends WorkspaceSyncData {
+  touched: string[];
+  frozen: string[];
+  failed: FailedRoot[];
 }
 
 export type WorkspaceErrorCode = "WORKSPACE_INVALID" | "ROOT_MISSING" | "POLICY_UNKNOWN";
@@ -56,13 +68,29 @@ export class WorkspaceConfigError extends Error {
   }
 }
 
-/** Revision resolve failed. Exit 1. Not a working-copy update. */
+/** Revision resolve failed. Exit 1. The work tree was not updated. */
 export class WorkspacePlanError extends Error {
   readonly exitCode = 1;
-  readonly code = "VCS_REVISION";
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code = "VCS_REVISION",
+  ) {
     super(message);
     this.name = "WorkspacePlanError";
+  }
+}
+
+/** A real sync reached the work tree and then failed. Exit 1. `data` keeps this run's plan. */
+export class WorkspaceSyncError extends Error {
+  readonly exitCode = 1;
+  readonly code: string;
+  constructor(
+    readonly data: WorkspaceSyncResult,
+    readonly issues: Array<{ code: string; message: string }>,
+  ) {
+    super(issues[0]?.message ?? "workspace sync failed");
+    this.name = "WorkspaceSyncError";
+    this.code = issues[0]?.code ?? "VCS_SYNC";
   }
 }
 
@@ -170,7 +198,9 @@ function missingRootMessage(root: WorkspaceRoot, resolved: string): string {
 
 const PLAN_KEYS = ["root", "action", "target_rev", "will_touch"] as const;
 
-export function formatWorkspacePlan(data: WorkspaceSyncData): string {
+export function formatWorkspacePlan(
+  data: WorkspaceSyncData & Partial<Pick<WorkspaceSyncResult, "touched" | "frozen" | "failed">>,
+): string {
   const rows = data.plan.map((row) => ({
     root: row.root,
     action: row.action,
@@ -184,7 +214,7 @@ export function formatWorkspacePlan(data: WorkspaceSyncData): string {
     PLAN_KEYS.map((key) => row[key].padEnd(widths[key]))
       .join("  ")
       .trimEnd();
-  return [
+  const lines = [
     `policy: ${data.policy}`,
     line({
       root: "root",
@@ -193,8 +223,25 @@ export function formatWorkspacePlan(data: WorkspaceSyncData): string {
       will_touch: "will_touch",
     }),
     ...rows.map((row) => line(row)),
-  ].join("\n");
+  ];
+  if (data.touched) {
+    lines.push(labeled("touched", data.touched));
+    lines.push(labeled("frozen", data.frozen ?? []));
+    lines.push(
+      labeled(
+        "failed",
+        (data.failed ?? []).map((item) => `${item.root} ${item.code}`),
+      ),
+    );
+  }
+  return lines.join("\n");
 }
+
+function labeled(name: string, values: readonly string[]): string {
+  return values.length === 0 ? `${name}:` : `${name}: ${values.join(", ")}`;
+}
+
+const VCS_CODE = /^VCS_[A-Z0-9_]*$/;
 
 function planRow(rootId: string, data: unknown, ref: string): PlanRow {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
@@ -214,9 +261,136 @@ function planRow(rootId: string, data: unknown, ref: string): PlanRow {
   return { root: rootId, action, target_rev, will_touch };
 }
 
+function failureCode(result: HandlerResult, fallback: string): string {
+  for (const item of result.diagnostics ?? []) {
+    if (item.code && VCS_CODE.test(item.code)) return item.code;
+  }
+  return fallback;
+}
+
+function failureMessage(result: HandlerResult, ref: string, rootId: string): string {
+  return (
+    result.summary ||
+    result.diagnostics?.find((item) => item.message)?.message ||
+    `${ref} failed for root "${rootId}".`
+  );
+}
+
+interface RevisionBinding {
+  ref: string;
+  handler: BoltPluginHandler;
+}
+
+function revisionBinding(root: WorkspaceRoot, registry: PluginRegistry): RevisionBinding {
+  const match = registry
+    .findByCapability("vcs.revision")
+    .find((item) => item.namespace === root.vcs);
+  const plugin = registry.get(root.vcs);
+  const handler = match ? plugin?.handlers[match.handler] : undefined;
+  if (!match || !plugin || !handler) {
+    throw new WorkspacePlanError(
+      `No vcs.revision handler for root "${root.id}" (vcs ${root.vcs}).`,
+    );
+  }
+  if (plugin.apiVersion !== 2) {
+    throw new WorkspacePlanError(
+      `${match.ref} must declare apiVersion 2 to return a workspace plan row.`,
+    );
+  }
+  return { ref: match.ref, handler };
+}
+
+type RevisionPhase = "plan" | "precheck" | "sync";
+
+interface RevisionOk {
+  ok: true;
+  result: HandlerResult;
+}
+
+interface RevisionFail {
+  ok: false;
+  code: string;
+  message: string;
+}
+
+function revisionParams(
+  root: WorkspaceRoot,
+  resolved: string,
+  policy: SyncPolicy,
+  phase: RevisionPhase,
+  row?: PlanRow,
+): Record<string, string> {
+  const params: Record<string, string> = {
+    id: root.id,
+    path: resolved,
+    role: root.role,
+    vcs: root.vcs,
+    pin: root.pin ?? "",
+    policy,
+    phase,
+  };
+  if (row) {
+    params.action = row.action;
+    params.target_rev = row.target_rev;
+    params.will_touch = row.will_touch ? "true" : "false";
+  }
+  return params;
+}
+
+async function callRevision(
+  root: WorkspaceRoot,
+  resolved: string,
+  policy: SyncPolicy,
+  phase: RevisionPhase,
+  binding: RevisionBinding,
+  ctx: BoltPluginContext,
+  row?: PlanRow,
+): Promise<RevisionOk | RevisionFail> {
+  const fallback = phase === "plan" ? "VCS_REVISION" : "VCS_SYNC";
+  let returned: unknown;
+  try {
+    returned = await binding.handler(revisionParams(root, resolved, policy, phase, row), ctx);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      code: fallback,
+      message: `${binding.ref} failed for root "${root.id}": ${message}`,
+    };
+  }
+  let validated: ReturnType<typeof validateHandlerResult>;
+  try {
+    validated = validateHandlerResult(returned, binding.ref);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, code: fallback, message };
+  }
+  const result = validated.result;
+  if (result.status !== "ok" && result.status !== "warn") {
+    return {
+      ok: false,
+      code: failureCode(result, fallback),
+      message: failureMessage(result, binding.ref, root.id),
+    };
+  }
+  return { ok: true, result };
+}
+
+function requireRoot(root: WorkspaceRoot, configDir: string): string {
+  const resolved = resolveRootPath(root.path, configDir);
+  if (!existsSync(resolved)) {
+    throw new WorkspaceConfigError(
+      "ROOT_MISSING",
+      missingRootMessage(root, resolved),
+      `Fix workspace.roots path for "${root.id}". A path is relative to the bolt.yaml directory, or absolute. bolt.local.yaml does not change it.`,
+    );
+  }
+  return resolved;
+}
+
 /**
- * Aggregate one dry-run row per root, in config order.
- * `pin-rev` omits a root whose pin is null. Plugins are not asked to touch the disk.
+ * Aggregate one plan row per root, in config order.
+ * `pin-rev` omits a root whose pin is null. `phase=plan` does not update a work tree.
  */
 export async function planWorkspaceSync(
   workspace: WorkspaceConfig,
@@ -226,62 +400,92 @@ export async function planWorkspaceSync(
 ): Promise<WorkspaceSyncData> {
   const plan: PlanRow[] = [];
   for (const root of workspace.roots) {
-    const resolved = resolveRootPath(root.path, configDir);
-    if (!existsSync(resolved)) {
-      throw new WorkspaceConfigError(
-        "ROOT_MISSING",
-        missingRootMessage(root, resolved),
-        `Fix workspace.roots path for "${root.id}". A path is relative to the bolt.yaml directory, or absolute. bolt.local.yaml does not change it.`,
-      );
-    }
+    const resolved = requireRoot(root, configDir);
     if (workspace.sync_policy === "pin-rev" && root.pin === null) continue;
-    const match = registry
-      .findByCapability("vcs.revision")
-      .find((item) => item.namespace === root.vcs);
-    const plugin = registry.get(root.vcs);
-    const handler = match ? plugin?.handlers[match.handler] : undefined;
-    if (!match || !plugin || !handler) {
-      throw new WorkspacePlanError(
-        `No vcs.revision handler for root "${root.id}" (vcs ${root.vcs}). This dry-run does not sync, and built-in git and svn do not supply a plan row.`,
-      );
-    }
-    if (plugin.apiVersion !== 2) {
-      throw new WorkspacePlanError(
-        `${match.ref} must declare apiVersion 2 to return a workspace plan row.`,
-      );
-    }
-    let returned: unknown;
-    try {
-      returned = await handler(
-        {
-          id: root.id,
-          path: resolved,
-          role: root.role,
-          vcs: root.vcs,
-          pin: root.pin ?? "",
-          policy: workspace.sync_policy,
-        },
-        ctx,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new WorkspacePlanError(
-        `${match.ref} failed while planning root "${root.id}": ${message}`,
-      );
-    }
-    let validated: ReturnType<typeof validateHandlerResult>;
-    try {
-      validated = validateHandlerResult(returned, match.ref);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new WorkspacePlanError(message);
-    }
-    if (validated.result.status === "fail") {
-      throw new WorkspacePlanError(
-        validated.result.summary ?? `${match.ref} failed while planning root "${root.id}".`,
-      );
-    }
-    plan.push(planRow(root.id, validated.result.data, match.ref));
+    const binding = revisionBinding(root, registry);
+    const outcome = await callRevision(root, resolved, workspace.sync_policy, "plan", binding, ctx);
+    if (!outcome.ok) throw new WorkspacePlanError(outcome.message, outcome.code);
+    plan.push(planRow(root.id, outcome.result.data, binding.ref));
   }
   return { policy: workspace.sync_policy, plan };
+}
+
+/**
+ * Plan every included root, then update work trees in config order.
+ * `together` runs every precheck before any update. `one-side-safe` and `pin-rev`
+ * update serially and stop at the first sync failure. Already updated roots stay
+ * in `touched`. The failed root and every later root are `frozen`. There is no rollback.
+ */
+export async function executeWorkspaceSync(
+  workspace: WorkspaceConfig,
+  configDir: string,
+  registry: PluginRegistry,
+  ctx: BoltPluginContext,
+): Promise<WorkspaceSyncResult> {
+  const planned = await planWorkspaceSync(workspace, configDir, registry, ctx);
+  const plan = planned.plan.map((row) => ({ ...row }));
+  const roots = new Map(workspace.roots.map((root) => [root.id, root]));
+  const syncCtx = { ...ctx, dryRun: false };
+
+  const call = async (row: PlanRow, phase: RevisionPhase) => {
+    const root = roots.get(row.root);
+    if (!root) throw new WorkspacePlanError(`Plan row "${row.root}" is not a workspace root.`);
+    const resolved = resolveRootPath(root.path, configDir);
+    return callRevision(
+      root,
+      resolved,
+      workspace.sync_policy,
+      phase,
+      revisionBinding(root, registry),
+      phase === "sync" ? syncCtx : ctx,
+      row,
+    );
+  };
+
+  if (workspace.sync_policy === "together") {
+    const issues: Array<{ root: string; code: string; message: string }> = [];
+    for (const row of plan) {
+      const outcome = await call(row, "precheck");
+      if (!outcome.ok)
+        issues.push({ root: row.root, code: outcome.code, message: outcome.message });
+    }
+    if (issues.length > 0) {
+      for (const row of plan) row.will_touch = false;
+      throw new WorkspaceSyncError(
+        {
+          policy: workspace.sync_policy,
+          plan,
+          touched: [],
+          frozen: plan.map((row) => row.root),
+          failed: issues.map((item) => ({ root: item.root, code: item.code })),
+        },
+        issues.map((item) => ({ code: item.code, message: item.message })),
+      );
+    }
+  }
+
+  const touched: string[] = [];
+  const frozen: string[] = [];
+  for (let index = 0; index < plan.length; index++) {
+    const row = plan[index];
+    if (!row.will_touch) {
+      frozen.push(row.root);
+      continue;
+    }
+    const outcome = await call(row, "sync");
+    if (!outcome.ok) {
+      throw new WorkspaceSyncError(
+        {
+          policy: workspace.sync_policy,
+          plan,
+          touched,
+          frozen: [...frozen, ...plan.slice(index).map((item) => item.root)],
+          failed: [{ root: row.root, code: outcome.code }],
+        },
+        [{ code: outcome.code, message: outcome.message }],
+      );
+    }
+    touched.push(row.root);
+  }
+  return { policy: workspace.sync_policy, plan, touched, frozen, failed: [] };
 }

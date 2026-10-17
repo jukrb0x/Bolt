@@ -24,7 +24,7 @@ test("unknown key, bad ref, ambiguous, and missing are exit 3", async () => {
     "capabilities:\n  vcs.sync: git/pul\ntasks:\n  hi:\n    - run: echo hi\n",
   );
   const ambiguous = writeProject("tasks:\n  sync:\n    - uses: vcs.sync\n");
-  const missing = writeProject("tasks:\n  rev:\n    - uses: vcs.revision\n");
+  const missing = writeProject("tasks:\n  rev:\n    - uses: artifact.store\n");
   try {
     const unknownRun = await bolt(unknown, ["check"]);
     expect(unknownRun.exitCode).toBe(3);
@@ -46,7 +46,7 @@ test("unknown key, bad ref, ambiguous, and missing are exit 3", async () => {
     const missingRun = await bolt(missing, ["inspect", "rev"]);
     expect(missingRun.exitCode).toBe(3);
     expect(missingRun.output).toContain("CAPABILITY_MISSING");
-    expect(missingRun.output).toContain("vcs.revision");
+    expect(missingRun.output).toContain("artifact.store");
   } finally {
     dispose(unknown);
     dispose(bad);

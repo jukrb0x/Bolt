@@ -9,7 +9,7 @@ Built-in git handlers.
 
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `git`     | `1.0.0` | 5        |
+| `git`     | `1.0.0` | 6        |
 
 ## Handlers
 
@@ -48,6 +48,16 @@ git pull \$\{path\}
 Step: `uses: git/pull`. AI: `"confirm"` (AI may call it after user confirmation).
 
 Capabilities: `vcs.sync`.
+
+_No declared parameter schema._
+
+### git/revision
+
+Resolve the git revision workspace sync uses for \$\{path\}
+
+Step: `uses: git/revision`. AI: `"confirm"` (AI may call it after user confirmation).
+
+Capabilities: `vcs.revision`.
 
 _No declared parameter schema._
 

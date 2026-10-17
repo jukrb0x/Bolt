@@ -145,7 +145,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["roots", "sync_policy"],
       description:
-        "Optional multi-root workspace. Dry-run planning reads this block. It does not sync by itself.",
+        "Optional multi-root workspace. bolt workspace sync updates these roots. --dry-run prints the plan and does not update a working copy.",
       properties: {
         roots: {
           type: "array",

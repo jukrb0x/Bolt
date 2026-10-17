@@ -114,7 +114,7 @@ A step can then say `uses: vcs.sync`. `uses: git/pull` does not consult the map.
 
 ## workspace
 
-Optional. `bolt workspace sync --dry-run` prints a plan for these roots. It does not update them. `bolt.local.yaml` does not override `path`.
+Optional. `bolt workspace sync` updates these roots in config order. `--dry-run` prints the plan and does not update a working copy. `bolt.local.yaml` does not override `path`.
 
 `sync_policy` is `one-side-safe`, `together`, or `pin-rev`. Use `one-side-safe`.
 
@@ -133,7 +133,7 @@ workspace:
   sync_policy: one-side-safe
 ```
 
-`role` is `engine`, `project`, or `related`. `path` is relative to the `bolt.yaml` directory, or absolute. `--json` prints one `bolt.workspace.sync/v1` document. `data.plan[]` rows use `root`, `action`, `target_rev`, and `will_touch`. A row is supplied by a plugin handler tagged `vcs.revision` for that root's `vcs`. The built-in git and svn plugins do not supply one yet.
+`role` is `engine`, `project`, or `related`. `path` is relative to the `bolt.yaml` directory, or absolute. `--json` prints one `bolt.workspace.sync/v1` document. `data.plan[]` rows use `root`, `action`, `target_rev`, and `will_touch`. Built-in `git/revision` and `svn/revision` are tagged `vcs.revision` and supply that row. A real sync also returns `touched`, `frozen`, and `failed`. This command does not add `bolt workspace status`, and it does not reject an empty shell.
 
 ## bolt.local.yaml — annotated walkthrough
 
