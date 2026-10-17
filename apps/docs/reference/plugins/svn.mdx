@@ -15,7 +15,7 @@ Built-in svn handlers.
 
 ### svn/add
 
-svn add $&#123;path&#125;
+svn add \$\{path\}
 
 Step: `uses: svn/add`. AI: `false` (not exposed to AI).
 
@@ -23,7 +23,7 @@ _No declared parameter schema._
 
 ### svn/cleanup
 
-svn cleanup $&#123;path&#125;
+svn cleanup \$\{path\}
 
 Step: `uses: svn/cleanup`. AI: `false` (not exposed to AI).
 
@@ -31,7 +31,7 @@ _No declared parameter schema._
 
 ### svn/commit
 
-svn commit $&#123;path&#125;
+svn commit \$\{path\}
 
 Step: `uses: svn/commit`. AI: `false` (not exposed to AI).
 
@@ -39,7 +39,7 @@ _No declared parameter schema._
 
 ### svn/info
 
-svn info $&#123;path&#125;
+svn info \$\{path\}
 
 Step: `uses: svn/info`. AI: `true` (AI may call this handler).
 
@@ -51,7 +51,7 @@ Capabilities: `vcs.info`.
 
 ### svn/revert
 
-svn revert $&#123;path&#125;
+svn revert \$\{path\}
 
 Step: `uses: svn/revert`. AI: `false` (not exposed to AI).
 
@@ -59,7 +59,7 @@ _No declared parameter schema._
 
 ### svn/status
 
-svn status $&#123;path&#125;
+svn status \$\{path\}
 
 Step: `uses: svn/status`. AI: `"confirm"` (AI may call it after user confirmation).
 
@@ -69,7 +69,7 @@ Step: `uses: svn/status`. AI: `"confirm"` (AI may call it after user confirmatio
 
 ### svn/update
 
-svn update $&#123;path&#125;
+svn update \$\{path\}
 
 Step: `uses: svn/update`. AI: `"confirm"` (AI may call it after user confirmation).
 

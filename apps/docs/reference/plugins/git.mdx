@@ -15,7 +15,7 @@ Built-in git handlers.
 
 ### git/checkout
 
-git checkout $&#123;branch&#125; in $&#123;path&#125;
+git checkout \$\{branch\} in \$\{path\}
 
 Step: `uses: git/checkout`. AI: `false` (not exposed to AI).
 
@@ -23,7 +23,7 @@ _No declared parameter schema._
 
 ### git/clone
 
-git clone $&#123;url&#125; into $&#123;path&#125;
+git clone \$\{url\} into \$\{path\}
 
 Step: `uses: git/clone`. AI: `false` (not exposed to AI).
 
@@ -31,7 +31,7 @@ _No declared parameter schema._
 
 ### git/info
 
-git info $&#123;path&#125;
+git info \$\{path\}
 
 Step: `uses: git/info`. AI: `true` (AI may call this handler).
 
@@ -43,7 +43,7 @@ Capabilities: `vcs.info`.
 
 ### git/pull
 
-git pull $&#123;path&#125;
+git pull \$\{path\}
 
 Step: `uses: git/pull`. AI: `"confirm"` (AI may call it after user confirmation).
 
@@ -53,7 +53,7 @@ _No declared parameter schema._
 
 ### git/status
 
-git status $&#123;path&#125;
+git status \$\{path\}
 
 Step: `uses: git/status`. AI: `"confirm"` (AI may call it after user confirmation).
 

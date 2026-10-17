@@ -15,6 +15,7 @@ import { PluginRegistry } from "../../../src/plugin-registry";
 import { builtinPlugins } from "../../../src/plugins";
 import type { HandlerManifest } from "../../../src/plugin";
 import { commandSources, commands } from "../../../src/commands";
+import { cell } from "./mdx-text";
 
 const DOCS = path.resolve(import.meta.dir, "..");
 const REPO = path.resolve(DOCS, "../..");
@@ -52,16 +53,6 @@ function format(rel: string, text: string): string {
 /** Plain code-point order, independent of locale. */
 function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-/** Escape text for an MDX table cell outside code spans. */
-function cell(text: unknown): string {
-  if (text === undefined || text === null || text === "") return "";
-  return String(text)
-    .replace(/\s+/g, " ")
-    .replace(/\\/g, "\\\\")
-    .replace(/\|/g, "\\|")
-    .replace(/[{}<>]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 /** Inline code safe inside a table cell. */
