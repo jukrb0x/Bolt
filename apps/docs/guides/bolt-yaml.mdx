@@ -7,10 +7,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                | Why                                                                                                                           |
-| ----------------- | ------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars | The team's automation contract. Everyone runs the same tasks/flows.                                                           |
-| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`             | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine. |
+| File              | Committed?    | Contains                                                                      | Why                                                                                                                           |
+| ----------------- | ------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace` | The team's automation contract. Everyone runs the same tasks/flows. `workspace` is a dry-run plan only.                       |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine. |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -111,6 +111,29 @@ capabilities:
 ```
 
 A step can then say `uses: vcs.sync`. `uses: git/pull` does not consult the map.
+
+## workspace
+
+Optional. `bolt workspace sync --dry-run` prints a plan for these roots. It does not update them. `bolt.local.yaml` does not override `path`.
+
+`sync_policy` is `one-side-safe`, `together`, or `pin-rev`. Use `one-side-safe`.
+
+```yaml
+workspace:
+  roots:
+    - id: engine
+      path: ../engine
+      role: engine
+      vcs: git
+      pin: null
+    - id: game
+      path: .
+      role: project
+      vcs: svn
+  sync_policy: one-side-safe
+```
+
+`role` is `engine`, `project`, or `related`. `path` is relative to the `bolt.yaml` directory, or absolute. `--json` prints one `bolt.workspace.sync/v1` document. `data.plan[]` rows use `root`, `action`, `target_rev`, and `will_touch`. A row is supplied by a plugin handler tagged `vcs.revision` for that root's `vcs`. The built-in git and svn plugins do not supply one yet.
 
 ## bolt.local.yaml — annotated walkthrough
 

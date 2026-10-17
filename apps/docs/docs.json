@@ -67,6 +67,7 @@
               "reference/cli/plugin",
               "reference/cli/inspect",
               "reference/cli/status",
+              "reference/cli/workspace",
               "reference/cli/self-update",
               "reference/cli/ai",
               "reference/cli/version"

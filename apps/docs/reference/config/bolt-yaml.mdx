@@ -21,6 +21,7 @@ Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main
 | `flows`         | `map<string, flow>` ([flow](#flow))               |          | `{}`    |                                                                                                                                                                                        |
 | `plugins`       | `plugin[]` ([plugin](#plugin))                    |          | `[]`    |                                                                                                                                                                                        |
 | `capabilities`  | `map<string, string>`                             |          | `{}`    | Singleton capability tag to handler ref (namespace/handler). bolt.local.yaml wins per key. An empty object is the same as omitting the key. Fan-out tags are ignored with one warning. |
+| `workspace`     | `workspace` ([workspace](#workspace))             |          |         |                                                                                                                                                                                        |
 | `timeout_hours` | `number`                                          |          |         | exclusiveMinimum: 0                                                                                                                                                                    |
 | `notifications` | `notifications` ([notifications](#notifications)) |          |         |                                                                                                                                                                                        |
 
@@ -112,3 +113,26 @@ Type: `object`
 | `type`        | `"wecom"` | yes      |         |       |
 | `webhook_url` | `string`  | yes      |         |       |
 | `chat_id`     | `string`  |          |         |       |
+
+### workspace
+
+Type: `object`
+
+Optional multi-root workspace. Dry-run planning reads this block. It does not sync by itself.
+
+| Field         | Type                                                | Required | Default | Notes                                                                  |
+| ------------- | --------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------- |
+| `roots`       | `workspaceRoot[]` ([workspaceRoot](#workspaceroot)) | yes      |         | minItems: 1                                                            |
+| `sync_policy` | `"one-side-safe" \| "together" \| "pin-rev"`        | yes      |         | one-side-safe is the frozen name. together and pin-rev are recognized. |
+
+### workspaceRoot
+
+Type: `object`
+
+| Field  | Type                                 | Required | Default | Notes                                                                                                                      |
+| ------ | ------------------------------------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `id`   | `string`                             | yes      |         | minLength: 1                                                                                                               |
+| `path` | `string`                             | yes      |         | Relative to the directory that contains bolt.yaml, or an absolute path. bolt.local.yaml does not override it. minLength: 1 |
+| `role` | `"engine" \| "project" \| "related"` | yes      |         |                                                                                                                            |
+| `vcs`  | `string`                             | yes      |         | minLength: 1                                                                                                               |
+| `pin`  | `string \| null`                     |          |         | Revision or branch to pin. Null or omitted means no pin.                                                                   |

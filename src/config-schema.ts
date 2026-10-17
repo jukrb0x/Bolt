@@ -99,6 +99,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       additionalProperties: { type: "string", minLength: 1 },
       default: {},
     },
+    workspace: { $ref: "#/$defs/workspace" },
     timeout_hours: { type: "number", exclusiveMinimum: 0 },
     notifications: { $ref: "#/$defs/notifications" },
   },
@@ -119,6 +120,44 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       },
     },
     plugin,
+    workspaceRoot: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "path", "role", "vcs"],
+      properties: {
+        id: { type: "string", minLength: 1 },
+        path: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Relative to the directory that contains bolt.yaml, or an absolute path. bolt.local.yaml does not override it",
+        },
+        role: { enum: ["engine", "project", "related"] },
+        vcs: { type: "string", minLength: 1 },
+        pin: {
+          description: "Revision or branch to pin. Null or omitted means no pin.",
+          oneOf: [{ type: "string", minLength: 1 }, { type: "null" }],
+        },
+      },
+    },
+    workspace: {
+      type: "object",
+      additionalProperties: false,
+      required: ["roots", "sync_policy"],
+      description:
+        "Optional multi-root workspace. Dry-run planning reads this block. It does not sync by itself.",
+      properties: {
+        roots: {
+          type: "array",
+          minItems: 1,
+          items: { $ref: "#/$defs/workspaceRoot" },
+        },
+        sync_policy: {
+          description: "one-side-safe is the frozen name. together and pin-rev are recognized.",
+          enum: ["one-side-safe", "together", "pin-rev"],
+        },
+      },
+    },
     wecom: {
       type: "object",
       additionalProperties: false,

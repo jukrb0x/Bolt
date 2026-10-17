@@ -5,6 +5,28 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Workspace dry-run plan
+
+`bolt workspace sync --dry-run` reads an optional `workspace` block in `bolt.yaml` and prints a plan. It does not update a working copy. This slice does not sync mixed roots, and it does not add `bolt workspace status`.
+
+`--json` prints one `bolt.workspace.sync/v1` document. The envelope matches the other commands (`schema`, `bolt`, `ok`, `config`, `data`, `warnings`, `errors`). `ok` is true exactly when the process exits 0. `bolt status --json` lists `schemas.workspace` as `v1`.
+
+`workspace.roots` is kept in declaration order. Each root has `id`, `path`, `role` (`engine`, `project`, or `related`), `vcs`, and optional `pin` (a non-empty string, or `null`). `path` is relative to the directory that contains `bolt.yaml`, or absolute. `bolt.local.yaml` does not override `path`.
+
+`sync_policy` accepts `one-side-safe`, `together`, and `pin-rev`. The frozen name is `one-side-safe`.
+
+Dry-run `data` is `{ policy, plan }`. Each plan row is `{ root, action, target_rev, will_touch }`. Human output uses those names as the table columns. `pin-rev` omits a root that has no `pin`. Core only aggregates rows. The row comes from a plugin handler tagged `vcs.revision` whose namespace equals that root's `vcs`. Built-in `git` and `svn` do not provide that handler, so a config that relies on them exits 1 with `VCS_REVISION`. A plan row in tests comes from a fixture plugin. `will_touch` is whatever that handler returns. This slice does not pre-check `together`, and it does not freeze later roots after a failure.
+
+Without `--dry-run`, the command exits 2 with `USAGE` and does not sync.
+
+These config errors exit 3:
+
+- `WORKSPACE_INVALID` — the `workspace` block is missing or malformed, including a duplicate root id.
+- `ROOT_MISSING` — a root `path` does not exist. The message names the root `id` and the path.
+- `POLICY_UNKNOWN` — `sync_policy` is not one of the three names above.
+
+Not in this slice: performing the sync, `touched` / `frozen` / `failed`, `bolt workspace status`, path overrides in `bolt.local.yaml`, and empty-shell rejection.
+
 ### doctor and why
 
 `bolt doctor` and `bolt why` fan out the existing `doctor` and `diagnose` capability tags. This slice does not add a capability tag. It does not run a package step.

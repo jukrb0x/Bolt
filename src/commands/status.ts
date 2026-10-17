@@ -23,6 +23,7 @@ const SCHEMAS = {
   status: "v1",
   run: "v1",
   ai: "v1",
+  workspace: "v1",
 } as const;
 
 function statusData(cfg: Awaited<ReturnType<typeof loadConfigForJson>>["cfg"], configPath: string) {

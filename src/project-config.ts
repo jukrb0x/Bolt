@@ -2,9 +2,16 @@ import path from "path";
 import { findConfig } from "./discover";
 import { loadConfig, type BoltConfig } from "./config";
 import { CONFIG_EXIT_CODE } from "./exit-codes";
+import { WorkspaceConfigError } from "./workspace";
 
-/** Machine-readable reason for a config error (the `code` field of future `--json` output). */
-export type ConfigErrorCode = "CONFIG_NOT_FOUND" | "CONFIG_UNREADABLE" | "CONFIG_INVALID";
+/** Machine-readable reason for a config error (the `code` field of `--json` output). */
+export type ConfigErrorCode =
+  | "CONFIG_NOT_FOUND"
+  | "CONFIG_UNREADABLE"
+  | "CONFIG_INVALID"
+  | "WORKSPACE_INVALID"
+  | "POLICY_UNKNOWN"
+  | "ROOT_MISSING";
 
 /** A bolt.yaml problem. Always exits with CONFIG_EXIT_CODE (3); `code` carries the reason. */
 export class ConfigError extends Error {
@@ -47,6 +54,10 @@ export async function loadProjectConfig(
           `  Check the file permissions (it must be readable by the current user).`,
         "CONFIG_UNREADABLE",
       );
+    }
+    if (e instanceof WorkspaceConfigError) {
+      const hint = e.hint ? `\n  ${e.hint}` : "";
+      throw new ConfigError(`${e.message}${hint}\n  ${CHECK_HINT}`, e.code);
     }
     const message = String(e?.message ?? e);
     const file = path.basename(configPath);

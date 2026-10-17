@@ -13,6 +13,13 @@ import {
   mergeCapabilityMaps,
   type SelectionFile,
 } from "./capability-selection";
+import {
+  WorkspaceSchema,
+  codeForZodIssue,
+  formatZodConfigError,
+  workspaceFromParsed,
+  type WorkspaceConfig,
+} from "./workspace";
 
 /** bolt.yaml schema version. Unknown versions are rejected; there is no migrator. */
 export const CONFIG_VERSION = 1;
@@ -160,6 +167,7 @@ const BoltConfigSchema = z
     flows: z.record(FlowSchema).default({}),
     plugins: z.array(PluginEntrySchema).default([]),
     capabilities: CapabilitySelectionSchema,
+    workspace: WorkspaceSchema.optional(),
     timeout_hours: z.number().positive().optional(),
     notifications: NotificationsSchema.optional(),
   })
@@ -196,6 +204,8 @@ export interface BoltConfig {
    * Set by loadConfig. Not a bolt.yaml field. Relative plugin paths resolve against it.
    */
   configDir?: string;
+  /** Parsed `workspace` block. Absent when bolt.yaml omits it. */
+  workspace?: WorkspaceConfig;
   timeout_hours?: number;
   notifications?: NotificationsConfig;
 }
@@ -367,7 +377,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
       )
       .join("; ");
     const legacy = findLegacyKeys(parsed, undefined).length > 0 ? ` ${MIGRATE_HINT}` : "";
-    throw new Error(`bolt.yaml invalid (${detail})${legacy}`);
+    throw formatZodConfigError(sharedResult.error.issues, `bolt.yaml invalid (${detail})${legacy}`);
   }
   const shared = sharedResult.data;
   const { map: capabilities, sources: capabilitySources } = mergeCapabilityMaps(
@@ -398,6 +408,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     aiRun: local.ai?.run ?? "confirm",
     trustPlugins: local.ai?.trust_plugins ?? [],
     configDir,
+    ...(shared.workspace ? { workspace: workspaceFromParsed(shared.workspace) } : {}),
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
   };
@@ -768,10 +779,14 @@ export async function checkConfig(
   const result = BoltConfigSchema.safeParse(merged);
   if (!result.success) {
     errors.push(
-      ...result.error.issues.map((issue) => ({
-        path: labelOverridePath(issue.path.join(".") || "<root>", parsed, localOverrides),
-        message: issue.message,
-      })),
+      ...result.error.issues.map((issue) => {
+        const code = codeForZodIssue(issue);
+        return {
+          path: labelOverridePath(issue.path.join(".") || "<root>", parsed, localOverrides),
+          message: issue.message,
+          ...(code ? { code } : {}),
+        };
+      }),
     );
   }
   let hookWarnings: string[] = [];
