@@ -46,6 +46,7 @@ test("builtin confirm tier is signed off", () => {
     clone: false,
     info: true,
     pull: "confirm",
+    revision: "confirm",
     status: "confirm",
   });
   expect(flags(svnPlugin)).toEqual({
@@ -54,6 +55,7 @@ test("builtin confirm tier is signed off", () => {
     commit: false,
     info: true,
     revert: false,
+    revision: "confirm",
     status: "confirm",
     update: "confirm",
   });

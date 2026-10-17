@@ -78,6 +78,7 @@ test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tag
     pull: { ai: "confirm", capabilities: ["vcs.sync"] },
     status: { ai: "confirm", capabilities: undefined },
     info: { ai: true, capabilities: ["vcs.info"] },
+    revision: { ai: "confirm", capabilities: ["vcs.revision"] },
     checkout: { ai: false, capabilities: undefined },
     clone: { ai: false, capabilities: undefined },
   });
@@ -86,6 +87,7 @@ test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tag
     cleanup: { ai: false, capabilities: undefined },
     revert: { ai: false, capabilities: undefined },
     info: { ai: true, capabilities: ["vcs.info"] },
+    revision: { ai: "confirm", capabilities: ["vcs.revision"] },
     commit: { ai: false, capabilities: undefined },
     add: { ai: false, capabilities: undefined },
     status: { ai: "confirm", capabilities: undefined },
@@ -94,7 +96,9 @@ test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tag
   expect(reg.findByCapability("vcs", { exact: false }).map((m) => m.ref)).toEqual([
     "git/info",
     "git/pull",
+    "git/revision",
     "svn/info",
+    "svn/revision",
     "svn/update",
   ]);
   expect(reg.findByCapability("vcs")).toEqual([]);

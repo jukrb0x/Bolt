@@ -1,8 +1,6 @@
 import { defineCommand } from "citty";
 import os from "os";
 import path from "path";
-import { findConfig } from "../discover";
-import { USAGE_EXIT_CODE } from "../exit-codes";
 import {
   JSON_SCHEMA,
   configRef,
@@ -20,12 +18,11 @@ import { createRuntime } from "../runtime";
 import {
   WorkspaceConfigError,
   WorkspacePlanError,
+  WorkspaceSyncError,
   formatWorkspacePlan,
+  executeWorkspaceSync,
   planWorkspaceSync,
 } from "../workspace";
-
-const DRY_RUN_REQUIRED =
-  "bolt workspace sync does not sync in this build. Re-run with --dry-run to print the plan.";
 
 function userHome(): string {
   return process.env.HOME || process.env.USERPROFILE || os.homedir();
@@ -34,12 +31,12 @@ function userHome(): string {
 const syncCmd = defineCommand({
   meta: {
     name: "sync",
-    description: "Print a dry-run plan for workspace.roots. Does not update a working copy",
+    description: "Update workspace.roots, or print the plan with --dry-run",
   },
   args: {
     "dry-run": {
       type: "boolean",
-      description: "Print the plan. Required; this build does not sync",
+      description: "Print the plan and do not update a working copy",
     },
     json: {
       type: "boolean",
@@ -48,20 +45,8 @@ const syncCmd = defineCommand({
   },
   async run({ args }) {
     const json = Boolean(args?.json);
+    const dryRun = args?.["dry-run"] === true;
     if (json) installJsonStdoutGuard();
-    if (args?.["dry-run"] !== true) {
-      if (json) {
-        emitJsonAndExit({
-          schema: JSON_SCHEMA.workspaceSync,
-          exitCode: USAGE_EXIT_CODE,
-          config: configRef(await findConfig(process.cwd())),
-          data: null,
-          errors: [issue("USAGE", DRY_RUN_REQUIRED)],
-        });
-      }
-      console.error(`[ERROR] ${DRY_RUN_REQUIRED}`);
-      process.exit(USAGE_EXIT_CODE);
-    }
 
     const loaded = json
       ? await loadConfigForJson(JSON_SCHEMA.workspaceSync)
@@ -98,15 +83,32 @@ const syncCmd = defineCommand({
       const registry = await buildRegistry(cfg, configDir, [...builtinPlugins], {
         home: userHome(),
       });
-      data = await planWorkspaceSync(workspace, configDir, registry, {
+      const ctx = {
         cfg,
         configDir,
-        dryRun: true,
+        dryRun,
         logger: new Logger({ sink: (line) => process.stderr.write(`${line}\n`) }),
         runtime: createRuntime(),
         emit: () => {},
-      });
+      };
+      data = dryRun
+        ? await planWorkspaceSync(workspace, configDir, registry, ctx)
+        : await executeWorkspaceSync(workspace, configDir, registry, ctx);
     } catch (error) {
+      if (error instanceof WorkspaceSyncError) {
+        if (json) {
+          emitJsonAndExit({
+            schema: JSON_SCHEMA.workspaceSync,
+            exitCode: error.exitCode,
+            config: configRef(configPath),
+            data: error.data,
+            errors: error.issues.map((item) => issue(item.code, item.message)),
+          });
+        }
+        console.log(formatWorkspacePlan(error.data));
+        for (const item of error.issues) console.error(`[ERROR] ${item.code}: ${item.message}`);
+        process.exit(error.exitCode);
+      }
       if (error instanceof WorkspaceConfigError || error instanceof WorkspacePlanError) fail(error);
       if (error instanceof ConfigError) {
         if (json) {
@@ -138,7 +140,7 @@ const syncCmd = defineCommand({
 export default defineCommand({
   meta: {
     name: "workspace",
-    description: "Plan workspace roots declared in bolt.yaml",
+    description: "Sync or plan workspace roots declared in bolt.yaml",
   },
   subCommands: {
     sync: syncCmd,

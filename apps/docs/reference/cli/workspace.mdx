@@ -1,13 +1,13 @@
 ---
 title: "bolt workspace"
-description: "Plan workspace roots declared in bolt.yaml"
+description: "Sync or plan workspace roots declared in bolt.yaml"
 ---
 
 {/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
 
 Source: [`src/commands/workspace.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/workspace.ts).
 
-Plan workspace roots declared in bolt.yaml
+Sync or plan workspace roots declared in bolt.yaml
 
 ```bash
 bolt workspace <command>
@@ -15,7 +15,7 @@ bolt workspace <command>
 
 ### bolt workspace sync
 
-Print a dry-run plan for workspace.roots. Does not update a working copy
+Update workspace.roots, or print the plan with --dry-run
 
 ```bash
 bolt workspace sync [options]
@@ -23,7 +23,7 @@ bolt workspace sync [options]
 
 | Argument    | Type    | Alias | Required | Default | Description                                              |
 | ----------- | ------- | ----- | -------- | ------- | -------------------------------------------------------- |
-| `--dry-run` | boolean |       |          |         | Print the plan. Required; this build does not sync       |
+| `--dry-run` | boolean |       |          |         | Print the plan and do not update a working copy          |
 | `--json`    | boolean |       |          |         | Print one bolt.workspace.sync/v1 JSON document on stdout |
 
 Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

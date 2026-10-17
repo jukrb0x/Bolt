@@ -9,7 +9,7 @@ Built-in svn handlers.
 
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `svn`     | `1.0.0` | 7        |
+| `svn`     | `1.0.0` | 8        |
 
 ## Handlers
 
@@ -54,6 +54,16 @@ Capabilities: `vcs.info`.
 svn revert \$\{path\}
 
 Step: `uses: svn/revert`. AI: `false` (not exposed to AI).
+
+_No declared parameter schema._
+
+### svn/revision
+
+Resolve the svn revision workspace sync uses for \$\{path\}
+
+Step: `uses: svn/revision`. AI: `"confirm"` (AI may call it after user confirmation).
+
+Capabilities: `vcs.revision`.
 
 _No declared parameter schema._
 

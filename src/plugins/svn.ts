@@ -3,7 +3,9 @@ import { defineHandler, definePlugin, type BoltPluginContext, type HandlerResult
 import { pathParams, projectPath } from "./git";
 import { existsSync } from "fs";
 import { z } from "zod";
+import type { SpawnResult } from "../runtime/types";
 import { declaredPluginConfig } from "./helpers";
+import { vcsFail, vcsFailureCode } from "./vcs-revision";
 
 /** svn plugin metadata. Not part of the core bolt.yaml schema. */
 export const svnConfigSchema = z
@@ -71,6 +73,120 @@ export async function svnInfo(p: string, ctx: BoltPluginContext): Promise<Handle
     }
   }
   return { status: "ok", data };
+}
+
+function svnCall(ctx: BoltPluginContext, args: string[]): SpawnResult {
+  try {
+    return ctx.runtime.spawnSync(["svn", ...args]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { exitCode: 127, stdout: "", stderr: message };
+  }
+}
+
+function svnDetail(result: SpawnResult, fallback: string): string {
+  const text = `${result.stderr}\n${result.stdout}`.trim();
+  return text || fallback;
+}
+
+function svnRevision(
+  ctx: BoltPluginContext,
+  target: string,
+  rev?: string,
+): { value: string } | { fail: HandlerResult } {
+  const args = ["info", "--non-interactive", "--trust-server-cert", "--show-item", "revision"];
+  if (rev) args.push("--revision", rev);
+  args.push("--", target);
+  const result = svnCall(ctx, args);
+  if (result.exitCode !== 0) {
+    const detail = svnDetail(result, `svn info failed (exit ${result.exitCode})`);
+    return {
+      fail: vcsFail(
+        vcsFailureCode(detail, "VCS_REVISION"),
+        `SVN revision unavailable for ${target}: ${detail}`,
+      ),
+    };
+  }
+  const value = result.stdout.trim();
+  if (!value) return { fail: vcsFail("VCS_REVISION", `SVN revision unavailable for ${target}.`) };
+  return { value };
+}
+
+function svnPlan(
+  params: Record<string, string>,
+  ctx: BoltPluginContext,
+  cwd: string,
+): HandlerResult {
+  const current = svnRevision(ctx, cwd);
+  if ("fail" in current) return current.fail;
+  if (params.pin) {
+    const pinned = svnRevision(ctx, cwd, params.pin);
+    if ("fail" in pinned) return pinned.fail;
+    return {
+      status: "ok",
+      data: { action: "sync", target_rev: params.pin, will_touch: current.value !== params.pin },
+    };
+  }
+  const head = svnRevision(ctx, cwd, "HEAD");
+  if ("fail" in head) return head.fail;
+  return {
+    status: "ok",
+    data: { action: "sync", target_rev: head.value, will_touch: current.value !== head.value },
+  };
+}
+
+function svnPrecheck(
+  params: Record<string, string>,
+  ctx: BoltPluginContext,
+  cwd: string,
+): HandlerResult {
+  const current = svnRevision(ctx, cwd);
+  if ("fail" in current) return current.fail;
+  if (!params.pin) {
+    const head = svnRevision(ctx, cwd, "HEAD");
+    if ("fail" in head) return head.fail;
+  }
+  return { status: "ok" };
+}
+
+async function svnSync(
+  params: Record<string, string>,
+  ctx: BoltPluginContext,
+  cwd: string,
+): Promise<HandlerResult> {
+  const rev = params.pin || params.target_rev;
+  const shown = rev
+    ? `svn update -r ${rev} "${cwd}" --non-interactive --trust-server-cert`
+    : `svn update "${cwd}" --non-interactive --trust-server-cert`;
+  ctx.logger.cmd(shown);
+  if (ctx.dryRun) return { status: "ok" };
+  const args = ["svn", "update"];
+  if (rev) args.push("--revision", rev);
+  args.push("--non-interactive", "--trust-server-cert", "--", cwd);
+  let result: SpawnResult;
+  try {
+    result = await ctx.runtime.spawn(args);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result = { exitCode: 127, stdout: "", stderr: message };
+  }
+  if (result.exitCode !== 0) {
+    const detail = svnDetail(result, `svn update failed (exit ${result.exitCode})`);
+    return vcsFail(vcsFailureCode(detail, "VCS_SYNC"), `svn update failed for ${cwd}: ${detail}`);
+  }
+  return { status: "ok" };
+}
+
+/** `phase=plan` and `phase=precheck` do not update the work tree. `phase=sync` does. */
+async function svnRevisionHandler(
+  params: Record<string, string>,
+  ctx: BoltPluginContext,
+): Promise<HandlerResult> {
+  const cwd = params.path;
+  if (!cwd) return vcsFail("VCS_REVISION", "svn/revision requires path.");
+  if (params.phase === "sync") return svnSync(params, ctx, cwd);
+  if (params.phase === "precheck") return svnPrecheck(params, ctx, cwd);
+  return svnPlan(params, ctx, cwd);
 }
 
 const plugin = definePlugin({
@@ -176,6 +292,15 @@ const plugin = definePlugin({
         params: pathParams("Working copy path inside the project"),
       },
       async (params, ctx) => svnInfo(projectPath(params, ctx, "svn/info"), ctx),
+    ),
+
+    revision: defineHandler(
+      {
+        ai: "confirm",
+        capability: "vcs.revision",
+        description: "Resolve the svn revision workspace sync uses for ${path}",
+      },
+      svnRevisionHandler,
     ),
 
     commit: defineHandler({ ai: false, description: "svn commit ${path}" }, async (params, ctx) => {

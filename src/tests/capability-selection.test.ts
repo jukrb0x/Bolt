@@ -117,14 +117,22 @@ test("5. two built providers and no selection is CAPABILITY_AMBIGUOUS (exit 3 sh
 
 test("6. a singleton with no handler is CAPABILITY_MISSING", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "bolt-cap-miss-"));
-  const report = assessCapabilities({ tasks: { rev: [{ uses: "vcs.revision" }] } }, dir, {
+  const report = assessCapabilities({ tasks: { rev: [{ uses: "artifact.store" }] } }, dir, {
+    home: dir,
+    builtins: { git, svn },
+    requested: ["artifact.store"],
+  });
+  expect(report.errors.map((error) => error.code)).toEqual(["CAPABILITY_MISSING"]);
+  expect(report.errors[0].message).toContain('no handler provides "artifact.store"');
+  expect(report.errors[0].message).toContain("Enable a provider");
+  const ambiguous = assessCapabilities({ tasks: { rev: [{ uses: "vcs.revision" }] } }, dir, {
     home: dir,
     builtins: { git, svn },
     requested: ["vcs.revision"],
   });
-  expect(report.errors.map((error) => error.code)).toEqual(["CAPABILITY_MISSING"]);
-  expect(report.errors[0].message).toContain('no handler provides "vcs.revision"');
-  expect(report.errors[0].message).toContain("Enable a provider");
+  expect(ambiguous.errors.map((error) => error.code)).toEqual(["CAPABILITY_AMBIGUOUS"]);
+  expect(ambiguous.errors[0].message).toContain("git/revision");
+  expect(ambiguous.errors[0].message).toContain("svn/revision");
 });
 
 test("7. capabilitySelectionHash matches the canonical golden digest", () => {
