@@ -7,23 +7,22 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 
 ## Command Overview
 
-| Command                                           | Description                                                                                     |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [`bolt run`](/cli/run)                            | Run tasks (in typed order) or a flow                                                            |
-| [`bolt list`](/cli/list)                          | List tasks, flows, and workspace roots                                                          |
-| [`bolt info`](/cli/info)                          | Show project and VCS configuration                                                              |
-| [`bolt check`](/cli/check)                        | Validate bolt.yaml                                                                              |
-| [`bolt doctor`](/cli/doctor)                      | Run doctor checks                                                                               |
-| [`bolt why`](/cli/why)                            | Explain a failed run log                                                                        |
-| [`bolt migrate`](/cli/migrate)                    | Convert v2.0 bolt.yaml/bolt.local.yaml                                                          |
-| [`bolt config`](/cli/config)                      | Manage configuration                                                                            |
-| [`bolt plugin`](/cli/plugin)                      | Manage plugins                                                                                  |
-| [`bolt inspect`](/cli/inspect)                    | Preview resolved steps for a task or flow                                                       |
-| `bolt status`                                     | Context freshness, built plugins, and policy                                                    |
-| [`bolt workspace sync`](/reference/cli/workspace) | Experimental, deprecated, pending removal. Dry-run only. Prefer a pipeline step with `vcs.sync` |
-| [`bolt version`](/cli/version)                    | Print version                                                                                   |
-| [`bolt self-update`](/cli/self-update)            | Update to latest release                                                                        |
-| `bolt ai`                                         | Generate `.bolt/ai-context.md` for AI agents                                                    |
+| Command                                | Description                                  |
+| -------------------------------------- | -------------------------------------------- |
+| [`bolt run`](/cli/run)                 | Run tasks (in typed order) or a flow         |
+| [`bolt list`](/cli/list)               | List tasks, flows, and workspace roots       |
+| [`bolt info`](/cli/info)               | Show project and VCS configuration           |
+| [`bolt check`](/cli/check)             | Validate bolt.yaml                           |
+| [`bolt doctor`](/cli/doctor)           | Run doctor checks                            |
+| [`bolt why`](/cli/why)                 | Explain a failed run log                     |
+| [`bolt migrate`](/cli/migrate)         | Convert v2.0 bolt.yaml/bolt.local.yaml       |
+| [`bolt config`](/cli/config)           | Manage configuration                         |
+| [`bolt plugin`](/cli/plugin)           | Manage plugins                               |
+| [`bolt inspect`](/cli/inspect)         | Preview resolved steps for a task or flow    |
+| `bolt status`                          | Context freshness, built plugins, and policy |
+| [`bolt version`](/cli/version)         | Print version                                |
+| [`bolt self-update`](/cli/self-update) | Update to latest release                     |
+| `bolt ai`                              | Generate `.bolt/ai-context.md` for AI agents |
 
 ## Global Options
 
@@ -78,8 +77,8 @@ runs. There are two error shapes:
 
 Declared on purpose and accepted: `bolt version --json` (flat version object),
 `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt doctor --json`, `bolt why --json`, `bolt inspect --json`,
-`bolt status --json`, `bolt run --json`, `bolt ai --json`, and `bolt workspace sync --json` (one shared JSON envelope on stdout; logs
-go to stderr; `bolt ai --json` is `bolt.catalog/v1`; `bolt workspace sync --json` is `bolt.workspace.sync/v1` and the command is experimental, deprecated, and pending removal — prefer a pipeline step with `vcs.sync`), `bolt migrate --dry-run`, `bolt workspace sync --dry-run`, `bolt run --dry-run` / `--simulate`, and on
+`bolt status --json`, `bolt run --json`, and `bolt ai --json` (one shared JSON envelope on stdout; logs
+go to stderr; `bolt ai --json` is `bolt.catalog/v1`), `bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`, and on
 `bolt run` only: `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. On
 `bolt inspect`, undeclared `--dry-run` / `--simulate` still say `Unknown flag` with the
 inspect-is-already-a-preview note. `bolt ai --json` prints one `bolt.catalog/v1` document and writes nothing. `--agent` on any
@@ -98,7 +97,7 @@ passthrough. Other commands reject arguments after `--` (with a "Bolt flags go b
 | 0    | Success                                                                                                                       |
 | 1    | Task failure while running                                                                                                    |
 | 2    | Usage error (unknown flag/command/task, reserved flag)                                                                        |
-| 3    | Config error (`bolt.yaml` missing/invalid, `WORKSPACE_INVALID`, `ROOT_MISSING`, or `--dry-run` config problems)               |
+| 3    | Config error (`bolt.yaml` missing/invalid, `WORKSPACE_INVALID`, or `--dry-run` config problems)                               |
 | 4    | Denied on agent execute (`PLUGIN_NOT_BUILT`, `PLAN_MISMATCH`, `AGENT_EXECUTION_DISABLED`, `AI_FORBIDDEN`, `CONFIRM_REQUIRED`) |
 | 70   | Internal error (uncaught exception or rejection)                                                                              |
 | 130  | Interrupted (`SIGINT`, or `SIGBREAK` on Windows)                                                                              |

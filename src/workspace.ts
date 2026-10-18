@@ -1,17 +1,10 @@
 /**
- * Workspace model and dry-run plan aggregation (BOLT-A1a).
- * Core stores the model and orders plan rows. A plugin tagged `vcs.revision`
- * supplies action, target_rev, and will_touch. This module does not sync.
+ * Workspace roots inventory (BOLT-A1-LIST).
+ * List and check read the declaration. This module does not sync.
  */
 import { existsSync } from "fs";
 import path from "path";
 import { z } from "zod";
-import { validateHandlerResult } from "./handler-result";
-import type { BoltPluginContext } from "./plugin";
-import type { PluginRegistry } from "./plugin-registry";
-
-export const SYNC_POLICIES = ["one-side-safe", "together", "pin-rev"] as const;
-export type SyncPolicy = (typeof SYNC_POLICIES)[number];
 
 export const WORKSPACE_ROLES = ["engine", "project", "related"] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
@@ -23,14 +16,10 @@ export interface WorkspaceRoot {
   role: WorkspaceRole;
   /** Copied from bolt.yaml when set. List and check do not call a VCS. */
   vcs?: string;
-  /** Planner-only. bolt.yaml rejects `pin`. */
-  pin?: string | null;
 }
 
 export interface WorkspaceConfig {
   roots: WorkspaceRoot[];
-  /** Planner-only. bolt.yaml rejects `sync_policy`. */
-  sync_policy?: SyncPolicy;
 }
 
 export interface WorkspaceRootView {
@@ -45,19 +34,7 @@ export interface WorkspaceRootView {
 export const SYNC_POLICY_MIGRATION =
   "Remove sync_policy. Daily multi-repo update stays pipeline + vcs.sync.";
 
-export interface PlanRow {
-  root: string;
-  action: string;
-  target_rev: string;
-  will_touch: boolean;
-}
-
-export interface WorkspaceSyncData {
-  policy: SyncPolicy;
-  plan: PlanRow[];
-}
-
-export type WorkspaceErrorCode = "WORKSPACE_INVALID" | "ROOT_MISSING" | "POLICY_UNKNOWN";
+export type WorkspaceErrorCode = "WORKSPACE_INVALID";
 
 export class WorkspaceConfigError extends Error {
   readonly exitCode = 3;
@@ -69,20 +46,6 @@ export class WorkspaceConfigError extends Error {
     super(message);
     this.name = "WorkspaceConfigError";
   }
-}
-
-/** Revision resolve failed. Exit 1. Not a working-copy update. */
-export class WorkspacePlanError extends Error {
-  readonly exitCode = 1;
-  readonly code = "VCS_REVISION";
-  constructor(message: string) {
-    super(message);
-    this.name = "WorkspacePlanError";
-  }
-}
-
-export function isSyncPolicy(value: string): value is SyncPolicy {
-  return (SYNC_POLICIES as readonly string[]).includes(value);
 }
 
 const WorkspaceRootSchema = z
@@ -106,7 +69,7 @@ export const WorkspaceSchema = z
         code: z.ZodIssueCode.custom,
         path: ["sync_policy"],
         message: SYNC_POLICY_MIGRATION,
-        params: { boltCode: "WORKSPACE_INVALID", hint: SYNC_POLICY_MIGRATION },
+        params: { hint: SYNC_POLICY_MIGRATION },
       });
     }
     const seen = new Set<string>();
@@ -139,18 +102,8 @@ type ZodLikeIssue = {
 };
 
 /** Map a bolt.yaml Zod issue onto a workspace code, or undefined when it is not one. */
-export function codeForZodIssue(
-  issue: ZodLikeIssue,
-): "WORKSPACE_INVALID" | "POLICY_UNKNOWN" | undefined {
+export function codeForZodIssue(issue: ZodLikeIssue): "WORKSPACE_INVALID" | undefined {
   if (issue.path[0] !== "workspace") return undefined;
-  const params = issue.params;
-  if (
-    params &&
-    typeof params === "object" &&
-    (params as { boltCode?: unknown }).boltCode === "POLICY_UNKNOWN"
-  ) {
-    return "POLICY_UNKNOWN";
-  }
   return "WORKSPACE_INVALID";
 }
 
@@ -163,12 +116,9 @@ export function hintForZodIssue(issue: ZodLikeIssue): string | undefined {
 
 export function formatZodConfigError(issues: readonly ZodLikeIssue[], message: string): Error {
   const codes = issues.map((issue) => codeForZodIssue(issue));
-  if (
-    codes.length > 0 &&
-    codes.every((code) => code === "WORKSPACE_INVALID" || code === "POLICY_UNKNOWN")
-  ) {
+  if (codes.length > 0 && codes.every((code) => code === "WORKSPACE_INVALID")) {
     const hint = issues.map((issue) => hintForZodIssue(issue)).find((item) => item !== undefined);
-    return new WorkspaceConfigError(codes[0] ?? "WORKSPACE_INVALID", message, hint);
+    return new WorkspaceConfigError("WORKSPACE_INVALID", message, hint);
   }
   return new Error(message);
 }
@@ -201,133 +151,4 @@ export function missingWorkspacePathWarnings(inventory: { roots: WorkspaceRootVi
   return inventory.roots
     .filter((root) => !root.exists)
     .map((root) => `workspace.roots.${root.id}: path "${root.path}" does not exist`);
-}
-
-function missingRootMessage(root: WorkspaceRoot, resolved: string): string {
-  return `Root "${root.id}" path "${root.path}" does not exist (${resolved}).`;
-}
-
-const PLAN_KEYS = ["root", "action", "target_rev", "will_touch"] as const;
-
-export function formatWorkspacePlan(data: WorkspaceSyncData): string {
-  const rows = data.plan.map((row) => ({
-    root: row.root,
-    action: row.action,
-    target_rev: row.target_rev,
-    will_touch: row.will_touch ? "true" : "false",
-  }));
-  const widths = Object.fromEntries(
-    PLAN_KEYS.map((key) => [key, Math.max(key.length, ...rows.map((row) => row[key].length))]),
-  ) as Record<(typeof PLAN_KEYS)[number], number>;
-  const line = (row: Record<(typeof PLAN_KEYS)[number], string>) =>
-    PLAN_KEYS.map((key) => row[key].padEnd(widths[key]))
-      .join("  ")
-      .trimEnd();
-  return [
-    `policy: ${data.policy}`,
-    line({
-      root: "root",
-      action: "action",
-      target_rev: "target_rev",
-      will_touch: "will_touch",
-    }),
-    ...rows.map((row) => line(row)),
-  ].join("\n");
-}
-
-function planRow(rootId: string, data: unknown, ref: string): PlanRow {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new WorkspacePlanError(`${ref} returned no plan data for root "${rootId}".`);
-  }
-  const record = data as Record<string, unknown>;
-  const { action, target_rev, will_touch } = record;
-  if (typeof action !== "string" || action === "") {
-    throw new WorkspacePlanError(`${ref} plan data for root "${rootId}" needs action.`);
-  }
-  if (typeof target_rev !== "string" || target_rev === "") {
-    throw new WorkspacePlanError(`${ref} plan data for root "${rootId}" needs target_rev.`);
-  }
-  if (typeof will_touch !== "boolean") {
-    throw new WorkspacePlanError(`${ref} plan data for root "${rootId}" needs will_touch.`);
-  }
-  return { root: rootId, action, target_rev, will_touch };
-}
-
-/**
- * Aggregate one dry-run row per root, in config order.
- * `pin-rev` omits a root whose pin is null. Plugins are not asked to touch the disk.
- */
-export async function planWorkspaceSync(
-  workspace: WorkspaceConfig,
-  configDir: string,
-  registry: PluginRegistry,
-  ctx: BoltPluginContext,
-): Promise<WorkspaceSyncData> {
-  const policy = workspace.sync_policy;
-  if (!policy || !isSyncPolicy(policy)) {
-    throw new WorkspaceConfigError(
-      "WORKSPACE_INVALID",
-      "bolt workspace sync does not read the roots inventory.",
-      "Daily multi-repo update stays pipeline + vcs.sync.",
-    );
-  }
-  const plan: PlanRow[] = [];
-  for (const root of workspace.roots) {
-    const resolved = resolveRootPath(root.path, configDir);
-    if (!existsSync(resolved)) {
-      throw new WorkspaceConfigError(
-        "ROOT_MISSING",
-        missingRootMessage(root, resolved),
-        `Fix workspace.roots path for "${root.id}". A path is relative to the bolt.yaml directory, or absolute. bolt.local.yaml does not change it.`,
-      );
-    }
-    if (policy === "pin-rev" && !root.pin) continue;
-    const vcs = root.vcs ?? "";
-    const match = registry.findByCapability("vcs.revision").find((item) => item.namespace === vcs);
-    const plugin = registry.get(vcs);
-    const handler = match ? plugin?.handlers[match.handler] : undefined;
-    if (!vcs || !match || !plugin || !handler) {
-      throw new WorkspacePlanError(
-        `No vcs.revision handler for root "${root.id}" (vcs ${vcs}). This dry-run does not sync, and built-in git and svn do not supply a plan row.`,
-      );
-    }
-    if (plugin.apiVersion !== 2) {
-      throw new WorkspacePlanError(
-        `${match.ref} must declare apiVersion 2 to return a workspace plan row.`,
-      );
-    }
-    let returned: unknown;
-    try {
-      returned = await handler(
-        {
-          id: root.id,
-          path: resolved,
-          role: root.role,
-          vcs,
-          pin: root.pin ?? "",
-          policy,
-        },
-        ctx,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new WorkspacePlanError(
-        `${match.ref} failed while planning root "${root.id}": ${message}`,
-      );
-    }
-    let validated: ReturnType<typeof validateHandlerResult>;
-    try {
-      validated = validateHandlerResult(returned, match.ref);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new WorkspacePlanError(message);
-    }
-    if (validated.result.status === "fail") {
-      throw new WorkspacePlanError(
-        validated.result.summary ?? `${match.ref} failed while planning root "${root.id}".`,
-      );
-    }
-    plan.push(planRow(root.id, validated.result.data, match.ref));
-  }
-  return { policy, plan };
 }

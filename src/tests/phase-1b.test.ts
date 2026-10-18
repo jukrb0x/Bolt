@@ -211,7 +211,6 @@ test("read-only commands do not import an unbuilt plugin and previews fail close
       status: "v1",
       run: "v1",
       ai: "v1",
-      workspace: "v1",
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });

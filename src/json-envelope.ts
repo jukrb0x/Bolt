@@ -16,7 +16,6 @@ export const JSON_SCHEMA = {
   status: "bolt.status/v1",
   run: "bolt.run/v1",
   catalog: "bolt.catalog/v1",
-  workspaceSync: "bolt.workspace.sync/v1",
 } as const;
 
 export interface JsonIssue {

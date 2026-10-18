@@ -9,9 +9,7 @@ export type ConfigErrorCode =
   | "CONFIG_NOT_FOUND"
   | "CONFIG_UNREADABLE"
   | "CONFIG_INVALID"
-  | "WORKSPACE_INVALID"
-  | "POLICY_UNKNOWN"
-  | "ROOT_MISSING";
+  | "WORKSPACE_INVALID";
 
 /** A bolt.yaml problem. Always exits with CONFIG_EXIT_CODE (3); `code` carries the reason. */
 export class ConfigError extends Error {
