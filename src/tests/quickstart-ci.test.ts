@@ -8,8 +8,9 @@ test("quickstart CI installs the local binary and is not a required-check workfl
   const ci = readFileSync(".github/workflows/ci.yml", "utf8");
   expect(ci).toContain("name: quickstart ${{ matrix.os }}");
   expect(ci).toContain("needs: binaries");
-  expect(ci).toContain("os: macos-14");
-  expect(ci).toContain("os: macos-15-intel");
+  expect(ci).toContain('"os":"macos-14"');
+  expect(ci).toContain('"os":"macos-15-intel"');
+  expect(ci).not.toContain('"os":"macos-13"');
   expect(ci).not.toContain("os: macos-13");
   expect(ci).toContain("bash scripts/unix-quickstart-e2e.sh");
   expect(ci).toContain("github.event_name == 'pull_request' || github.ref == 'refs/heads/main'");

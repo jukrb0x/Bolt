@@ -86,7 +86,7 @@ test("pull requests run the local Windows install proof once", () => {
   expect(ci).not.toContain("windows-latest self-update from v2.1.0");
   expect(ci).not.toContain("windows-self-update:");
   expect(ci.split("windows-install-e2e.ps1").length - 1).toBe(1);
-  expect(ci).toContain("host: [powershell, pwsh]");
+  expect(ci).toContain("host: [pwsh]");
   expect(ci).toContain("github.event_name == 'pull_request'");
 
   for (const path of workflows) {
