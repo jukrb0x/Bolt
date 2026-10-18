@@ -25,7 +25,7 @@ import {
 } from "../workspace";
 
 const DRY_RUN_REQUIRED =
-  "bolt workspace sync does not sync in this build. Re-run with --dry-run to print the plan.";
+  "bolt workspace sync is experimental, deprecated, and pending removal. It does not sync. Re-run with --dry-run to print a plan. Daily multi-repo update stays a pipeline step with vcs.sync.";
 
 function userHome(): string {
   return process.env.HOME || process.env.USERPROFILE || os.homedir();
@@ -34,12 +34,14 @@ function userHome(): string {
 const syncCmd = defineCommand({
   meta: {
     name: "sync",
-    description: "Print a dry-run plan for workspace.roots. Does not update a working copy",
+    description:
+      "Experimental, deprecated, pending removal. Not the supported update path. Prints a dry-run plan only. Prefer a pipeline step with vcs.sync",
   },
   args: {
     "dry-run": {
       type: "boolean",
-      description: "Print the plan. Required; this build does not sync",
+      description:
+        "Print the experimental plan. Required; this command does not sync and is pending removal",
     },
     json: {
       type: "boolean",
@@ -89,7 +91,7 @@ const syncCmd = defineCommand({
       fail(
         new WorkspaceConfigError(
           "WORKSPACE_INVALID",
-          "bolt.yaml has no workspace block. Add workspace.roots and sync_policy.",
+          "bolt.yaml has no workspace block. This command is experimental and pending removal. Do not add sync_policy. Daily multi-repo update stays a pipeline step with vcs.sync.",
         ),
       );
 
@@ -138,7 +140,8 @@ const syncCmd = defineCommand({
 export default defineCommand({
   meta: {
     name: "workspace",
-    description: "Plan workspace roots declared in bolt.yaml",
+    description:
+      "Experimental, deprecated, pending removal. Not the supported multi-repo update path. Prefer a pipeline step with vcs.sync",
   },
   subCommands: {
     sync: syncCmd,

@@ -118,12 +118,12 @@ Type: `object`
 
 Type: `object`
 
-Optional multi-root workspace. Dry-run planning reads this block. It does not sync by itself.
+Experimental, legacy, pending removal. Not the supported multi-repo update path. Daily updates stay a pipeline step with vcs.sync. Remove this block and sync_policy.
 
-| Field         | Type                                                | Required | Default | Notes                                                                  |
-| ------------- | --------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------- |
-| `roots`       | `workspaceRoot[]` ([workspaceRoot](#workspaceroot)) | yes      |         | minItems: 1                                                            |
-| `sync_policy` | `"one-side-safe" \| "together" \| "pin-rev"`        | yes      |         | one-side-safe is the frozen name. together and pin-rev are recognized. |
+| Field         | Type                                                | Required | Default | Notes                                                                                               |
+| ------------- | --------------------------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `roots`       | `workspaceRoot[]` ([workspaceRoot](#workspaceroot)) | yes      |         | minItems: 1                                                                                         |
+| `sync_policy` | `"one-side-safe" \| "together" \| "pin-rev"`        | yes      |         | Experimental, legacy, pending removal. Do not add. Remove it and use a pipeline step with vcs.sync. |
 
 ### workspaceRoot
 

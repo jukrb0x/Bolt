@@ -5,7 +5,15 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Workspace sync dry-run downgraded
+
+`bolt workspace sync --dry-run` and `workspace.sync_policy` are downgraded from a product path to experimental / historical, pending teardown.
+
+**Migrate:** remove `sync_policy`. Daily multi-repo update stays a pipeline step with `vcs.sync`.
+
 ### Workspace dry-run plan
+
+Historical record of the dry-run slice. Superseded by the downgrade above. Not a supported product path.
 
 `bolt workspace sync --dry-run` reads an optional `workspace` block in `bolt.yaml` and prints a plan. It does not update a working copy. This slice does not sync mixed roots, and it does not add `bolt workspace status`.
 

@@ -216,7 +216,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["roots", "sync_policy"],
-      "description": "Optional multi-root workspace. Dry-run planning reads this block. It does not sync by itself.",
+      "description": "Experimental, legacy, pending removal. Not the supported multi-repo update path. Daily updates stay a pipeline step with vcs.sync. Remove this block and sync_policy.",
       "properties": {
         "roots": {
           "type": "array",
@@ -226,7 +226,7 @@
           }
         },
         "sync_policy": {
-          "description": "one-side-safe is the frozen name. together and pin-rev are recognized.",
+          "description": "Experimental, legacy, pending removal. Do not add. Remove it and use a pipeline step with vcs.sync.",
           "enum": ["one-side-safe", "together", "pin-rev"]
         }
       }

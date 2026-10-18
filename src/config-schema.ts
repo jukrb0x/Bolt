@@ -145,7 +145,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["roots", "sync_policy"],
       description:
-        "Optional multi-root workspace. Dry-run planning reads this block. It does not sync by itself.",
+        "Experimental, legacy, pending removal. Not the supported multi-repo update path. Daily updates stay a pipeline step with vcs.sync. Remove this block and sync_policy.",
       properties: {
         roots: {
           type: "array",
@@ -153,7 +153,8 @@ const BOLT_CONFIG_JSON_SCHEMA = {
           items: { $ref: "#/$defs/workspaceRoot" },
         },
         sync_policy: {
-          description: "one-side-safe is the frozen name. together and pin-rev are recognized.",
+          description:
+            "Experimental, legacy, pending removal. Do not add. Remove it and use a pipeline step with vcs.sync.",
           enum: ["one-side-safe", "together", "pin-rev"],
         },
       },
