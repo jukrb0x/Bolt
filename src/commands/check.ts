@@ -48,6 +48,7 @@ export default defineCommand({
             path: item.path,
             message: item.message,
           })),
+          ...(result.workspace ? { workspace: result.workspace } : {}),
         },
         warnings: result.warnings.map((message) => issue("CONFIG_WARNING", message)),
         errors: result.errors.map((error) =>
@@ -69,6 +70,14 @@ export default defineCommand({
     console.log(pc.dim(`bolt.yaml: ${configPath}`));
 
     const result = await checkConfig(configPath);
+
+    if (result.workspace) {
+      console.log(`${pc.underline(pc.bold("WORKSPACE"))} ${pc.dim("(roots)")}`);
+      for (const root of result.workspace.roots) {
+        const vcs = root.vcs ? pc.dim(`  ${root.vcs}`) : "";
+        console.log(`  ${root.id}  ${root.role}  ${root.path}${vcs}`);
+      }
+    }
 
     for (const warning of result.warnings) console.log(pc.yellow(warning));
 

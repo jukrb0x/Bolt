@@ -10,7 +10,7 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 | Command                                           | Description                                                                                     |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`bolt run`](/cli/run)                            | Run tasks (in typed order) or a flow                                                            |
-| [`bolt list`](/cli/list)                          | List all tasks and flows                                                                        |
+| [`bolt list`](/cli/list)                          | List tasks, flows, and workspace roots                                                          |
 | [`bolt info`](/cli/info)                          | Show project and VCS configuration                                                              |
 | [`bolt check`](/cli/check)                        | Validate bolt.yaml                                                                              |
 | [`bolt doctor`](/cli/doctor)                      | Run doctor checks                                                                               |
@@ -93,15 +93,15 @@ passthrough. Other commands reject arguments after `--` (with a "Bolt flags go b
 
 ## Exit Codes
 
-| Code | Meaning                                                                                                                           |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | Success                                                                                                                           |
-| 1    | Task failure while running                                                                                                        |
-| 2    | Usage error (unknown flag/command/task, reserved flag)                                                                            |
-| 3    | Config error (`bolt.yaml` missing/invalid, `WORKSPACE_INVALID`, `ROOT_MISSING`, `POLICY_UNKNOWN`, or `--dry-run` config problems) |
-| 4    | Denied on agent execute (`PLUGIN_NOT_BUILT`, `PLAN_MISMATCH`, `AGENT_EXECUTION_DISABLED`, `AI_FORBIDDEN`, `CONFIRM_REQUIRED`)     |
-| 70   | Internal error (uncaught exception or rejection)                                                                                  |
-| 130  | Interrupted (`SIGINT`, or `SIGBREAK` on Windows)                                                                                  |
+| Code | Meaning                                                                                                                       |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                                                       |
+| 1    | Task failure while running                                                                                                    |
+| 2    | Usage error (unknown flag/command/task, reserved flag)                                                                        |
+| 3    | Config error (`bolt.yaml` missing/invalid, `WORKSPACE_INVALID`, `ROOT_MISSING`, or `--dry-run` config problems)               |
+| 4    | Denied on agent execute (`PLUGIN_NOT_BUILT`, `PLAN_MISMATCH`, `AGENT_EXECUTION_DISABLED`, `AI_FORBIDDEN`, `CONFIRM_REQUIRED`) |
+| 70   | Internal error (uncaught exception or rejection)                                                                              |
+| 130  | Interrupted (`SIGINT`, or `SIGBREAK` on Windows)                                                                              |
 
 ## Configuration Discovery
 

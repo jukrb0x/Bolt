@@ -17,8 +17,12 @@ import {
   WorkspaceSchema,
   codeForZodIssue,
   formatZodConfigError,
+  hintForZodIssue,
+  missingWorkspacePathWarnings,
+  readWorkspaceInventory,
   workspaceFromParsed,
   type WorkspaceConfig,
+  type WorkspaceRootView,
 } from "./workspace";
 
 /** bolt.yaml schema version. Unknown versions are rejected; there is no migrator. */
@@ -704,6 +708,8 @@ export interface ConfigCheckResultWithLegacy extends ConfigCheckResult {
   legacy: ReturnType<typeof findLegacyKeys>;
   /** Fan-out keys in `capabilities:` (ignored, not an error). */
   warnings: string[];
+  /** Present when bolt.yaml has a workspace block that parsed. */
+  workspace?: { roots: WorkspaceRootView[] };
 }
 
 export async function checkConfig(
@@ -781,10 +787,12 @@ export async function checkConfig(
     errors.push(
       ...result.error.issues.map((issue) => {
         const code = codeForZodIssue(issue);
+        const hint = hintForZodIssue(issue);
         return {
           path: labelOverridePath(issue.path.join(".") || "<root>", parsed, localOverrides),
           message: issue.message,
           ...(code ? { code } : {}),
+          ...(hint ? { hint } : {}),
         };
       }),
     );
@@ -851,6 +859,18 @@ export async function checkConfig(
     }
   }
 
+  let workspace: { roots: WorkspaceRootView[] } | undefined;
+  if (result.success && result.data.workspace) {
+    workspace = readWorkspaceInventory(workspaceFromParsed(result.data.workspace), configDir);
+    warnings = [...warnings, ...missingWorkspacePathWarnings(workspace)];
+  }
+
   const legacy = findLegacyKeys(parsed, localParsed);
-  return { ok: errors.length === 0, errors, legacy, warnings };
+  return {
+    ok: errors.length === 0,
+    errors,
+    legacy,
+    warnings,
+    ...(workspace ? { workspace } : {}),
+  };
 }

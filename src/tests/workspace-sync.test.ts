@@ -24,13 +24,13 @@ workspace:
       path: ./engine
       role: engine
       vcs: git
-      pin: null
     - id: game
       path: ./game
       role: project
       vcs: svn
-  sync_policy: one-side-safe
 `;
+
+const WITH_POLICY = `${YAML}  sync_policy: one-side-safe\n`;
 
 function tempProject(yaml: string, extra?: (dir: string) => void): string {
   const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-a1a-"));
@@ -90,35 +90,14 @@ function planner(namespace: string, targetRev: string, calls: string[]) {
   });
 }
 
-function fixturePlugin(namespace: string, targetRev: string): string {
-  return `import { defineHandler, definePlugin } from "boltstack";
-export default definePlugin({
-  namespace: ${JSON.stringify(namespace)},
-  version: "0.0.0",
-  description: "fixture planner",
-  apiVersion: 2,
-  handlers: {
-    revision: defineHandler(
-      { ai: true, capability: "vcs.revision", description: "plan a root" },
-      async (params) => ({
-        status: "ok",
-        data: { action: "sync", target_rev: params.pin || ${JSON.stringify(targetRev)}, will_touch: true },
-      }),
-    ),
-  },
-});
-`;
-}
-
 test("loadConfig keeps workspace roots in declaration order", async () => {
   const dir = tempProject(YAML);
   try {
     const cfg = await loadConfig(path.join(dir, "bolt.yaml"));
     expect(cfg.workspace).toEqual({
-      sync_policy: "one-side-safe",
       roots: [
-        { id: "engine", path: "./engine", role: "engine", vcs: "git", pin: null },
-        { id: "game", path: "./game", role: "project", vcs: "svn", pin: null },
+        { id: "engine", path: "./engine", role: "engine", vcs: "git" },
+        { id: "game", path: "./game", role: "project", vcs: "svn" },
       ],
     });
   } finally {
@@ -126,22 +105,19 @@ test("loadConfig keeps workspace roots in declaration order", async () => {
   }
 });
 
-test("schema accepts workspace and rejects an unknown policy", async () => {
+test("schema accepts a roots inventory and rejects sync_policy", async () => {
   expect(schemaErrors(boltConfigJsonSchema(), parse(YAML))).toEqual([]);
   expect(
-    schemaErrors(boltConfigJsonSchema(), parse(YAML.replace("one-side-safe", "together"))),
-  ).toEqual([]);
-  expect(
-    schemaErrors(boltConfigJsonSchema(), parse(YAML.replace("one-side-safe", "pin-rev"))),
-  ).toEqual([]);
-  const dir = tempProject(YAML.replace("one-side-safe", "one-side"));
+    schemaErrors(boltConfigJsonSchema(), parse(WITH_POLICY)).some((err) =>
+      err.includes("sync_policy"),
+    ),
+  ).toBe(true);
+  const dir = tempProject(WITH_POLICY);
   try {
     const checked = await checkConfig(path.join(dir, "bolt.yaml"));
     expect(checked.ok).toBe(false);
-    expect(checked.errors.some((error) => error.code === "POLICY_UNKNOWN")).toBe(true);
-    expect(
-      schemaErrors(boltConfigJsonSchema(), parse(YAML.replace("one-side-safe", "one-side"))).length,
-    ).toBeGreaterThan(0);
+    expect(checked.errors.some((error) => error.code === "POLICY_UNKNOWN")).toBe(false);
+    expect(checked.errors.some((error) => error.hint?.includes("vcs.sync"))).toBe(true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -186,7 +162,13 @@ test("plan rows follow config order and pin-rev skips a root with no pin", async
   const registry = new PluginRegistry();
   registry.register(planner("svn", "1234", calls));
   registry.register(planner("git", "abc", calls));
-  const workspace = (await loadConfig(path.join(dir, "bolt.yaml"))).workspace as WorkspaceConfig;
+  const workspace: WorkspaceConfig = {
+    sync_policy: "one-side-safe",
+    roots: [
+      { id: "engine", path: "./engine", role: "engine", vcs: "git", pin: null },
+      { id: "game", path: "./game", role: "project", vcs: "svn", pin: null },
+    ],
+  };
   try {
     const planned = await planWorkspaceSync(
       workspace,
@@ -216,6 +198,25 @@ test("plan rows follow config order and pin-rev skips a root with no pin", async
     );
     expect(pinPlan.plan.map((row) => row.root)).toEqual(["engine"]);
     expect(calls).toEqual(["git:engine"]);
+
+    const missing = planWorkspaceSync(
+      {
+        ...workspace,
+        roots: [{ ...workspace.roots[0], path: "./nope" }, workspace.roots[1]],
+      },
+      dir,
+      registry,
+      createTestContext({ configDir: dir, dryRun: true }),
+    );
+    await expect(missing).rejects.toMatchObject({ code: "ROOT_MISSING" });
+
+    const bare = planWorkspaceSync(
+      workspace,
+      dir,
+      new PluginRegistry(),
+      createTestContext({ configDir: dir, dryRun: true }),
+    );
+    await expect(bare).rejects.toMatchObject({ code: "VCS_REVISION" });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -231,71 +232,40 @@ test("format uses the json field names as columns", () => {
   expect(header.split(/\s+/)).toEqual(["root", "action", "target_rev", "will_touch"]);
 });
 
-test("dry-run json plans a git root and an svn root from fixture plugins", async () => {
-  const game = path.join(os.tmpdir(), `bolt-a1a-game-${process.pid}`);
-  mkdirSync(game, { recursive: true });
-  const dir = tempProject(
-    YAML.replace("path: ./game", `path: ${game.replaceAll("\\", "/")}`),
-    (root) => {
-      mkdirSync(path.join(root, "engine"));
-      const gitDir = path.join(root, "plugins", "git");
-      const svnDir = path.join(root, "plugins", "svn");
-      mkdirSync(gitDir, { recursive: true });
-      mkdirSync(svnDir, { recursive: true });
-      writeFileSync(path.join(gitDir, "index.ts"), fixturePlugin("git", "abc"));
-      writeFileSync(path.join(svnDir, "index.ts"), fixturePlugin("svn", "1234"));
-      writeFileSync(
-        path.join(root, "bolt.yaml"),
-        `${YAML.replace("path: ./game", `path: ${game.replaceAll("\\", "/")}`)}
-plugins:
-  - namespace: svn
-    path: ./plugins/svn
-  - namespace: git
-    path: ./plugins/git
-`,
-      );
-    },
-  );
+test("workspace sync rejects sync_policy before it prints a plan", async () => {
+  const dir = tempProject(WITH_POLICY, (root) => {
+    mkdirSync(path.join(root, "engine"));
+    mkdirSync(path.join(root, "game"));
+  });
   try {
     const run = await bolt(["workspace", "sync", "--dry-run", "--json"], dir);
-    expect(run.code).toBe(0);
+    expect(run.code).toBe(3);
     const body = parseStdout(run.out);
     expect(body.schema).toBe("bolt.workspace.sync/v1");
     expect(body.bolt).toBe(VERSION);
-    expect(body.ok).toBe(true);
-    expect(body.errors).toEqual([]);
-    const data = body.data as { policy: string; plan: Array<Record<string, unknown>> };
-    expect(data).toEqual({
-      policy: "one-side-safe",
-      plan: [
-        { root: "engine", action: "sync", target_rev: "abc", will_touch: true },
-        { root: "game", action: "sync", target_rev: "1234", will_touch: true },
-      ],
-    });
-    const human = await bolt(["workspace", "sync", "--dry-run"], dir);
-    expect(human.code).toBe(0);
-    expect(human.out.split("\n")[1].split(/\s+/)).toEqual([
-      "root",
-      "action",
-      "target_rev",
-      "will_touch",
-    ]);
+    expect(body.ok).toBe(false);
+    expect(body.data).toBeNull();
+    const errors = body.errors as Array<{ code: string; message: string; hint?: string }>;
+    expect(errors[0].code).toBe("WORKSPACE_INVALID");
+    expect(`${errors[0].message}\n${errors[0].hint ?? ""}`).toContain("vcs.sync");
+    expect(run.out).not.toContain("target_rev");
+    expect(run.out).not.toContain("ROOT_MISSING");
   } finally {
     rmSync(dir, { recursive: true, force: true });
-    rmSync(game, { recursive: true, force: true });
   }
 });
 
 test("unknown policy, missing root, and a sync without dry-run exit as specified", async () => {
-  const unknown = tempProject(YAML.replace("one-side-safe", "together-ish"));
+  const unknown = tempProject(WITH_POLICY.replace("one-side-safe", "together-ish"));
   try {
     const run = await bolt(["workspace", "sync", "--dry-run", "--json"], unknown);
     expect(run.code).toBe(3);
     const body = parseStdout(run.out);
     expect(body.ok).toBe(false);
     const errors = body.errors as Array<{ code: string; message: string }>;
-    expect(errors[0].code).toBe("POLICY_UNKNOWN");
-    expect(errors[0].message).toContain("together-ish");
+    expect(errors[0].code).toBe("WORKSPACE_INVALID");
+    expect(errors[0].message).toContain("sync_policy");
+    expect(errors[0].message).not.toContain("POLICY_UNKNOWN");
   } finally {
     rmSync(unknown, { recursive: true, force: true });
   }
@@ -307,9 +277,9 @@ test("unknown policy, missing root, and a sync without dry-run exit as specified
     const body = parseStdout(run.out);
     expect(body.ok).toBe(false);
     const errors = body.errors as Array<{ code: string; message: string }>;
-    expect(errors[0].code).toBe("ROOT_MISSING");
-    expect(errors[0].message).toContain("engine");
-    expect(errors[0].message).toContain("./engine");
+    expect(errors[0].code).toBe("WORKSPACE_INVALID");
+    expect(errors[0].message).not.toContain("ROOT_MISSING");
+    expect(run.out).not.toContain("ROOT_MISSING");
   } finally {
     rmSync(missing, { recursive: true, force: true });
   }
@@ -339,10 +309,11 @@ test("unknown policy, missing root, and a sync without dry-run exit as specified
     expect(human.err).toContain("--dry-run");
     expect(human.out).not.toContain("target_rev");
     const builtin = await bolt(["workspace", "sync", "--dry-run", "--json"], ready);
-    expect(builtin.code).toBe(1);
+    expect(builtin.code).toBe(3);
     const builtinBody = parseStdout(builtin.out);
     expect(builtinBody.ok).toBe(false);
-    expect((builtinBody.errors as Array<{ code: string }>)[0].code).toBe("VCS_REVISION");
+    expect((builtinBody.errors as Array<{ code: string }>)[0].code).toBe("WORKSPACE_INVALID");
+    expect(builtin.out).not.toContain("VCS_REVISION");
   } finally {
     rmSync(ready, { recursive: true, force: true });
   }

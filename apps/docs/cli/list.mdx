@@ -1,9 +1,9 @@
 ---
 title: "bolt list"
-description: "List all tasks and flows defined in bolt.yaml."
+description: "List tasks, flows, and workspace roots defined in bolt.yaml."
 ---
 
-List all tasks and flows defined in `bolt.yaml`.
+List tasks, flows, and workspace roots defined in `bolt.yaml`.
 
 ## Usage
 
@@ -15,8 +15,11 @@ bolt list
 
 Lists every **task** (`bolt run <task...>`) and every **flow** (`bolt run <flow>`)
 defined in your project. Each flow also shows its ordered steps and description, so
-you can see at a glance what a flow will run. Useful for discovering what workflows
-are available in your project.
+you can see at a glance what a flow will run. When `bolt.yaml` has a `workspace`
+block, the command also lists those roots (`id`, `role`, `path`, optional `vcs`).
+A path that is not on disk is still listed, with `path does not exist`. `--json`
+adds `data.workspace.roots` and sets `exists`. The command does not update those
+paths.
 
 ## Options
 

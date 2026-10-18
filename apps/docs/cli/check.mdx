@@ -16,8 +16,10 @@ bolt check
 Validates your configuration against Bolt's schema:
 
 - **`bolt.yaml`** — file existence, YAML syntax, `version: 1`, and the core schema
-  (project name, tasks, flows, plugins). `ue` and `svn` plugin metadata is checked
-  when those entries are present.
+  (project name, tasks, flows, plugins, optional `workspace.roots`). `ue` and `svn`
+  plugin metadata is checked when those entries are present. A `workspace` root
+  whose `path` is not on disk warns `path does not exist` and stays in
+  `data.workspace` when `--json` is set. `sync_policy` is rejected.
 - **`bolt.local.yaml`** — only if the file exists. It may contain `vars`,
   `plugins` (per-namespace overrides), and `capabilities` (per-key overrides of
   the same map in `bolt.yaml`). `bolt.yaml` is validated after those overrides

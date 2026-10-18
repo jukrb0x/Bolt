@@ -123,7 +123,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
     workspaceRoot: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "path", "role", "vcs"],
+      required: ["id", "path", "role"],
       properties: {
         id: { type: "string", minLength: 1 },
         path: {
@@ -133,29 +133,25 @@ const BOLT_CONFIG_JSON_SCHEMA = {
             "Relative to the directory that contains bolt.yaml, or an absolute path. bolt.local.yaml does not override it",
         },
         role: { enum: ["engine", "project", "related"] },
-        vcs: { type: "string", minLength: 1 },
-        pin: {
-          description: "Revision or branch to pin. Null or omitted means no pin.",
-          oneOf: [{ type: "string", minLength: 1 }, { type: "null" }],
+        vcs: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Optional version-control namespace. Omit it when the root has none. bolt list and bolt check do not call it",
         },
       },
     },
     workspace: {
       type: "object",
       additionalProperties: false,
-      required: ["roots", "sync_policy"],
+      required: ["roots"],
       description:
-        "Experimental, legacy, pending removal. Not the supported multi-repo update path. Daily updates stay a pipeline step with vcs.sync. Remove this block and sync_policy.",
+        "Optional multi-root inventory. bolt list and bolt check read these roots. They do not update a working copy. sync_policy is rejected: remove it. Daily multi-repo update stays pipeline + vcs.sync.",
       properties: {
         roots: {
           type: "array",
           minItems: 1,
           items: { $ref: "#/$defs/workspaceRoot" },
-        },
-        sync_policy: {
-          description:
-            "Experimental, legacy, pending removal. Do not add. Remove it and use a pipeline step with vcs.sync.",
-          enum: ["one-side-safe", "together", "pin-rev"],
         },
       },
     },

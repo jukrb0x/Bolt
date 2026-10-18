@@ -7,10 +7,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                                      | Why                                                                                                                           |
-| ----------------- | ------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace` | The team's automation contract. Everyone runs the same tasks/flows. `workspace` is experimental, legacy, and pending removal. |
-| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine. |
+| File              | Committed?    | Contains                                                                      | Why                                                                                                                                      |
+| ----------------- | ------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace` | The team's automation contract. Everyone runs the same tasks/flows. `workspace.roots` is an inventory `bolt list` and `bolt check` read. |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine.            |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -114,9 +114,23 @@ A step can then say `uses: vcs.sync`. `uses: git/pull` does not consult the map.
 
 ## workspace
 
-Experimental, legacy, and pending removal. `bolt workspace sync` is not a supported update path. Do not add `sync_policy`.
+Optional roots inventory. `bolt list` prints the roots. `bolt check` validates them. Neither command updates a working copy, and neither calls `vcs`.
 
-Daily multi-repo update stays a pipeline step with `vcs.sync` (see [capabilities](#capabilities)). **Migrate:** remove the entire `workspace` block (including `sync_policy`).
+```yaml
+workspace:
+  roots:
+    - id: engine
+      path: ../engine
+      role: engine
+      vcs: git
+    - id: game
+      path: .
+      role: project
+```
+
+`role` is `engine`, `project`, or `related`. `path` is relative to the `bolt.yaml` directory, or absolute. `vcs` is optional. `bolt list --json` stays `bolt.list/v1` and adds `data.workspace.roots` (`id`, `path`, `role`, `exists`, and `vcs` when set). A missing directory stays in the list with `exists: false`. `bolt check` warns `path does not exist`.
+
+`sync_policy` and `pin` are rejected. **Migrate:** remove `sync_policy`. Daily multi-repo update stays pipeline + `vcs.sync` (see [capabilities](#capabilities)).
 
 ## bolt.local.yaml — annotated walkthrough
 

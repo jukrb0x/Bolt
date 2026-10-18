@@ -5,11 +5,23 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Workspace roots inventory
+
+`workspace` in `bolt.yaml` is a roots inventory. `bolt list` and `bolt check` read it. They do not update a working copy.
+
+`workspace.roots` stays in declaration order. Each root requires `id`, `path`, and `role` (`engine`, `project`, or `related`). `path` is relative to the directory that contains `bolt.yaml`, or absolute. `bolt.local.yaml` does not override `path`. `vcs` is optional. Omit it when the root has none. `bolt list` and `bolt check` do not call it.
+
+`bolt list` prints the roots. `bolt list --json` stays `bolt.list/v1` and adds `data.workspace.roots` when the block is present. Each root is `id`, `path`, `role`, `exists`, and `vcs` when that key is set. A path that is not on disk stays in the list with `exists: false`. `bolt check --json` reports the same inventory under `data.workspace` and warns `path does not exist`. That warning does not create the directory.
+
+`sync_policy` and `pin` are not accepted. A file that still contains `sync_policy` fails validation (exit 3, `WORKSPACE_INVALID`). The hint is: remove `sync_policy`. Daily multi-repo update stays pipeline + `vcs.sync`. An empty `id` or `path`, a `role` outside the three names, or a duplicate root `id` is the same config error.
+
+Not in this slice: a sync, a plan, or a `bolt workspace list` command.
+
 ### Workspace sync dry-run downgraded
 
 `bolt workspace sync --dry-run` and `workspace.sync_policy` are downgraded from a product path to experimental / historical, pending teardown.
 
-**Migrate:** remove the entire `workspace` block (including `sync_policy`). Daily multi-repo update stays a pipeline step with `vcs.sync`.
+**Migrate:** remove `sync_policy` and `pin`. Keep `workspace.roots`. Daily multi-repo update stays pipeline + `vcs.sync`.
 
 ### Workspace dry-run plan
 
