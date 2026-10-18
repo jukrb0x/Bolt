@@ -116,7 +116,7 @@ A step can then say `uses: vcs.sync`. `uses: git/pull` does not consult the map.
 
 Experimental, legacy, and pending removal. `bolt workspace sync` is not a supported update path. Do not add `sync_policy`.
 
-Daily multi-repo update stays a pipeline step with `vcs.sync` (see [capabilities](#capabilities)). **Migrate:** remove `sync_policy` from `bolt.yaml`.
+Daily multi-repo update stays a pipeline step with `vcs.sync` (see [capabilities](#capabilities)). **Migrate:** remove the entire `workspace` block (including `sync_policy`).
 
 ## bolt.local.yaml — annotated walkthrough
 

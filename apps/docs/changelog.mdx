@@ -9,7 +9,7 @@ description: "User-visible changes and migration notes."
 
 `bolt workspace sync --dry-run` and `workspace.sync_policy` are downgraded from a product path to experimental / historical, pending teardown.
 
-**Migrate:** remove `sync_policy`. Daily multi-repo update stays a pipeline step with `vcs.sync`.
+**Migrate:** remove the entire `workspace` block (including `sync_policy`). Daily multi-repo update stays a pipeline step with `vcs.sync`.
 
 ### Workspace dry-run plan
 
