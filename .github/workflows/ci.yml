@@ -2,7 +2,22 @@ name: CI
 
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'apps/docs/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'apps/docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -64,8 +79,37 @@ jobs:
       - name: End-to-end
         run: bun run test:e2e
 
+  # docs:gen inputs. A docs-only push never gets here (paths-ignore).
+  docs-changes:
+    name: docs changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docs:
+              - 'apps/docs/**'
+              - 'schema/v1/**'
+              - 'src/commands/**'
+              - 'src/plugins/**'
+              - 'src/plugin.ts'
+              - 'src/plugin-registry.ts'
+              - '.oxfmtrc.json'
+
   docs:
     name: docs
+    needs: docs-changes
+    if: needs.docs-changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -100,8 +144,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows PowerShell 5.1 and PowerShell 7.
-        host: [powershell, pwsh]
+        # PowerShell 7. Windows PowerShell 5.1 is not in this matrix.
+        host: [pwsh]
     timeout-minutes: 45
     steps:
       - name: Keep LF line endings
@@ -126,6 +170,7 @@ jobs:
   # Served local artifacts, not the public latest release: a pull request is
   # not published, and the live install workflows run only after Release.
   # macos-13 was removed in December 2025. macos-15-intel is the x64 image.
+  # Pull requests schedule ubuntu-latest only. macOS runs on push to main.
   quickstart:
     name: quickstart ${{ matrix.os }}
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
@@ -138,13 +183,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            self_update: true
-          - os: macos-14
-            self_update: false
-          - os: macos-15-intel
-            self_update: false
+        # Conditional include: macOS rows are not scheduled on pull_request.
+        include: ${{ fromJSON(github.event_name == 'push' && github.ref == 'refs/heads/main' && '[{"os":"ubuntu-latest","self_update":true},{"os":"macos-14","self_update":false},{"os":"macos-15-intel","self_update":false}]' || '[{"os":"ubuntu-latest","self_update":true}]') }}
     steps:
       - uses: actions/checkout@v4
         with:
