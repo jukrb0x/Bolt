@@ -104,7 +104,7 @@ async sync() {}
 
 Allowed: core tags (`doctor`, `diagnose`, `detect`, `notify`, `vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store`, `env.check`), `x-<vendor>.<name>`, and `<your-namespace>.<name>`. The areas `doctor`, `diagnose`, `detect`, `notify`, `vcs`, `artifact`, and `env` are reserved for core tags. At most 8 tags per handler. Tags must not depend on config. Plain object plugins (a hand-written `handlers` map) cannot carry tags. Convert them to `definePlugin`.
 
-`env.check` also takes `checkId`. `bolt env probe` passes the declaration on optional `ctx.envCheck`. Read `ctx.envCheck?.id` so the plugin still loads on a bolt that does not set the field.
+`env.check` also takes `checkId`. `bolt env probe` and `bolt env ensure` pass the declaration on optional `ctx.envCheck`. Read `ctx.envCheck?.id`. `action` is `"ensure"` only while ensure is filling that gap. A missing `action` means probe, including on older bolts that omit `ctx.envCheck`.
 
 ## 8. Tests
 
@@ -126,7 +126,7 @@ Core looks handlers up with `PluginRegistry.findByCapability()`. Choosing among 
 
 ## 10. Choosing a singleton provider
 
-`doctor`, `diagnose`, `detect`, and `notify` are fan-out: every matching handler runs, and a `capabilities:` entry for those tags is ignored with one warning. `env.check` is ignored by that map the same way. `bolt env probe` selects the handler by `checkId` instead of running every match. The other core tags (`vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store`) and plugin tags are singletons.
+`doctor`, `diagnose`, `detect`, and `notify` are fan-out: every matching handler runs, and a `capabilities:` entry for those tags is ignored with one warning. `env.check` is ignored by that map the same way. `bolt env probe` and `bolt env ensure` select the handler by `checkId` instead of running every match. The other core tags (`vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store`) and plugin tags are singletons.
 
 ```yaml
 # bolt.yaml — commit this

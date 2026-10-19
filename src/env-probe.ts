@@ -14,7 +14,7 @@ import {
 } from "./env-manifest";
 import { validateHandlerResult, type HandlerResult, type HandlerStatus } from "./handler-result";
 import { issue, type JsonIssue } from "./json-envelope";
-import type { EnvCheckContext } from "./plugin";
+import type { BoltPluginContext, EnvCheckContext } from "./plugin";
 import { PluginRegistry, type CapabilityMatch } from "./plugin-registry";
 
 export type EnvStatus = "pass" | "fail" | "warn" | "skip";
@@ -57,7 +57,7 @@ export interface EnvProbeOutcome {
   errors: JsonIssue[];
 }
 
-interface EnvProvider {
+export interface EnvProvider {
   ref: string;
   namespace: string;
   handler: string;
@@ -165,11 +165,41 @@ export function indexEnvChecks(registry: PluginRegistry): Map<string, EnvProvide
   return index;
 }
 
-function envCheckContext(decl: EnvCheckDecl): EnvCheckContext {
+function envCheckContext(decl: EnvCheckDecl, action?: "ensure"): EnvCheckContext {
   const ctx: EnvCheckContext = { id: decl.id, require: decl.require };
   if (decl.version !== undefined) ctx.version = decl.version;
   if (decl.params !== undefined) ctx.params = decl.params;
+  if (action === "ensure") ctx.action = "ensure";
   return ctx;
+}
+
+/** Run one `env.check` handler. `action: "ensure"` is set only for a real ensure apply. */
+export async function callEnvHandler(
+  registry: PluginRegistry,
+  provider: EnvProvider,
+  decl: EnvCheckDecl,
+  base: BoltPluginContext,
+  action?: "ensure",
+): Promise<
+  { ok: true; result: HandlerResult; warnings: string[] } | { ok: false; message: string }
+> {
+  const plugin = registry.get(provider.namespace);
+  const handler = plugin?.handlers[provider.handler];
+  if (!plugin || !handler) return { ok: false, message: `Unknown handler "${provider.ref}".` };
+  let returned: unknown;
+  try {
+    returned = await handler({}, { ...base, envCheck: envCheckContext(decl, action) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, message };
+  }
+  try {
+    const validated = validateHandlerResult(returned, provider.ref);
+    return { ok: true, result: validated.result, warnings: validated.warnings };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, message };
+  }
 }
 
 export function envNoManifestWarning(): JsonIssue {
@@ -226,45 +256,17 @@ export async function probeEnv(input: {
   const checks: EnvProbeCheck[] = [];
   for (const decl of resolved.checks) {
     const provider = providers.get(decl.id)!;
-    const plugin = registry.get(provider.namespace);
-    const handler = plugin?.handlers[provider.handler];
-    if (!plugin || !handler) {
+    const called = await callEnvHandler(registry, provider, decl, base);
+    if (!called.ok) {
       return {
         exitCode: 1,
         data: probeData(resolved.source, resolved.checks.length, checks),
         warnings,
-        errors: [issue("RUN_FAILED", `Unknown handler "${provider.ref}".`)],
+        errors: [issue("RUN_FAILED", called.message)],
       };
     }
-    let returned: unknown;
-    try {
-      returned = await handler({}, { ...base, envCheck: envCheckContext(decl) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        exitCode: 1,
-        data: probeData(resolved.source, resolved.checks.length, checks),
-        warnings,
-        errors: [issue("RUN_FAILED", message)],
-      };
-    }
-    let result: HandlerResult;
-    try {
-      const validated = validateHandlerResult(returned, provider.ref);
-      result = validated.result;
-      for (const warning of validated.warnings) {
-        warnings.push(issue("RESULT_WARNING", warning));
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        exitCode: 1,
-        data: probeData(resolved.source, resolved.checks.length, checks),
-        warnings,
-        errors: [issue("RUN_FAILED", message)],
-      };
-    }
-    checks.push(checkFromHandler(decl, provider.namespace, result));
+    for (const warning of called.warnings) warnings.push(issue("RESULT_WARNING", warning));
+    checks.push(checkFromHandler(decl, provider.namespace, called.result));
   }
 
   return {

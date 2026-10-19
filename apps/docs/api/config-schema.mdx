@@ -12,18 +12,18 @@ Complete reference for Bolt's configuration. Field names and defaults below mirr
 
 Top-level keys:
 
-| Key             | Type   | Required | Default | Description                                          |
-| --------------- | ------ | -------- | ------- | ---------------------------------------------------- |
-| `version`       | number | yes      | —       | Must be `1`                                          |
-| `project`       | object | yes      | —       | Project name                                         |
-| `tasks`         | map    | no       | `{}`    | Named lists of steps                                 |
-| `flows`         | map    | no       | `{}`    | Named, ordered sets of tasks                         |
-| `vars`          | map    | no       | `{}`    | Shared string variables                              |
-| `plugins`       | array  | no       | `[]`    | Plugin entries, including builtin metadata           |
-| `capabilities`  | map    | no       | `{}`    | Singleton capability tag → `namespace/handler`       |
-| `env`           | object | no       | —       | Declared environment checks for `bolt env probe`     |
-| `timeout_hours` | number | no       | —       | Abort the run if it exceeds this duration (positive) |
-| `notifications` | object | no       | —       | Build-event notifications                            |
+| Key             | Type   | Required | Default | Description                                                            |
+| --------------- | ------ | -------- | ------- | ---------------------------------------------------------------------- |
+| `version`       | number | yes      | —       | Must be `1`                                                            |
+| `project`       | object | yes      | —       | Project name                                                           |
+| `tasks`         | map    | no       | `{}`    | Named lists of steps                                                   |
+| `flows`         | map    | no       | `{}`    | Named, ordered sets of tasks                                           |
+| `vars`          | map    | no       | `{}`    | Shared string variables                                                |
+| `plugins`       | array  | no       | `[]`    | Plugin entries, including builtin metadata                             |
+| `capabilities`  | map    | no       | `{}`    | Singleton capability tag → `namespace/handler`                         |
+| `env`           | object | no       | —       | Declared environment checks for `bolt env probe` and `bolt env ensure` |
+| `timeout_hours` | number | no       | —       | Abort the run if it exceeds this duration (positive)                   |
+| `notifications` | object | no       | —       | Build-event notifications                                              |
 
 ## project
 
@@ -181,7 +181,7 @@ Optional positive number. When set, a flow aborts if elapsed time reaches this m
 
 ## capabilities
 
-Optional map from a singleton capability tag to one handler ref. `bolt.local.yaml` wins per key. An empty map is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`, `env.check`) are ignored with one warning. `env.check` is resolved by check id during `bolt env probe`, not by this map.
+Optional map from a singleton capability tag to one handler ref. `bolt.local.yaml` wins per key. An empty map is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`, `env.check`) are ignored with one warning. `env.check` is resolved by check id during `bolt env probe` and `bolt env ensure`, not by this map.
 
 ```yaml
 capabilities:
@@ -197,7 +197,7 @@ A tag with one built handler is selected automatically (`auto: only match` in `b
 
 ## env
 
-Optional declared checks for `bolt env probe`. This block does not install tools. Omit it when the project has no environment contract. An empty `checks` list is valid.
+Optional declared checks. `bolt env probe` reads this block. `bolt env ensure` fills required gaps. Omit it when the project has no environment contract. An empty `checks` list is valid. This is not `ue/setup`.
 
 ```yaml
 env:

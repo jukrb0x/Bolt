@@ -77,6 +77,7 @@ test("built-in git and svn declare plugin API v2 with per-handler ai and vcs tag
   expect(summary("git")).toEqual({
     pull: { ai: "confirm", capabilities: ["vcs.sync"] },
     status: { ai: "confirm", capabilities: undefined },
+    lfs: { ai: false, capabilities: ["env.check"] },
     info: { ai: true, capabilities: ["vcs.info"] },
     checkout: { ai: false, capabilities: undefined },
     clone: { ai: false, capabilities: undefined },

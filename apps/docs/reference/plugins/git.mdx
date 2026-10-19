@@ -9,7 +9,7 @@ Built-in git handlers.
 
 | Namespace | Version | Handlers |
 | --------- | ------- | -------- |
-| `git`     | `1.0.0` | 5        |
+| `git`     | `1.0.0` | 6        |
 
 ## Handlers
 
@@ -40,6 +40,16 @@ Capabilities: `vcs.info`.
 | Param  | Type     | Required | Default | Notes                                |
 | ------ | -------- | -------- | ------- | ------------------------------------ |
 | `path` | `string` | yes      |         | Working copy path inside the project |
+
+### git/lfs
+
+Check Git LFS. env ensure installs user filters when they are missing
+
+Step: `uses: git/lfs`. AI: `false` (not exposed to AI).
+
+Capabilities: `env.check`.
+
+_No declared parameter schema._
 
 ### git/pull
 

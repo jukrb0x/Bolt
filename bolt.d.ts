@@ -132,6 +132,11 @@ declare module "boltstack" {
     require: boolean;
     version?: string;
     params?: Record<string, unknown>;
+    /**
+     * Set by `bolt env ensure` when it asks the handler to fill this gap.
+     * Absent on probe and on older bolts. `"ensure"` is the only value.
+     */
+    action?: "ensure";
   }
   /** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
   export interface BoltPluginContext {
@@ -147,9 +152,9 @@ declare module "boltstack" {
      */
     emit?: (event: BoltEvent) => void;
     /**
-     * Set when `bolt env probe` calls an `env.check` handler. Absent on older bolts
-     * and on every other call. Plugins that support older bolts read `ctx.envCheck?.id`.
-     * Additive on plugin API v2. It does not change the handler signature.
+     * Set when `bolt env probe` or `bolt env ensure` calls an `env.check` handler.
+     * Absent on older bolts and on every other call. Plugins that support older bolts
+     * read `ctx.envCheck?.id`. Additive on plugin API v2. It does not change the handler signature.
      */
     envCheck?: EnvCheckContext;
   }

@@ -1,5 +1,6 @@
 // src/plugins/git.ts
 import { defineHandler, definePlugin, type BoltPluginContext, type HandlerResult } from "../plugin";
+import { gitLfsCheck } from "./git-lfs";
 import { z } from "zod";
 import path from "path";
 import { projectFilePath } from "./path-guard";
@@ -110,6 +111,16 @@ const plugin = definePlugin({
           if (result.exitCode !== 0) throw new Error(`git status failed (exit ${result.exitCode})`);
         }
       },
+    ),
+
+    lfs: defineHandler(
+      {
+        ai: false,
+        capability: "env.check",
+        checkId: "vcs.git.lfs",
+        description: "Check Git LFS. env ensure installs user filters when they are missing",
+      },
+      async (_params, ctx) => gitLfsCheck(ctx),
     ),
 
     info: defineHandler(

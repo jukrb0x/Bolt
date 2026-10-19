@@ -45,6 +45,7 @@ test("builtin confirm tier is signed off", () => {
     checkout: false,
     clone: false,
     info: true,
+    lfs: false,
     pull: "confirm",
     status: "confirm",
   });

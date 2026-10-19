@@ -162,7 +162,7 @@ A handler can declare the roles it fills with `capability`. Core uses tags to fi
 
 Unknown bare tags are rejected with a "did you mean" hint. The areas `doctor`, `diagnose`, `detect`, `notify`, `vcs`, `artifact`, and `env` are reserved for core tags, even for a plugin whose namespace matches. A handler has at most 8 tags. Tags are static: they must not depend on config.
 
-`env.check` is the tag for `bolt env probe`. The handler also sets `checkId` to a stable id. Probe calls `findByCapability("env.check")` and runs the handler whose `checkId` matches the declared id. It does not run every tagged handler. `ctx.envCheck` is an optional field on the context (`id`, `require`, and `version` and `params` when the manifest sets them). Older bolts omit it, so plugins read `ctx.envCheck?.id`. The handler function signature is unchanged.
+`env.check` is the tag for `bolt env probe` and `bolt env ensure`. The handler also sets `checkId` to a stable id. Core calls `findByCapability("env.check")` and runs the handler whose `checkId` matches the declared id. It does not run every tagged handler. `ctx.envCheck` is an optional field on the context (`id`, `require`, and `version` and `params` when the manifest sets them). `action` is `"ensure"` only when ensure is applying that gap. Probe leaves `action` unset. Older bolts omit the whole field, so plugins read `ctx.envCheck?.id` and treat a missing `action` as probe. The handler function signature is unchanged.
 
 A plugin that uses `capability` without `apiVersion: 2` fails when it is defined (function plugins) or registered (class plugins), with the fix in the message.
 

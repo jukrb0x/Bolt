@@ -41,12 +41,17 @@ export interface BoltLogger {
   cmd(msg: string): void;
 }
 
-/** Declaration `bolt env probe` passes to the handler for one check. Optional on older bolts. */
+/** Declaration `bolt env probe` or `bolt env ensure` passes for one check. Optional on older bolts. */
 export interface EnvCheckContext {
   id: string;
   require: boolean;
   version?: string;
   params?: Record<string, unknown>;
+  /**
+   * Set by `bolt env ensure` when it asks the handler to fill this gap.
+   * Absent on probe and on older bolts. `"ensure"` is the only value.
+   */
+  action?: "ensure";
 }
 
 export interface BoltPluginContext {
@@ -62,8 +67,8 @@ export interface BoltPluginContext {
    */
   emit?: (event: BoltEvent) => void;
   /**
-   * The declared check when core invokes an `env.check` handler. Absent on older
-   * bolts and on every other call. Plugins read `ctx.envCheck?.id`.
+   * The declared check when core invokes an `env.check` handler for probe or ensure.
+   * Absent on older bolts and on every other call. Plugins read `ctx.envCheck?.id`.
    */
   envCheck?: EnvCheckContext;
 }

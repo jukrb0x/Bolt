@@ -1,8 +1,9 @@
 /**
- * Test fixture for `bolt env probe`. Not an installer.
+ * Test fixture for `bolt env probe` and `bolt env ensure`.
  * A check is present when `<project>/.bolt/env-checks/<id>` exists.
+ * Ensure creates that file. Probe only reads it.
  */
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { defineHandler, definePlugin, fail, ok } from "boltstack";
 
@@ -17,7 +18,25 @@ function probe(id: string) {
     async (_params, ctx) => {
       const expected = ctx.envCheck?.version ?? "present";
       const marker = path.join(ctx.configDir, ".bolt", "env-checks", id);
-      if (existsSync(marker)) {
+      const present = existsSync(marker);
+      if (ctx.envCheck?.action === "ensure") {
+        if (present || ctx.dryRun) {
+          return ok(present ? "present" : "missing", {
+            data: {
+              current: present ? "present" : null,
+              expected,
+              fix: present ? null : "Install via fixture plugin ensure adapter",
+              changed: false,
+            },
+          });
+        }
+        mkdirSync(path.dirname(marker), { recursive: true });
+        writeFileSync(marker, "");
+        return ok("ensured", {
+          data: { current: "present", expected, fix: null, changed: true },
+        });
+      }
+      if (present) {
         return ok("present", { data: { current: "present", expected, fix: null } });
       }
       return fail("missing", {

@@ -79,7 +79,7 @@ export default definePlugin({
 
 Params are a flat `z.object` of `z.string()`, `z.enum()`, `z.coerce.number()`, and `z.coerce.boolean()`, plus `.optional()`, `.default()`, and `.describe()`. Bolt checks them before the handler runs. `${input}` in `description` is replaced with the step's `with:` value.
 
-Class plugins still work. Decorate methods with `@handler("...")` or `@handler({ description, ai, params, alias, capability, checkId })`. `checkId` is the stable id for capability `env.check`. `bolt env probe` passes that declaration on `ctx.envCheck`. Pass plugin fields to `PluginBase.withDescriptor({ namespace, version, description, metadata })`. `onInit`, `onBeforeStep`, and `onAfterStep` stay on the instance and are not part of the manifest. The host compiles those files with legacy decorators (`experimentalDecorators`, `useDefineForClassFields: false`). It does not read a project `tsconfig` for that.
+Class plugins still work. Decorate methods with `@handler("...")` or `@handler({ description, ai, params, alias, capability, checkId })`. `checkId` is the stable id for capability `env.check`. `bolt env probe` and `bolt env ensure` pass that declaration on `ctx.envCheck`. `action` is `"ensure"` only on the ensure apply step. Pass plugin fields to `PluginBase.withDescriptor({ namespace, version, description, metadata })`. `onInit`, `onBeforeStep`, and `onAfterStep` stay on the instance and are not part of the manifest. The host compiles those files with legacy decorators (`experimentalDecorators`, `useDefineForClassFields: false`). It does not read a project `tsconfig` for that.
 
 ## Step 4: Call it from bolt.yaml
 

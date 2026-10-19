@@ -172,7 +172,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       type: "object",
       additionalProperties: false,
       description:
-        "Declared environment checks. bolt env probe reads this block. It does not install tools. Omit it when the project has no environment contract. An external manifest is a path relative to the project root.",
+        "Declared environment checks. bolt env probe reads this block. bolt env ensure fills required gaps. Omit it when the project has no environment contract. An external manifest is a path relative to the project root.",
       properties: {
         checks: {
           type: "array",
