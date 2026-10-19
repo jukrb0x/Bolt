@@ -22,12 +22,35 @@ Source: [`schema/v1/bolt.schema.json`](https://github.com/jukrb0x/Bolt/blob/main
 | `plugins`       | `plugin[]` ([plugin](#plugin))                    |          | `[]`    |                                                                                                                                                                                        |
 | `capabilities`  | `map<string, string>`                             |          | `{}`    | Singleton capability tag to handler ref (namespace/handler). bolt.local.yaml wins per key. An empty object is the same as omitting the key. Fan-out tags are ignored with one warning. |
 | `workspace`     | `workspace` ([workspace](#workspace))             |          |         |                                                                                                                                                                                        |
+| `env`           | `env` ([env](#env))                               |          |         |                                                                                                                                                                                        |
 | `timeout_hours` | `number`                                          |          |         | exclusiveMinimum: 0                                                                                                                                                                    |
 | `notifications` | `notifications` ([notifications](#notifications)) |          |         |                                                                                                                                                                                        |
 
 Unknown top-level fields are rejected.
 
 ## Definitions
+
+### env
+
+Type: `object`
+
+Declared environment checks. bolt env probe reads this block. It does not install tools. Omit it when the project has no environment contract. An external manifest is a path relative to the project root.
+
+| Field      | Type                                 | Required | Default | Notes                                                                                                                                                           |
+| ---------- | ------------------------------------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checks`   | `envCheck[]` ([envCheck](#envcheck)) |          |         | Inline checks. Cannot be combined with manifest                                                                                                                 |
+| `manifest` | `string`                             |          |         | Path to an external manifest, relative to the directory that contains bolt.yaml. Drive letters and paths that leave the project root are rejected. minLength: 1 |
+
+### envCheck
+
+Type: `object`
+
+| Field     | Type      | Required | Default | Notes                                                                                                                              |
+| --------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`      | `string`  | yes      |         | Stable check id. A plugin must provide it via capability env.check. minLength: 1. pattern: ^[a-z][a-z0-9-]_(\\.[a-z][a-z0-9-]_)\*$ |
+| `require` | `boolean` |          |         | Defaults to true. false reports a failing check as warn                                                                            |
+| `version` | `string`  |          |         | Expected version constraint. Not a path. minLength: 1                                                                              |
+| `params`  | `object`  |          |         | Opaque parameters for the check. Drive-letter paths are rejected                                                                   |
 
 ### flow
 

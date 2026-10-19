@@ -13,6 +13,7 @@ import {
   mergeCapabilityMaps,
   type SelectionFile,
 } from "./capability-selection";
+import { EnvSchema, type EnvBlock } from "./env-manifest";
 import {
   WorkspaceSchema,
   codeForZodIssue,
@@ -172,6 +173,7 @@ const BoltConfigSchema = z
     plugins: z.array(PluginEntrySchema).default([]),
     capabilities: CapabilitySelectionSchema,
     workspace: WorkspaceSchema.optional(),
+    env: EnvSchema.optional(),
     timeout_hours: z.number().positive().optional(),
     notifications: NotificationsSchema.optional(),
   })
@@ -210,6 +212,8 @@ export interface BoltConfig {
   configDir?: string;
   /** Parsed `workspace` block. Absent when bolt.yaml omits it. */
   workspace?: WorkspaceConfig;
+  /** Parsed `env` block. Absent when bolt.yaml omits it. Empty checks stay here. */
+  env?: EnvBlock;
   timeout_hours?: number;
   notifications?: NotificationsConfig;
 }
@@ -413,6 +417,7 @@ export async function loadConfig(filepath: string, runtime?: Runtime): Promise<B
     trustPlugins: local.ai?.trust_plugins ?? [],
     configDir,
     ...(shared.workspace ? { workspace: workspaceFromParsed(shared.workspace) } : {}),
+    ...(shared.env ? { env: shared.env } : {}),
     timeout_hours: shared.timeout_hours,
     notifications: shared.notifications,
   };

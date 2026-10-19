@@ -4,6 +4,7 @@ import infoCmd from "./info";
 import checkCmd from "./check";
 import doctorCmd from "./doctor";
 import whyCmd from "./why";
+import envCmd from "./env";
 import migrateCmd from "./migrate";
 import versionCmd from "./version";
 import updateCmd from "./update";
@@ -23,6 +24,7 @@ export const commands = {
   check: checkCmd,
   doctor: doctorCmd,
   why: whyCmd,
+  env: envCmd,
   migrate: migrateCmd,
   config: configCmd,
   init: initCmd,
@@ -43,6 +45,7 @@ export const commandSources: Record<keyof typeof commands, string> = {
   check: "check.ts",
   doctor: "doctor.ts",
   why: "why.ts",
+  env: "env.ts",
   migrate: "migrate.ts",
   config: "config.ts",
   init: "init.ts",

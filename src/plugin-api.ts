@@ -111,8 +111,17 @@ export type KnownCapability =
   | "vcs.sync"
   | "vcs.info"
   | "vcs.revision"
-  | "artifact.store";
+  | "artifact.store"
+  | "env.check";
 export type Capability = KnownCapability | (string & {});
+
+/** Declaration passed to an `env.check` handler. Absent on older bolts; read `ctx.envCheck?.id`. */
+export interface EnvCheckContext {
+  id: string;
+  require: boolean;
+  version?: string;
+  params?: Record<string, unknown>;
+}
 
 /** Public plugin context — uses narrow BoltPluginConfig to avoid leaking internals. */
 export interface BoltPluginContext {
@@ -127,6 +136,12 @@ export interface BoltPluginContext {
    * support older bolts call `ctx.emit?.(...)`. Optional until the next plugin API major.
    */
   emit?: (event: BoltEvent) => void;
+  /**
+   * Set when `bolt env probe` calls an `env.check` handler. Absent on older bolts
+   * and on every other call. Plugins that support older bolts read `ctx.envCheck?.id`.
+   * Additive on plugin API v2. It does not change the handler signature.
+   */
+  envCheck?: EnvCheckContext;
 }
 
 /** Context with a required `emit`, for plugins that declare `apiVersion: 2`. */
@@ -152,6 +167,8 @@ export interface HandlerManifest {
   paramsSchema?: Record<string, unknown>;
   /** Sorted, deduped capability tags. Omitted when empty. */
   capabilities?: string[];
+  /** Stable id for capability `env.check`. Omitted on every other handler. */
+  checkId?: string;
 }
 
 /**
@@ -272,6 +289,8 @@ export declare function handler(options: {
   alias?: string;
   /** Requires the instance field `apiVersion = 2;` on the class (not `static`). */
   capability?: Capability | Capability[];
+  /** Stable id required when `capability` includes `env.check`. */
+  checkId?: string;
 }): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
 
 /**
@@ -344,6 +363,8 @@ export declare function defineHandler<T = Record<string, string>, D extends Json
     params?: import("zod").ZodType<T>;
     /** Requires `apiVersion: 2` on definePlugin. */
     capability?: Capability | Capability[];
+    /** Stable id required when `capability` includes `env.check`. */
+    checkId?: string;
   },
   fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult<D>>,
 ): HandlerDef<T>;

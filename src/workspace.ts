@@ -5,6 +5,7 @@
 import { existsSync } from "fs";
 import path from "path";
 import { z } from "zod";
+import { ManifestError } from "./env-manifest";
 
 export const WORKSPACE_ROLES = ["engine", "project", "related"] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
@@ -101,10 +102,13 @@ type ZodLikeIssue = {
   params?: unknown;
 };
 
-/** Map a bolt.yaml Zod issue onto a workspace code, or undefined when it is not one. */
-export function codeForZodIssue(issue: ZodLikeIssue): "WORKSPACE_INVALID" | undefined {
-  if (issue.path[0] !== "workspace") return undefined;
-  return "WORKSPACE_INVALID";
+/** Map a bolt.yaml Zod issue onto a stable config code, or undefined when it is not one. */
+export function codeForZodIssue(
+  issue: ZodLikeIssue,
+): "WORKSPACE_INVALID" | "MANIFEST_INVALID" | undefined {
+  if (issue.path[0] === "workspace") return "WORKSPACE_INVALID";
+  if (issue.path[0] === "env") return "MANIFEST_INVALID";
+  return undefined;
 }
 
 export function hintForZodIssue(issue: ZodLikeIssue): string | undefined {
@@ -119,6 +123,9 @@ export function formatZodConfigError(issues: readonly ZodLikeIssue[], message: s
   if (codes.length > 0 && codes.every((code) => code === "WORKSPACE_INVALID")) {
     const hint = issues.map((issue) => hintForZodIssue(issue)).find((item) => item !== undefined);
     return new WorkspaceConfigError("WORKSPACE_INVALID", message, hint);
+  }
+  if (codes.length > 0 && codes.every((code) => code === "MANIFEST_INVALID")) {
+    return new ManifestError(message);
   }
   return new Error(message);
 }

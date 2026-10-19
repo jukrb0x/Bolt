@@ -100,6 +100,7 @@ const BOLT_CONFIG_JSON_SCHEMA = {
       default: {},
     },
     workspace: { $ref: "#/$defs/workspace" },
+    env: { $ref: "#/$defs/env" },
     timeout_hours: { type: "number", exclusiveMinimum: 0 },
     notifications: { $ref: "#/$defs/notifications" },
   },
@@ -138,6 +139,51 @@ const BOLT_CONFIG_JSON_SCHEMA = {
           minLength: 1,
           description:
             "Optional version-control namespace. Omit it when the root has none. bolt list and bolt check do not call it",
+        },
+      },
+    },
+    envCheck: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+          pattern: "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+          description: "Stable check id. A plugin must provide it via capability env.check",
+        },
+        require: {
+          type: "boolean",
+          description: "Defaults to true. false reports a failing check as warn",
+        },
+        version: {
+          type: "string",
+          minLength: 1,
+          description: "Expected version constraint. Not a path",
+        },
+        params: {
+          type: "object",
+          description: "Opaque parameters for the check. Drive-letter paths are rejected",
+        },
+      },
+    },
+    env: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Declared environment checks. bolt env probe reads this block. It does not install tools. Omit it when the project has no environment contract. An external manifest is a path relative to the project root.",
+      properties: {
+        checks: {
+          type: "array",
+          items: { $ref: "#/$defs/envCheck" },
+          description: "Inline checks. Cannot be combined with manifest",
+        },
+        manifest: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Path to an external manifest, relative to the directory that contains bolt.yaml. Drive letters and paths that leave the project root are rejected",
         },
       },
     },

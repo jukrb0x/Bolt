@@ -12,6 +12,7 @@ export const JSON_SCHEMA = {
   check: "bolt.check/v1",
   doctor: "bolt.doctor/v1",
   why: "bolt.why/v1",
+  envProbe: "bolt.env.probe/v1",
   inspect: "bolt.inspect/v1",
   status: "bolt.status/v1",
   run: "bolt.run/v1",

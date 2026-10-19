@@ -7,10 +7,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                                      | Why                                                                                                                                      |
-| ----------------- | ------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace` | The team's automation contract. Everyone runs the same tasks/flows. `workspace.roots` is an inventory `bolt list` and `bolt check` read. |
-| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine.            |
+| File              | Committed?    | Contains                                                                                      | Why                                                                                                                                                                                      |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace`, optional `env` | The team's automation contract. Everyone runs the same tasks/flows. `workspace.roots` is an inventory `bolt list` and `bolt check` read. `env` is the check list `bolt env probe` reads. |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine.                                                            |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -192,6 +192,21 @@ A v2.0 `bolt.yaml` had no `version`, kept `engine`/`project` repo identity under
 | `${{ project.uproject }}`          | `${{ vars.uproject }}` (set in `bolt.local.yaml`)     |
 
 Multi-task start notifications are sent once per invocation and show the top-level task list plus recursively owned actions.
+
+## env
+
+Optional. `bolt env probe` reads `env.checks` and reports gaps. It does not install tools. Each check needs an `id`. A plugin provides that id with capability `env.check`. `env.manifest` may name a file relative to this directory instead of inlining `checks`. Drive letters and paths that leave the project root are rejected.
+
+```yaml
+env:
+  checks:
+    - id: fixture.tool.a
+      require: true
+    - id: fixture.tool.b
+      version: ">=1"
+```
+
+With no `env` key, `bolt env probe` exits 0 and warns `ENV_NO_MANIFEST`.
 
 ## See Also
 

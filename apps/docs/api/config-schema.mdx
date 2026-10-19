@@ -21,6 +21,7 @@ Top-level keys:
 | `vars`          | map    | no       | `{}`    | Shared string variables                              |
 | `plugins`       | array  | no       | `[]`    | Plugin entries, including builtin metadata           |
 | `capabilities`  | map    | no       | `{}`    | Singleton capability tag → `namespace/handler`       |
+| `env`           | object | no       | —       | Declared environment checks for `bolt env probe`     |
 | `timeout_hours` | number | no       | —       | Abort the run if it exceeds this duration (positive) |
 | `notifications` | object | no       | —       | Build-event notifications                            |
 
@@ -180,7 +181,7 @@ Optional positive number. When set, a flow aborts if elapsed time reaches this m
 
 ## capabilities
 
-Optional map from a singleton capability tag to one handler ref. `bolt.local.yaml` wins per key. An empty map is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`) are ignored with one warning.
+Optional map from a singleton capability tag to one handler ref. `bolt.local.yaml` wins per key. An empty map is the same as omitting the key. Fan-out tags (`doctor`, `diagnose`, `detect`, `notify`, `env.check`) are ignored with one warning. `env.check` is resolved by check id during `bolt env probe`, not by this map.
 
 ```yaml
 capabilities:
@@ -193,6 +194,29 @@ capabilities:
 | `<tag>` | string | yes      | Handler ref, for example `git/pull` or `svn/update` |
 
 A tag with one built handler is selected automatically (`auto: only match` in `bolt inspect` and `bolt run --dry-run`). Unknown keys and refs that do not provide the tag fail `bolt check` with exit code `3`, naming the file, the key, and a "did you mean" hint. See [git/ and svn/](./built-in-handlers.md#git-and-svn--version-control).
+
+## env
+
+Optional declared checks for `bolt env probe`. This block does not install tools. Omit it when the project has no environment contract. An empty `checks` list is valid.
+
+```yaml
+env:
+  checks:
+    - id: fixture.tool.a
+      require: true
+    - id: fixture.tool.b
+      version: ">=1"
+```
+
+| Field      | Type    | Required | Description                                                                   |
+| ---------- | ------- | -------- | ----------------------------------------------------------------------------- |
+| `id`       | string  | yes      | Stable check id. A plugin must provide it with capability `env.check`         |
+| `require`  | boolean | no       | Defaults to true. `false` reports a failing check as warn                     |
+| `version`  | string  | no       | Expected constraint passed to the plugin. Not a path                          |
+| `params`   | object  | no       | Opaque parameters. Drive-letter paths are rejected                            |
+| `manifest` | string  | no       | External file, relative to the project root. Cannot be combined with `checks` |
+
+`manifest: env.manifest.yaml` points at a file whose only field is `checks`. A drive letter or a path that leaves the project root is `MANIFEST_INVALID` (exit 3).
 
 ## notifications
 

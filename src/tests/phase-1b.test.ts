@@ -207,6 +207,7 @@ test("read-only commands do not import an unbuilt plugin and previews fail close
       check: "v1",
       doctor: "v1",
       why: "v1",
+      env: "v1",
       inspect: "v1",
       status: "v1",
       run: "v1",

@@ -2,7 +2,12 @@ import type { BoltConfig } from "./config";
 import type { Runtime } from "./runtime/types";
 import type { ZodType, ZodTypeAny } from "zod";
 import type { BoltEvent, HandlerResult, JsonValue } from "./handler-result";
-import { normalizeCapabilities, type Capability } from "./capabilities";
+import {
+  CAPABILITY_PATTERN,
+  ENV_CHECK_CAPABILITY,
+  normalizeCapabilities,
+  type Capability,
+} from "./capabilities";
 import {
   PLUGIN_API_VERSION,
   SUPPORTED_PLUGIN_API_VERSIONS,
@@ -36,6 +41,14 @@ export interface BoltLogger {
   cmd(msg: string): void;
 }
 
+/** Declaration `bolt env probe` passes to the handler for one check. Optional on older bolts. */
+export interface EnvCheckContext {
+  id: string;
+  require: boolean;
+  version?: string;
+  params?: Record<string, unknown>;
+}
+
 export interface BoltPluginContext {
   cfg: BoltConfig;
   configDir: string;
@@ -48,6 +61,11 @@ export interface BoltPluginContext {
    * `ctx.emit?.(...)`. It stays optional until the next plugin API major.
    */
   emit?: (event: BoltEvent) => void;
+  /**
+   * The declared check when core invokes an `env.check` handler. Absent on older
+   * bolts and on every other call. Plugins read `ctx.envCheck?.id`.
+   */
+  envCheck?: EnvCheckContext;
 }
 
 /** Context with a required `emit`, for plugins that declare `apiVersion: 2`. */
@@ -80,6 +98,8 @@ export interface HandlerManifest {
   paramsSchema?: Record<string, unknown>;
   /** Sorted, deduped capability tags. Omitted when empty. */
   capabilities?: string[];
+  /** Stable id for capability `env.check`. Omitted on every other handler. */
+  checkId?: string;
 }
 
 /**
@@ -112,6 +132,8 @@ export interface HandlerOptions {
   alias?: string;
   /** Requires the class field `apiVersion = 2`. */
   capability?: Capability | Capability[];
+  /** Stable id required when `capability` includes `env.check`. */
+  checkId?: string;
 }
 
 /** One problem reported by `validateConfig` or by core metadata validation. */
@@ -186,6 +208,7 @@ const HANDLER_DEF = Symbol.for("bolt:handler-def");
 const DEFINED_PLUGIN = Symbol.for("bolt:defined-plugin");
 const MANIFEST_CACHE = Symbol.for("bolt:manifest-cache");
 const RAW_CAPABILITY = Symbol.for("bolt:raw-capability");
+const RAW_CHECK_ID = Symbol.for("bolt:raw-check-id");
 
 /** Cross-realm brand. `instanceof PluginBase` is false for another bundled copy. */
 export const PLUGIN_BRAND = Symbol.for("boltstack.plugin");
@@ -197,6 +220,8 @@ interface StoredHandler {
   params?: ZodTypeAny;
   /** Raw tags. Validated at registration, when the instance apiVersion is known. */
   capability?: unknown;
+  /** Raw `env.check` id. Validated with the capability tags. */
+  checkId?: unknown;
 }
 
 type HandlerMap = Map<string, StoredHandler>;
@@ -529,12 +554,24 @@ export function checkStaticApiVersion(plugin: object): string | undefined {
 export function assertClassCapabilities(plugin: BoltPlugin): void {
   const map = getHandlerMap(plugin);
   if (!map) return;
+  const handlers: Record<string, HandlerManifest> = {};
   for (const [, stored] of map) {
-    if (stored.capability === undefined) continue;
-    const label = `${plugin.namespace}/${stored.alias}`;
-    if (plugin.apiVersion !== 2) throw capabilityNeedsApi2(`handler "${label}"`, true);
-    normalizeCapabilities(stored.capability, plugin.namespace, `handler "${label}"`);
+    if (stored.capability === undefined && stored.checkId === undefined) continue;
+    const label = `handler "${plugin.namespace}/${stored.alias}"`;
+    if (plugin.apiVersion !== 2) {
+      if (stored.capability !== undefined) throw capabilityNeedsApi2(label, true);
+      throw checkIdNeedsApi2(label);
+    }
+    const capabilities =
+      stored.capability === undefined
+        ? []
+        : normalizeCapabilities(stored.capability, plugin.namespace, label);
+    const entry: HandlerManifest = { ai: stored.ai };
+    if (capabilities.length > 0) entry.capabilities = capabilities;
+    attachCheckId(entry, stored.checkId, label);
+    handlers[stored.alias] = entry;
   }
+  assertUniqueCheckIds(handlers, plugin.namespace);
 }
 
 /** True when `manifest` is a getter. Without the brand this is not a plugin. */
@@ -589,6 +626,9 @@ function toStored(
     };
     if (descriptionOrOptions.capability !== undefined) {
       stored.capability = descriptionOrOptions.capability;
+    }
+    if (descriptionOrOptions.checkId !== undefined) {
+      stored.checkId = descriptionOrOptions.checkId;
     }
     return stored;
   }
@@ -655,6 +695,8 @@ export function defineHandler<T = Record<string, string>, D extends JsonValue = 
     ai?: AiMode;
     params?: ZodType<T>;
     capability?: Capability | Capability[];
+    /** Stable id required when `capability` includes `env.check`. */
+    checkId?: string;
   },
   fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult<D>>,
 ): HandlerDef<T> {
@@ -673,8 +715,51 @@ export function defineHandler<T = Record<string, string>, D extends JsonValue = 
   if (meta.capability !== undefined) {
     Object.defineProperty(def, RAW_CAPABILITY, { value: meta.capability });
   }
+  if (meta.checkId !== undefined) {
+    Object.defineProperty(def, RAW_CHECK_ID, { value: meta.checkId });
+  }
   Object.defineProperty(def, HANDLER_DEF, { value: true });
   return def;
+}
+
+function checkIdNeedsApi2(label: string): Error {
+  return new Error(
+    `${label}: checkId requires plugin API v2. Fix: add \`apiVersion: 2\` to definePlugin({ ... }). ${pluginApi2Requirement()}`,
+  );
+}
+
+/** Attach `checkId` when the handler provides `env.check`. Throws on a mismatch. */
+export function attachCheckId(entry: HandlerManifest, checkId: unknown, label: string): void {
+  const tagged = entry.capabilities?.includes(ENV_CHECK_CAPABILITY) ?? false;
+  if (checkId === undefined) {
+    if (tagged) {
+      throw new Error(`${label}: capability "${ENV_CHECK_CAPABILITY}" requires checkId.`);
+    }
+    return;
+  }
+  if (!tagged) {
+    throw new Error(`${label}: checkId requires capability "${ENV_CHECK_CAPABILITY}".`);
+  }
+  if (typeof checkId !== "string" || !CAPABILITY_PATTERN.test(checkId)) {
+    throw new Error(
+      `${label}: checkId ${JSON.stringify(checkId)} is not a stable id. Use lowercase dot-separated words such as "fixture.tool.a".`,
+    );
+  }
+  entry.checkId = checkId;
+}
+
+function assertUniqueCheckIds(handlers: Record<string, HandlerManifest>, namespace: string): void {
+  const seen = new Map<string, string>();
+  for (const [name, entry] of Object.entries(handlers)) {
+    if (!entry.checkId) continue;
+    const prev = seen.get(entry.checkId);
+    if (prev) {
+      throw new Error(
+        `Plugin "${namespace}": checkId "${entry.checkId}" is declared on ${prev} and ${name}.`,
+      );
+    }
+    seen.set(entry.checkId, name);
+  }
 }
 
 export interface DefinePluginOptions<TMeta = unknown> extends PluginConfigHooks {
@@ -729,15 +814,20 @@ export function definePlugin<TMeta = unknown>(
     handlers[name] = def.fn as BoltPluginHandler;
     const label = `handler "${opts.namespace}/${name}"`;
     const raw = (def as { [RAW_CAPABILITY]?: unknown })[RAW_CAPABILITY];
+    const rawCheckId = (def as { [RAW_CHECK_ID]?: unknown })[RAW_CHECK_ID];
     if (raw !== undefined && apiVersion !== 2) throw capabilityNeedsApi2(label, false);
+    if (rawCheckId !== undefined && apiVersion !== 2) throw checkIdNeedsApi2(label);
     const capabilities = normalizeCapabilities(raw, opts.namespace, label);
-    manifestHandlers[name] = toManifestHandler({
+    const entry = toManifestHandler({
       description: def.description,
       ai: def.ai,
       params: def.params as ZodTypeAny | undefined,
       capabilities,
     });
+    attachCheckId(entry, rawCheckId, label);
+    manifestHandlers[name] = entry;
   }
+  assertUniqueCheckIds(manifestHandlers, opts.namespace);
 
   const manifest: PluginManifest = {
     namespace: opts.namespace,
@@ -800,17 +890,18 @@ function buildClassManifest(plugin: PluginBase): PluginManifest {
   const handlers: PluginManifest["handlers"] = {};
   if (map) {
     for (const [, stored] of map) {
+      const label = `handler "${plugin.namespace}/${stored.alias}"`;
+      if (stored.checkId !== undefined && plugin.apiVersion !== 2) throw checkIdNeedsApi2(label);
       const capabilities =
         stored.capability === undefined || plugin.apiVersion !== 2
           ? []
-          : normalizeCapabilities(
-              stored.capability,
-              plugin.namespace,
-              `handler "${plugin.namespace}/${stored.alias}"`,
-            );
-      handlers[stored.alias] = toManifestHandler({ ...stored, capabilities });
+          : normalizeCapabilities(stored.capability, plugin.namespace, label);
+      const entry = toManifestHandler({ ...stored, capabilities });
+      attachCheckId(entry, stored.checkId, label);
+      handlers[stored.alias] = entry;
     }
   }
+  assertUniqueCheckIds(handlers, plugin.namespace);
   const manifest: PluginManifest = {
     namespace: plugin.namespace,
     version: plugin.version ?? "",

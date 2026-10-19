@@ -5,6 +5,22 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Environment probe
+
+`bolt env probe` reads declared environment checks and prints what is missing. It does not install tools. `bolt env ensure`, a dry-run plan, and `plan_hash` are not part of this command. `ue/setup` is unchanged.
+
+Checks live in `bolt.yaml` under `env.checks`, or in a file named by `env.manifest` or `--manifest`. That path is relative to the project root. A drive letter, an absolute path, or a path that leaves the project root exits 3 with `MANIFEST_INVALID`.
+
+`--json` prints one `bolt.env.probe/v1` document. The envelope matches the other commands. `data.manifest` is the effective list (`source`, `checks_declared`). `data.checks` is every result. `data.gaps` is the fail and warn rows (`id`, `status`, `current`, `expected`, `fix`). A gap does not change the exit code.
+
+A project with no `env` key, or with an empty check list, exits 0 with warning `ENV_NO_MANIFEST`, `checks: []`, and `gaps: []`. A declared id that no plugin provides exits 3 with `CHECK_UNKNOWN` in `errors`. That id is not reported as a pass.
+
+Plugins contribute a check with capability `env.check` and a stable `checkId`. Core finds handlers with `findByCapability("env.check")` and calls the one whose `checkId` matches. The handler sees the declaration on `ctx.envCheck` (`id`, `require`, and `version` and `params` when set). `require: false` reports a failing check as `warn`. A `capabilities:` entry for `env.check` is ignored with one warning. It does not select a single handler.
+
+`bolt status --json` lists `schemas.env` as `v1`.
+
+Not in this slice: installing a tool, `bolt env ensure`, an agent ensure path, a standalone `bolt env manifest` command, and `--strict`.
+
 ### Workspace sync command removed
 
 `bolt workspace sync` is removed, including `--dry-run` and `--json`. Invoking it is an unknown command. It does not print a plan. `bolt status --json` does not list `schemas.workspace`. Daily multi-repo update stays pipeline + `vcs.sync`.

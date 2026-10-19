@@ -4,6 +4,9 @@
  */
 
 /** Core capability tags and how core resolves them. */
+/** Capability tag for a probe adapter. Core selects the handler by `checkId`, not by running every match. */
+export const ENV_CHECK_CAPABILITY = "env.check" as const;
+
 export const CORE_CAPABILITIES = {
   doctor: "fan-out",
   diagnose: "fan-out",
@@ -13,6 +16,11 @@ export const CORE_CAPABILITIES = {
   "vcs.info": "singleton",
   "vcs.revision": "singleton",
   "artifact.store": "singleton",
+  /**
+   * Same `capabilities:` map behavior as fan-out: an entry does not select one handler.
+   * `bolt env probe` calls the handler whose `checkId` matches the declared id.
+   */
+  "env.check": "fan-out",
 } as const;
 
 export type KnownCapability = keyof typeof CORE_CAPABILITIES;
@@ -27,6 +35,7 @@ export const RESERVED_CAPABILITY_AREAS: readonly string[] = [
   "notify",
   "vcs",
   "artifact",
+  "env",
 ];
 
 /** Shared by capability tags and event types. */
