@@ -35,6 +35,48 @@ export interface ResolvedEnvManifest {
   empty: boolean;
 }
 
+/** Effective manifest printed by `bolt env manifest`. Declarations, not probe results. */
+export interface EnvManifestData {
+  source: string;
+  checks_declared: number;
+  checks: EnvCheckDecl[];
+}
+
+export function toEnvManifestData(resolved: ResolvedEnvManifest): EnvManifestData {
+  return {
+    source: resolved.source,
+    checks_declared: resolved.checks.length,
+    checks: resolved.checks,
+  };
+}
+
+const SETUP_SCRIPT = /(?:^|[\s"'`\\/])[\w.-]*setup[\w.-]*\.(?:ps1|bat|cmd|sh)\b/i;
+
+/**
+ * E1: a project with no `env` block and a one-step setup script is not environment-ready.
+ * Warning only. `bolt check` still exits 0.
+ *
+ * ponytail: only a single `run` step whose command names a setup script. Multi-step
+ * tasks and `uses:` steps (including `ue/setup`) are ignored. Upgrade path: an
+ * explicit task flag if a real one-shot setup does not match this shape.
+ */
+export function envSetupShellWarnings(
+  tasks: Record<string, ReadonlyArray<{ run?: unknown }>> | undefined,
+  hasEnv: boolean,
+): string[] {
+  if (hasEnv || !tasks) return [];
+  const warnings: string[] = [];
+  for (const [name, steps] of Object.entries(tasks)) {
+    if (steps.length !== 1) continue;
+    const run = steps[0]?.run;
+    if (typeof run !== "string" || !SETUP_SCRIPT.test(run)) continue;
+    warnings.push(
+      `ENV_SETUP_SHELL: task "${name}" is a one-shot setup script and this project has no env block. That task is not environment readiness. Declare env.checks, or keep the task as an ordinary step.`,
+    );
+  }
+  return warnings;
+}
+
 const DRIVE = /^[A-Za-z]:(?:[\\/]|$)/;
 
 const CHECK_ID_MESSAGE = 'check id must be lowercase dot-separated words such as "fixture.tool.a"';

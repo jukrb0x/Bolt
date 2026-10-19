@@ -105,6 +105,12 @@ export interface HandlerManifest {
   capabilities?: string[];
   /** Stable id for capability `env.check`. Omitted on every other handler. */
   checkId?: string;
+  /**
+   * True when this `env.check` handler is a one-shot setup script.
+   * `bolt env ensure` refuses it with `EMPTY_SHELL` and does not call it.
+   * Omitted when unset. Additive on plugin API v2.
+   */
+  studio_setup_shell?: boolean;
 }
 
 /**
@@ -139,6 +145,11 @@ export interface HandlerOptions {
   capability?: Capability | Capability[];
   /** Stable id required when `capability` includes `env.check`. */
   checkId?: string;
+  /**
+   * Marks an `env.check` handler as a one-shot setup script.
+   * Requires capability `env.check`. Additive on plugin API v2.
+   */
+  studioSetupShell?: boolean;
 }
 
 /** One problem reported by `validateConfig` or by core metadata validation. */
@@ -214,6 +225,7 @@ const DEFINED_PLUGIN = Symbol.for("bolt:defined-plugin");
 const MANIFEST_CACHE = Symbol.for("bolt:manifest-cache");
 const RAW_CAPABILITY = Symbol.for("bolt:raw-capability");
 const RAW_CHECK_ID = Symbol.for("bolt:raw-check-id");
+const RAW_STUDIO_SETUP_SHELL = Symbol.for("bolt:raw-studio-setup-shell");
 
 /** Cross-realm brand. `instanceof PluginBase` is false for another bundled copy. */
 export const PLUGIN_BRAND = Symbol.for("boltstack.plugin");
@@ -227,6 +239,8 @@ interface StoredHandler {
   capability?: unknown;
   /** Raw `env.check` id. Validated with the capability tags. */
   checkId?: unknown;
+  /** Raw one-shot setup mark. Validated with the capability tags. */
+  studioSetupShell?: unknown;
 }
 
 type HandlerMap = Map<string, StoredHandler>;
@@ -574,6 +588,7 @@ export function assertClassCapabilities(plugin: BoltPlugin): void {
     const entry: HandlerManifest = { ai: stored.ai };
     if (capabilities.length > 0) entry.capabilities = capabilities;
     attachCheckId(entry, stored.checkId, label);
+    attachStudioSetupShell(entry, stored.studioSetupShell, label);
     handlers[stored.alias] = entry;
   }
   assertUniqueCheckIds(handlers, plugin.namespace);
@@ -634,6 +649,9 @@ function toStored(
     }
     if (descriptionOrOptions.checkId !== undefined) {
       stored.checkId = descriptionOrOptions.checkId;
+    }
+    if (descriptionOrOptions.studioSetupShell !== undefined) {
+      stored.studioSetupShell = descriptionOrOptions.studioSetupShell;
     }
     return stored;
   }
@@ -702,6 +720,8 @@ export function defineHandler<T = Record<string, string>, D extends JsonValue = 
     capability?: Capability | Capability[];
     /** Stable id required when `capability` includes `env.check`. */
     checkId?: string;
+    /** Marks this `env.check` handler as a one-shot setup script. */
+    studioSetupShell?: boolean;
   },
   fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult<D>>,
 ): HandlerDef<T> {
@@ -722,6 +742,9 @@ export function defineHandler<T = Record<string, string>, D extends JsonValue = 
   }
   if (meta.checkId !== undefined) {
     Object.defineProperty(def, RAW_CHECK_ID, { value: meta.checkId });
+  }
+  if (meta.studioSetupShell !== undefined) {
+    Object.defineProperty(def, RAW_STUDIO_SETUP_SHELL, { value: meta.studioSetupShell });
   }
   Object.defineProperty(def, HANDLER_DEF, { value: true });
   return def;
@@ -751,6 +774,18 @@ export function attachCheckId(entry: HandlerManifest, checkId: unknown, label: s
     );
   }
   entry.checkId = checkId;
+}
+
+/** Record `studio_setup_shell` when the handler is an explicit one-shot setup. */
+export function attachStudioSetupShell(entry: HandlerManifest, flag: unknown, label: string): void {
+  if (flag === undefined || flag === false) return;
+  if (flag !== true) {
+    throw new Error(`${label}: studioSetupShell must be true or omitted.`);
+  }
+  if (!entry.capabilities?.includes(ENV_CHECK_CAPABILITY)) {
+    throw new Error(`${label}: studioSetupShell requires capability "${ENV_CHECK_CAPABILITY}".`);
+  }
+  entry.studio_setup_shell = true;
 }
 
 function assertUniqueCheckIds(handlers: Record<string, HandlerManifest>, namespace: string): void {
@@ -820,8 +855,14 @@ export function definePlugin<TMeta = unknown>(
     const label = `handler "${opts.namespace}/${name}"`;
     const raw = (def as { [RAW_CAPABILITY]?: unknown })[RAW_CAPABILITY];
     const rawCheckId = (def as { [RAW_CHECK_ID]?: unknown })[RAW_CHECK_ID];
+    const rawShell = (def as { [RAW_STUDIO_SETUP_SHELL]?: unknown })[RAW_STUDIO_SETUP_SHELL];
     if (raw !== undefined && apiVersion !== 2) throw capabilityNeedsApi2(label, false);
     if (rawCheckId !== undefined && apiVersion !== 2) throw checkIdNeedsApi2(label);
+    if (rawShell !== undefined && apiVersion !== 2) {
+      throw new Error(
+        `${label}: studioSetupShell requires plugin API v2. Fix: add \`apiVersion: 2\` to definePlugin({ ... }). ${pluginApi2Requirement()}`,
+      );
+    }
     const capabilities = normalizeCapabilities(raw, opts.namespace, label);
     const entry = toManifestHandler({
       description: def.description,
@@ -830,6 +871,7 @@ export function definePlugin<TMeta = unknown>(
       capabilities,
     });
     attachCheckId(entry, rawCheckId, label);
+    attachStudioSetupShell(entry, rawShell, label);
     manifestHandlers[name] = entry;
   }
   assertUniqueCheckIds(manifestHandlers, opts.namespace);
@@ -897,12 +939,22 @@ function buildClassManifest(plugin: PluginBase): PluginManifest {
     for (const [, stored] of map) {
       const label = `handler "${plugin.namespace}/${stored.alias}"`;
       if (stored.checkId !== undefined && plugin.apiVersion !== 2) throw checkIdNeedsApi2(label);
+      if (
+        stored.studioSetupShell !== undefined &&
+        stored.studioSetupShell !== false &&
+        plugin.apiVersion !== 2
+      ) {
+        throw new Error(
+          `${label}: studioSetupShell requires plugin API v2. Fix: add the instance field \`apiVersion = 2;\` to the class (not \`static\`). ${pluginApi2Requirement()}`,
+        );
+      }
       const capabilities =
         stored.capability === undefined || plugin.apiVersion !== 2
           ? []
           : normalizeCapabilities(stored.capability, plugin.namespace, label);
       const entry = toManifestHandler({ ...stored, capabilities });
       attachCheckId(entry, stored.checkId, label);
+      attachStudioSetupShell(entry, stored.studioSetupShell, label);
       handlers[stored.alias] = entry;
     }
   }

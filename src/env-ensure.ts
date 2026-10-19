@@ -3,8 +3,9 @@
  * Dry-run only builds a plan. Execute applies that plan after the hash matches
  * and the user confirms. This plan is not a workspace sync plan.
  *
- * TODO(A2c): reject an ensure handler that has no gap/noop result, or that sets
- * studio_setup_shell, with EMPTY_SHELL exit 2.
+ * An ensure handler marked studio_setup_shell, or one that does not report
+ * gap fields on probe and data.changed on apply, is EMPTY_SHELL (exit 2).
+ * A handler that calls an installer and returns data.changed true or false is kept.
  */
 import type { BoltConfig } from "./config";
 import type { EnvCheckDecl } from "./env-manifest";
@@ -124,6 +125,72 @@ function counted(data: EnvEnsureData): EnvEnsureData {
   };
 }
 
+function emptyShellIssue(ref: string, marked: boolean): JsonIssue {
+  if (marked) {
+    return issue(
+      "EMPTY_SHELL",
+      `env.check handler "${ref}" is marked studio_setup_shell.`,
+      "A one-shot setup script cannot fill environment gaps. Use a handler that reports current, expected, and data.changed.",
+    );
+  }
+  return issue(
+    "EMPTY_SHELL",
+    `env.check "${ref}" has no gap or noop result.`,
+    "Return current and expected from probe, and data.changed true or false from ensure.",
+  );
+}
+
+/** Probe result carries structured gap fields. A skipped check counts as structured. */
+export function probeResultHasGapSemantics(result: HandlerResult): boolean {
+  const data = isRecord(result.data) ? result.data : undefined;
+  if (data?.studio_setup_shell === true) return false;
+  if (result.status === "skipped") return true;
+  if (!data) return false;
+  return "current" in data && "expected" in data;
+}
+
+/**
+ * Ensure result can tell a change from a noop.
+ * `data.changed` must be boolean. A skipped check counts. An explicit
+ * `studio_setup_shell` flag does not, even when `changed` is set.
+ */
+export function ensureResultHasNoopSemantics(result: HandlerResult): boolean {
+  const data = isRecord(result.data) ? result.data : undefined;
+  if (data?.studio_setup_shell === true) return false;
+  if (result.status === "skipped") return true;
+  return typeof data?.changed === "boolean";
+}
+
+function firstUnstructured(
+  checks: readonly { id: string }[],
+  results: readonly HandlerResult[] | undefined,
+): string | undefined {
+  if (!results || results.length !== checks.length) return checks[0]?.id ?? "env.check";
+  for (let i = 0; i < checks.length; i++) {
+    if (!probeResultHasGapSemantics(results[i]!)) return checks[i]!.id;
+  }
+  return undefined;
+}
+
+/** Handler refs marked studio_setup_shell. Does not call the handlers. */
+async function markedStudioShells(
+  cfg: BoltConfig,
+  configDir: string,
+  checks: readonly EnvCheckDecl[],
+): Promise<string[]> {
+  if (checks.length === 0) return [];
+  const registry = await loadFanoutRegistry(cfg, configDir);
+  const providers = indexEnvChecks(registry);
+  const refs: string[] = [];
+  for (const decl of checks) {
+    const provider = providers.get(decl.id);
+    if (!provider) continue;
+    const handler = registry.get(provider.namespace)?.manifest?.handlers[provider.handler];
+    if (handler?.studio_setup_shell === true) refs.push(provider.ref);
+  }
+  return refs;
+}
+
 export async function ensureEnv(input: {
   cfg: BoltConfig;
   configDir: string;
@@ -132,6 +199,21 @@ export async function ensureEnv(input: {
   plan?: string;
   confirmedByUser: boolean;
 }): Promise<EnvEnsureOutcome> {
+  const resolved = resolveEnvManifest({
+    env: input.cfg.env,
+    configDir: input.configDir,
+    manifestPath: input.manifestPath,
+  });
+  const marked = await markedStudioShells(input.cfg, input.configDir, resolved.checks);
+  if (marked.length > 0) {
+    return {
+      exitCode: 2,
+      data: emptyEnsureData(!input.execute, resolved.source),
+      warnings: [],
+      errors: marked.map((ref) => emptyShellIssue(ref, true)),
+    };
+  }
+
   const probe = await probeEnv({
     cfg: input.cfg,
     configDir: input.configDir,
@@ -147,11 +229,18 @@ export async function ensureEnv(input: {
     };
   }
 
-  const resolved = resolveEnvManifest({
-    env: input.cfg.env,
-    configDir: input.configDir,
-    manifestPath: input.manifestPath,
-  });
+  if (!resolved.empty) {
+    const unstructured = firstUnstructured(probe.data.checks, probe.handlerResults);
+    if (unstructured) {
+      return {
+        exitCode: 2,
+        data: emptyEnsureData(!input.execute, source),
+        warnings: probe.warnings,
+        errors: [emptyShellIssue(unstructured, false)],
+      };
+    }
+  }
+
   const plan = planFromProbe(probe.data.checks, resolved.checks);
   const planHash = hashEnvPlan(source, plan);
   const baseData = (): EnvEnsureData => ({
@@ -223,6 +312,14 @@ export async function ensureEnv(input: {
       continue;
     }
     for (const warning of called.warnings) warnings.push(issue("RESULT_WARNING", warning));
+    if (!ensureResultHasNoopSemantics(called.result)) {
+      return {
+        exitCode: 2,
+        data: counted(data),
+        warnings,
+        errors: [...errors, emptyShellIssue(provider.ref, false)],
+      };
+    }
     const settled = settleEnsure(called.result);
     if (settled.kind === "changed") data.changed.push(row.id);
     else if (settled.kind === "noop") data.noop.push({ id: row.id, reason: settled.reason });

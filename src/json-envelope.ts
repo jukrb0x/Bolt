@@ -14,6 +14,7 @@ export const JSON_SCHEMA = {
   why: "bolt.why/v1",
   envProbe: "bolt.env.probe/v1",
   envEnsure: "bolt.env.ensure/v1",
+  envManifest: "bolt.env.manifest/v1",
   inspect: "bolt.inspect/v1",
   status: "bolt.status/v1",
   run: "bolt.run/v1",

@@ -55,6 +55,8 @@ export interface EnvProbeOutcome {
   data: EnvProbeData;
   warnings: JsonIssue[];
   errors: JsonIssue[];
+  /** Raw handler results in declaration order. Set only when every check was called. */
+  handlerResults?: HandlerResult[];
 }
 
 export interface EnvProvider {
@@ -254,6 +256,7 @@ export async function probeEnv(input: {
 
   const base = observeContext(input.cfg, input.configDir);
   const checks: EnvProbeCheck[] = [];
+  const handlerResults: HandlerResult[] = [];
   for (const decl of resolved.checks) {
     const provider = providers.get(decl.id)!;
     const called = await callEnvHandler(registry, provider, decl, base);
@@ -266,6 +269,7 @@ export async function probeEnv(input: {
       };
     }
     for (const warning of called.warnings) warnings.push(issue("RESULT_WARNING", warning));
+    handlerResults.push(called.result);
     checks.push(checkFromHandler(decl, provider.namespace, called.result));
   }
 
@@ -274,6 +278,7 @@ export async function probeEnv(input: {
     data: probeData(resolved.source, resolved.checks.length, checks),
     warnings,
     errors: [],
+    handlerResults,
   };
 }
 

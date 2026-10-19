@@ -233,7 +233,7 @@
     "env": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Declared environment checks. bolt env probe reads this block. bolt env ensure fills required gaps. Omit it when the project has no environment contract. An external manifest is a path relative to the project root.",
+      "description": "Declared environment checks. bolt env manifest prints this block. bolt env probe reads it. bolt env ensure fills required gaps. Omit it when the project has no environment contract. An external manifest is a path relative to the project root.",
       "properties": {
         "checks": {
           "type": "array",

@@ -2,10 +2,15 @@ import { expect, test } from "bun:test";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import os from "os";
 import path from "path";
+import { checkConfig } from "../config";
+import { ensureResultHasNoopSemantics, probeResultHasGapSemantics } from "../env-ensure";
+import { envSetupShellWarnings } from "../env-manifest";
+import { fail, ok, skipped } from "../handler-result";
 
 const REPO = path.resolve(import.meta.dir, "../..");
 const MAIN = path.join(REPO, "src/main.ts");
 const FIXTURE = path.join(REPO, "tests/fixtures/env-check-plugin");
+const SHELL_FIXTURE = path.join(REPO, "tests/fixtures/env-shell-plugin");
 
 const YAML_HEAD = `version: 1
 project:
@@ -50,6 +55,21 @@ function project(yaml: string): string {
 
 function withFixture(dir: string): void {
   cpSync(FIXTURE, path.join(dir, "fixture"), { recursive: true });
+}
+
+function withShell(dir: string): void {
+  cpSync(SHELL_FIXTURE, path.join(dir, "shellfix"), { recursive: true });
+}
+
+function shellProject(id: string): string {
+  return project(`${YAML_HEAD}plugins:
+  - namespace: shellfix
+    path: ./shellfix
+env:
+  checks:
+    - id: ${id}
+      require: true
+`);
 }
 
 const TWO_CHECKS = `${YAML_HEAD}plugins:
@@ -294,6 +314,172 @@ test("vcs.git.lfs ensure is idempotent when git lfs is installed", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 }, 30000);
+
+test("gap and noop predicates keep a structured result and reject a bare one", () => {
+  const gap = fail("missing", {
+    data: { current: null, expected: "present", fix: "Install via adapter" },
+  });
+  expect(probeResultHasGapSemantics(gap)).toBe(true);
+  expect(probeResultHasGapSemantics(ok("please install"))).toBe(false);
+  expect(probeResultHasGapSemantics(skipped("skip"))).toBe(true);
+  expect(
+    ensureResultHasNoopSemantics(
+      ok("installer noop", { data: { changed: false, reason: "already_satisfied" } }),
+    ),
+  ).toBe(true);
+  expect(ensureResultHasNoopSemantics(ok("ensured", { data: { changed: true } }))).toBe(true);
+  expect(ensureResultHasNoopSemantics(ok("setup complete"))).toBe(false);
+  expect(
+    ensureResultHasNoopSemantics(
+      ok("setup", { data: { changed: true, studio_setup_shell: true } }),
+    ),
+  ).toBe(false);
+});
+
+test("a studio_setup_shell handler is EMPTY_SHELL and is not called", async () => {
+  const dir = shellProject("fixture.shell");
+  withShell(dir);
+  try {
+    const dry = await bolt(["env", "ensure", "--dry-run", "--json"], dir);
+    expect(dry.code).toBe(2);
+    const dryBody = parseStdout(dry.out);
+    expect(dryBody.ok).toBe(false);
+    expect(dryBody.schema).toBe("bolt.env.ensure/v1");
+    expect((dryBody.errors as Array<{ code: string }>)[0]?.code).toBe("EMPTY_SHELL");
+    expect(JSON.stringify(dryBody.errors)).toContain("studio_setup_shell");
+    expect(existsSync(marker(dir, "fixture.shell"))).toBe(false);
+
+    const run = await bolt(
+      [
+        "env",
+        "ensure",
+        "--execute",
+        "--plan=sha256:" + "ab".repeat(32),
+        "--confirmed-by-user",
+        "--json",
+      ],
+      dir,
+    );
+    expect(run.code).toBe(2);
+    expect((parseStdout(run.out).errors as Array<{ code: string }>)[0]?.code).toBe("EMPTY_SHELL");
+    expect(existsSync(marker(dir, "fixture.shell"))).toBe(false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("ensure rejects a probe result that has no gap fields", async () => {
+  const dir = shellProject("fixture.echo");
+  withShell(dir);
+  try {
+    const dry = await bolt(["env", "ensure", "--dry-run", "--json"], dir);
+    expect(dry.code).toBe(2);
+    const body = parseStdout(dry.out);
+    expect((body.errors as Array<{ code: string; message: string }>)[0]?.code).toBe("EMPTY_SHELL");
+    expect(body.errors).toEqual([
+      expect.objectContaining({ message: expect.stringContaining("fixture.echo") }),
+    ]);
+    expect((body.data as EnsureData).changed).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("ensure rejects an apply result that has no changed flag", async () => {
+  const dir = shellProject("fixture.bare");
+  withShell(dir);
+  try {
+    const preview = await bolt(["env", "ensure", "--dry-run", "--json"], dir);
+    expect(preview.code).toBe(0);
+    const hash = (parseStdout(preview.out).data as EnsureData).plan_hash;
+    const run = await bolt(
+      ["env", "ensure", "--execute", `--plan=${hash}`, "--confirmed-by-user", "--json"],
+      dir,
+    );
+    expect(run.code).toBe(2);
+    const body = parseStdout(run.out);
+    expect((body.errors as Array<{ code: string }>)[0]?.code).toBe("EMPTY_SHELL");
+    expect((body.data as EnsureData).changed).toEqual([]);
+    expect((body.data as EnsureData).summary.changed).toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("a handler that returns changed false is not EMPTY_SHELL", async () => {
+  const dir = shellProject("fixture.installer");
+  withShell(dir);
+  try {
+    const preview = await bolt(["env", "ensure", "--dry-run", "--json"], dir);
+    expect(preview.code).toBe(0);
+    const data = parseStdout(preview.out).data as EnsureData;
+    expect(data.plan).toEqual([{ id: "fixture.installer", action: "ensure", will_change: true }]);
+    const run = await bolt(
+      ["env", "ensure", "--execute", `--plan=${data.plan_hash}`, "--confirmed-by-user", "--json"],
+      dir,
+    );
+    expect(run.code).toBe(0);
+    const applied = parseStdout(run.out).data as EnsureData;
+    expect(applied.changed).toEqual([]);
+    expect(applied.noop).toEqual([{ id: "fixture.installer", reason: "already_satisfied" }]);
+    expect(applied.failed).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("bolt check warns on a one-shot setup task when env is absent and still exits 0", async () => {
+  const dir = project(`${YAML_HEAD}tasks:
+  setup:
+    - run: ./Setup.bat
+  build:
+    - run: echo build
+    - run: ./Setup.bat
+`);
+  try {
+    const run = await bolt(["check", "--json"], dir);
+    expect(run.code).toBe(0);
+    const body = parseStdout(run.out);
+    expect(body.ok).toBe(true);
+    const warnings = body.warnings as Array<{ code: string; message: string }>;
+    expect(warnings.map((item) => item.message)).toEqual([
+      expect.stringContaining('ENV_SETUP_SHELL: task "setup"'),
+    ]);
+    expect(JSON.stringify(warnings)).not.toContain("build");
+
+    writeFileSync(
+      path.join(dir, "bolt.yaml"),
+      `${YAML_HEAD}env:\n  checks: []\ntasks:\n  setup:\n    - run: ./Setup.bat\n`,
+    );
+    const declared = await bolt(["check", "--json"], dir);
+    expect(declared.code).toBe(0);
+    expect(JSON.stringify(parseStdout(declared.out).warnings)).not.toContain("ENV_SETUP_SHELL");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("checkConfig warning matches the one-shot setup task", async () => {
+  const dir = project(`${YAML_HEAD}tasks:\n  setup:\n    - run: pwsh ./tools/Setup.ps1\n`);
+  try {
+    const result = await checkConfig(path.join(dir, "bolt.yaml"));
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.some((warning) => warning.startsWith("ENV_SETUP_SHELL:"))).toBe(true);
+    expect(
+      envSetupShellWarnings(
+        {
+          setup: [{ run: "./Setup.bat" }],
+          engine: [{ run: undefined }],
+        },
+        false,
+      ).join("\n"),
+    ).not.toContain("engine");
+    expect(envSetupShellWarnings({ engine: [{ run: "ue/setup" }] }, false)).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("ensure without a mode is a usage error", async () => {
   const dir = project(YAML_HEAD);

@@ -164,6 +164,8 @@ Unknown bare tags are rejected with a "did you mean" hint. The areas `doctor`, `
 
 `env.check` is the tag for `bolt env probe` and `bolt env ensure`. The handler also sets `checkId` to a stable id. Core calls `findByCapability("env.check")` and runs the handler whose `checkId` matches the declared id. It does not run every tagged handler. `ctx.envCheck` is an optional field on the context (`id`, `require`, and `version` and `params` when the manifest sets them). `action` is `"ensure"` only when ensure is applying that gap. Probe leaves `action` unset. Older bolts omit the whole field, so plugins read `ctx.envCheck?.id` and treat a missing `action` as probe. The handler function signature is unchanged.
 
+Optional `studioSetupShell: true` marks that handler as a one-shot setup script. The manifest field is `studio_setup_shell`. `bolt env ensure` exits 2 with `EMPTY_SHELL` and does not call the handler. Probe still can. A handler that calls an installer and returns boolean `data.changed` does not set this flag. The option is additive on plugin API v2.
+
 A plugin that uses `capability` without `apiVersion: 2` fails when it is defined (function plugins) or registered (class plugins), with the fix in the message.
 
 Singleton tags are chosen with the top-level `capabilities:` map (`bolt.local.yaml` wins per key). Fan-out tags ignore that map. See [Choosing a singleton provider](/guides/migrating-to-plugin-api-2#10-choosing-a-singleton-provider).

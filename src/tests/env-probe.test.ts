@@ -355,3 +355,100 @@ test("a second project reuses the same check ids", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 }, 30000);
+
+test("env manifest --help lists json and manifest", async () => {
+  const dir = project(YAML_HEAD);
+  try {
+    const help = await bolt(["env", "manifest", "--help"], dir);
+    expect(help.code).toBe(0);
+    expect(help.out).toContain("--json");
+    expect(help.out).toContain("--manifest");
+    const parent = await bolt(["env", "--help"], dir);
+    expect(parent.code).toBe(0);
+    expect(parent.out).toContain("manifest");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("env manifest prints the effective checks and warns when env is absent", async () => {
+  const dir = project(TWO_CHECKS);
+  try {
+    const absent = project(YAML_HEAD);
+    try {
+      const empty = await bolt(["env", "manifest", "--json"], absent);
+      expect(empty.code).toBe(0);
+      const emptyBody = parseStdout(empty.out);
+      expect(emptyBody.schema).toBe("bolt.env.manifest/v1");
+      expect(emptyBody.ok).toBe(true);
+      expect(emptyBody.warnings).toEqual([expect.objectContaining({ code: "ENV_NO_MANIFEST" })]);
+      expect(emptyBody.data).toEqual({
+        source: "bolt.yaml#env",
+        checks_declared: 0,
+        checks: [],
+      });
+    } finally {
+      rmSync(absent, { recursive: true, force: true });
+    }
+
+    const run = await bolt(["env", "manifest", "--json"], dir);
+    expect(run.code).toBe(0);
+    const body = parseStdout(run.out);
+    expect(body.schema).toBe("bolt.env.manifest/v1");
+    expect(body.ok).toBe(true);
+    expect(body.errors).toEqual([]);
+    expect(body.warnings).toEqual([]);
+    expect(body.data).toEqual({
+      source: "bolt.yaml#env",
+      checks_declared: 2,
+      checks: [
+        { id: "fixture.tool.a", require: true },
+        { id: "fixture.tool.b", require: true, version: ">=1" },
+      ],
+    });
+
+    writeFileSync(
+      path.join(dir, "env.manifest.yaml"),
+      "checks:\n  - id: fixture.tool.a\n    require: false\n",
+    );
+    const external = await bolt(
+      ["env", "manifest", "--json", "--manifest", "env.manifest.yaml"],
+      dir,
+    );
+    expect(external.code).toBe(0);
+    expect(parseStdout(external.out).data).toEqual({
+      source: "env.manifest.yaml",
+      checks_declared: 1,
+      checks: [{ id: "fixture.tool.a", require: false }],
+    });
+
+    const escape = await bolt(["env", "manifest", "--json", "--manifest", "../env.yaml"], dir);
+    expect(escape.code).toBe(3);
+    const escapeBody = parseStdout(escape.out);
+    expect(escapeBody.ok).toBe(false);
+    expect(escapeBody.schema).toBe("bolt.env.manifest/v1");
+    expect((escapeBody.errors as Array<{ code: string }>)[0]?.code).toBe("MANIFEST_INVALID");
+
+    const drive = await bolt(["env", "manifest", "--json", "--manifest", "C:/tools/env.yaml"], dir);
+    expect(drive.code).toBe(3);
+    expect((parseStdout(drive.out).errors as Array<{ code: string }>)[0]?.code).toBe(
+      "MANIFEST_INVALID",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("studioSetupShell requires capability env.check", () => {
+  expect(() =>
+    definePlugin({
+      namespace: "fixture",
+      version: "0.0.0",
+      description: "fixture",
+      apiVersion: 2,
+      handlers: {
+        bare: defineHandler({ studioSetupShell: true, ai: false }, async () => ok()),
+      },
+    }),
+  ).toThrow(/env\.check/);
+});

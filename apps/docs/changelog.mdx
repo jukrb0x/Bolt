@@ -5,6 +5,22 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Environment manifest and empty-shell rejection
+
+`bolt env manifest` prints the effective environment manifest. Checks come from `env.checks` in `bolt.yaml`, from the file named by `env.manifest`, or from `--manifest`. That path is relative to the project root. The source rules match `bolt env probe`. `--json` prints one `bolt.env.manifest/v1` document. `data` is `source`, `checks_declared`, and `checks` (each check is `id`, `require`, and `version` or `params` when set). These are declarations, not probe results.
+
+A project with no `env` key, or with an empty check list, exits 0 with warning `ENV_NO_MANIFEST`. A drive letter, an absolute path, or a path that leaves the project root exits 3 with `MANIFEST_INVALID`. `bolt status --json` still lists `schemas.env` as `v1`.
+
+`bolt env ensure` refuses an empty shell. A handler marked `studioSetupShell: true` (manifest field `studio_setup_shell`) exits 2 with `EMPTY_SHELL` and is not called. A probe result without `current` and `expected`, or an ensure result without boolean `data.changed`, is the same refusal. A handler that returns `data.changed` true or false is kept, including one that calls an installer and then reports a noop. `ue/setup` is unchanged. It is a UE plugin step, not this refusal, and not the platform environment contract.
+
+`data.plan` on ensure is the environment plan. It is not a workspace sync plan. `bolt workspace sync` stays removed.
+
+`bolt check` warns when a project has no `env` block and a task is a single `run` of a setup script (`*.ps1`, `*.bat`, `*.cmd`, or `*.sh`). The message starts with `ENV_SETUP_SHELL`. The command still exits 0. A task that uses `ue/setup`, or a task with more than one step, does not warn. The warning does not stop `bolt run`.
+
+`defineHandler` and `@handler` accept optional `studioSetupShell`. That field is additive on plugin API v2. The handler signature is unchanged.
+
+This is not a one-click environment. `--strict` is not in this slice.
+
 ### Environment ensure
 
 `bolt env ensure --dry-run` prints a fill-gaps plan and a `plan_hash` (`sha256:` plus 64 hex characters). It does not change the machine. `changed`, `noop`, and `failed` are empty. `--json` prints one `bolt.env.ensure/v1` document. The envelope matches probe.
@@ -19,7 +35,7 @@ The built-in git plugin provides `vcs.git.lfs` (probe and ensure). Ensure runs `
 
 `ctx.envCheck.action` is `"ensure"` only on that apply step. Probe leaves it unset. The handler signature is unchanged.
 
-Not in this slice: `EMPTY_SHELL` rejection, a standalone `bolt env manifest` command, and `--strict`.
+Not in the ensure slice: `EMPTY_SHELL` rejection and a standalone `bolt env manifest` command (both are in the section above), and `--strict`.
 
 ### Environment probe
 
@@ -35,7 +51,7 @@ Plugins contribute a check with capability `env.check` and a stable `checkId`. C
 
 `bolt status --json` lists `schemas.env` as `v1`.
 
-Not in the probe slice: a standalone `bolt env manifest` command, and `--strict`. Ensure is the separate command above.
+Not in the probe slice: a standalone `bolt env manifest` command (it is in the section above), and `--strict`. Ensure is the separate command above.
 
 ### Workspace sync command removed
 

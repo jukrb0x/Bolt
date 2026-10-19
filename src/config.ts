@@ -13,7 +13,7 @@ import {
   mergeCapabilityMaps,
   type SelectionFile,
 } from "./capability-selection";
-import { EnvSchema, type EnvBlock } from "./env-manifest";
+import { EnvSchema, envSetupShellWarnings, type EnvBlock } from "./env-manifest";
 import {
   WorkspaceSchema,
   codeForZodIssue,
@@ -868,6 +868,12 @@ export async function checkConfig(
   if (result.success && result.data.workspace) {
     workspace = readWorkspaceInventory(workspaceFromParsed(result.data.workspace), configDir);
     warnings = [...warnings, ...missingWorkspacePathWarnings(workspace)];
+  }
+  if (result.success) {
+    warnings = [
+      ...warnings,
+      ...envSetupShellWarnings(result.data.tasks, result.data.env !== undefined),
+    ];
   }
 
   const legacy = findLegacyKeys(parsed, localParsed);

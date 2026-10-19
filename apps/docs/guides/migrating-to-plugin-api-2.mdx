@@ -104,7 +104,7 @@ async sync() {}
 
 Allowed: core tags (`doctor`, `diagnose`, `detect`, `notify`, `vcs.sync`, `vcs.info`, `vcs.revision`, `artifact.store`, `env.check`), `x-<vendor>.<name>`, and `<your-namespace>.<name>`. The areas `doctor`, `diagnose`, `detect`, `notify`, `vcs`, `artifact`, and `env` are reserved for core tags. At most 8 tags per handler. Tags must not depend on config. Plain object plugins (a hand-written `handlers` map) cannot carry tags. Convert them to `definePlugin`.
 
-`env.check` also takes `checkId`. `bolt env probe` and `bolt env ensure` pass the declaration on optional `ctx.envCheck`. Read `ctx.envCheck?.id`. `action` is `"ensure"` only while ensure is filling that gap. A missing `action` means probe, including on older bolts that omit `ctx.envCheck`.
+`env.check` also takes `checkId`. `bolt env probe` and `bolt env ensure` pass the declaration on optional `ctx.envCheck`. Read `ctx.envCheck?.id`. `action` is `"ensure"` only while ensure is filling that gap. A missing `action` means probe, including on older bolts that omit `ctx.envCheck`. Optional `studioSetupShell: true` is an additive flag for a one-shot setup script. It does not change the handler signature. `bolt env ensure` exits 2 with `EMPTY_SHELL` and does not call that handler.
 
 ## 8. Tests
 

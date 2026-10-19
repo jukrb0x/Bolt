@@ -7,10 +7,10 @@ How to author a Bolt project's configuration. `bolt.yaml` starts with `version: 
 
 ## The two files
 
-| File              | Committed?    | Contains                                                                                      | Why                                                                                                                                                                                                                  |
-| ----------------- | ------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace`, optional `env` | The team's automation contract. Everyone runs the same tasks/flows. `workspace.roots` is an inventory `bolt list` and `bolt check` read. `env` is the check list `bolt env probe` reads and `bolt env ensure` fills. |
-| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine.                                                                                        |
+| File              | Committed?    | Contains                                                                                      | Why                                                                                                                                                                                                                                               |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bolt.yaml`       | Yes (shared)  | `version: 1`, project name, plugins, tasks, flows, vars, optional `workspace`, optional `env` | The team's automation contract. Everyone runs the same tasks/flows. `workspace.roots` is an inventory `bolt list` and `bolt check` read. `env` is the check list `bolt env manifest` prints, `bolt env probe` reads, and `bolt env ensure` fills. |
+| `bolt.local.yaml` | No (optional) | `vars`, `plugins`, `capabilities`, and `ai`                                                   | Per-machine vars, plugin config, capability choices, and agent policy (`ai.run`, `ai.trust_plugins`). A missing file is fine.                                                                                                                     |
 
 Relative paths inside plugin config resolve against the directory containing `bolt.yaml`. There is no root `targets` key.
 
@@ -195,7 +195,7 @@ Multi-task start notifications are sent once per invocation and show the top-lev
 
 ## env
 
-Optional. `bolt env probe` reads `env.checks` and reports gaps. `bolt env ensure` fills required gaps (`require: false` is left alone). Each check needs an `id`. A plugin provides that id with capability `env.check`. `env.manifest` may name a file relative to this directory instead of inlining `checks`. Drive letters and paths that leave the project root are rejected. This block is not `ue/setup`.
+Optional. `bolt env manifest` prints this declaration. `bolt env probe` reads `env.checks` and reports gaps. `bolt env ensure` fills required gaps (`require: false` is left alone). Each check needs an `id`. A plugin provides that id with capability `env.check`. `env.manifest` may name a file relative to this directory instead of inlining `checks`. Drive letters and paths that leave the project root are rejected. This block is not `ue/setup`. Platform environment setup is not a one-click wrapper around that UE step.
 
 ```yaml
 env:
@@ -206,7 +206,7 @@ env:
       version: ">=1"
 ```
 
-With no `env` key, `bolt env probe` and `bolt env ensure --dry-run` exit 0 and warn `ENV_NO_MANIFEST`.
+With no `env` key, `bolt env manifest`, `bolt env probe`, and `bolt env ensure --dry-run` exit 0 and warn `ENV_NO_MANIFEST`. A task that is only `run: ./Setup.ps1` (or another setup script) makes `bolt check` warn `ENV_SETUP_SHELL`. That warning does not fail the check.
 
 ## See Also
 

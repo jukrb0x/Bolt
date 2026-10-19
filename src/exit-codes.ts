@@ -3,7 +3,7 @@
  *
  * - 0 success
  * - 1 task failure (a step failed while running)
- * - 2 usage error (unknown flag/command/task, malformed param)
+ * - 2 usage error (unknown flag/command/task, malformed param) or EMPTY_SHELL
  * - 3 config error (bolt.yaml missing, unreadable, unparseable, schema errors, invalid
  *   task graph, a config problem found by --dry-run, a missing/stale/invalid
  *   bolt.plugin.json on the bolt ai path, MANIFEST_INVALID, or CHECK_UNKNOWN)

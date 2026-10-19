@@ -174,6 +174,12 @@ export interface HandlerManifest {
   capabilities?: string[];
   /** Stable id for capability `env.check`. Omitted on every other handler. */
   checkId?: string;
+  /**
+   * True when this `env.check` handler is a one-shot setup script.
+   * `bolt env ensure` refuses it with `EMPTY_SHELL` and does not call it.
+   * Omitted when unset. Additive on plugin API v2. It does not change the handler signature.
+   */
+  studio_setup_shell?: boolean;
 }
 
 /**
@@ -296,6 +302,11 @@ export declare function handler(options: {
   capability?: Capability | Capability[];
   /** Stable id required when `capability` includes `env.check`. */
   checkId?: string;
+  /**
+   * Marks an `env.check` handler as a one-shot setup script.
+   * Requires capability `env.check`. Additive on plugin API v2.
+   */
+  studioSetupShell?: boolean;
 }): (target: any, propertyKey: string, descriptor: PropertyDescriptor) => void;
 
 /**
@@ -370,6 +381,11 @@ export declare function defineHandler<T = Record<string, string>, D extends Json
     capability?: Capability | Capability[];
     /** Stable id required when `capability` includes `env.check`. */
     checkId?: string;
+    /**
+     * Marks an `env.check` handler as a one-shot setup script.
+     * Requires capability `env.check`. Additive on plugin API v2.
+     */
+    studioSetupShell?: boolean;
   },
   fn: (params: T, ctx: BoltPluginContext) => Promise<void | HandlerResult<D>>,
 ): HandlerDef<T>;
