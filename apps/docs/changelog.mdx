@@ -5,6 +5,10 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### What this project can do
+
+"What can this project do" is `bolt list --json`, `bolt info --json`, and `bolt ai --json`. Task names are `data.tasks` on `bolt.list/v1` and `bolt.info/v1` (the same strings). Flow `name` and `steps` match on both. `bolt list --json` may also include a flow `description`. Handler `ai` marks are `data.plugins[].handlers[].name` and `.ai` on `bolt.catalog/v1` (`bolt ai --json`). `ai` is `true` or `"confirm"`. Handlers with `ai: false` are omitted. `bolt info --json` `data.plugins` is the configured plugin list, not that catalog. README prose and `.bolt/ai-context.md` are not this source. This slice adds no catalog fields. Generating a config is not yet gated on `check` and dry-run.
+
 ### Local observation on bolt dash
 
 `bolt dash` is a local observer for one project's execute sessions. It listens on `127.0.0.1` only. It is not CI, Jenkins, or GitHub Actions.
