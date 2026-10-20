@@ -116,8 +116,12 @@ test("dash listens on 127.0.0.1 and serves the session list envelope", async () 
   try {
     expect(server.hostname).toBe("127.0.0.1");
     const port = boundPort(server);
-    const hex = port.toString(16).toUpperCase().padStart(4, "0");
-    expect(localListeners(port)).toEqual([`0100007F:${hex}`]);
+    // /proc/net/tcp is Linux-only. Other platforms keep the hostname check
+    // and the 127.0.0.1 fetch below.
+    if (process.platform === "linux") {
+      const hex = port.toString(16).toUpperCase().padStart(4, "0");
+      expect(localListeners(port)).toEqual([`0100007F:${hex}`]);
+    }
 
     const listRes = await fetch(`http://127.0.0.1:${port}/sessions`);
     expect(listRes.status).toBe(200);
