@@ -8,6 +8,7 @@
  * `preview: true` stays out of the default list.
  */
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -27,7 +28,7 @@ export const SESSION_RECLAIM_MS = 2 * 60 * 60 * 1000;
 
 const ARG_LIMIT = 160;
 const ARG_COUNT_LIMIT = 32;
-const SECRET_FLAG = /(^|[-_])(token|password|passwd|secret|api[-_]?key|access[-_]?key|key)$/i;
+const SECRET_FLAG = /(^|[-_])(token|password|passwd|secret|api[-_]?key|access[-_]?key|key)($|[-_])/i;
 const SAFE_ID = /^[A-Za-z0-9._-]+$/;
 
 export type SessionStatus = "running" | "ok" | "failed" | "interrupted";
@@ -199,6 +200,26 @@ export function pidAlive(pid: number): boolean {
   }
 }
 
+
+/**
+ * Persist session JSON via tmp + rename. Must not unlink the sole `.json` first:
+ * on Unix rename replaces atomically; on Windows fall back to overwrite-copy
+ * without deleting the good file ahead of time.
+ */
+function writeSessionAtomic(file: string, body: string): void {
+  const dir = path.dirname(file);
+  mkdirSync(dir, { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, body);
+  try {
+    renameSync(tmp, file);
+  } catch {
+    // Windows cannot rename over an existing file. Copy over (keeps dest present), then drop tmp.
+    copyFileSync(tmp, file);
+    rmSync(tmp, { force: true });
+  }
+}
+
 export class RunSession implements SessionHooks {
   readonly file: string;
   record: SessionRecord;
@@ -284,12 +305,7 @@ export class RunSession implements SessionHooks {
   }
 
   write(): void {
-    const dir = path.dirname(this.file);
-    mkdirSync(dir, { recursive: true });
-    const tmp = `${this.file}.${process.pid}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(this.record, null, 2)}\n`);
-    rmSync(this.file, { force: true });
-    renameSync(tmp, this.file);
+    writeSessionAtomic(this.file, `${JSON.stringify(this.record, null, 2)}\n`);
   }
 }
 
@@ -412,7 +428,7 @@ export function loadSessions(
             step.finished_at = parsed.finished_at;
           }
         }
-        writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`);
+        writeSessionAtomic(file, `${JSON.stringify(parsed, null, 2)}\n`);
       }
     }
     if (parsed.preview === true && !opts.includePreview) continue;

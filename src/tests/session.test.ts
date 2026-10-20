@@ -14,12 +14,14 @@ import path from "path";
 import {
   SESSION_RECLAIM_MS,
   SESSION_RETAIN_MS,
+  RunSession,
   clearSessions,
   invocationEntry,
   issueFromStepError,
   loadSessions,
   stepsFromPlanTasks,
   summarizeArgv,
+  type SessionRecord,
 } from "../session";
 import { BoltStepError } from "../handler-result";
 
@@ -118,6 +120,31 @@ test("summarizeArgv masks secret flags and truncates", () => {
   ).toBe(true);
 });
 
+
+test("summarizeArgv masks *-file secret flags without false-positive on keyboard", () => {
+  const summary = summarizeArgv([
+    "run",
+    "build",
+    "--token-file=/creds/token",
+    "--password-file",
+    "/secret/pass",
+    "--secret-file=/var/secret",
+    "--api-key-file=/keys/api",
+    "--keyboard=fine",
+  ]);
+  const joined = summary.join(" ");
+  expect(joined).not.toContain("/creds/token");
+  expect(joined).not.toContain("/secret/pass");
+  expect(joined).not.toContain("/var/secret");
+  expect(joined).not.toContain("/keys/api");
+  expect(summary).toContain("--token-file=***");
+  expect(summary).toContain("--password-file");
+  expect(summary).toContain("***");
+  expect(summary).toContain("--secret-file=***");
+  expect(summary).toContain("--api-key-file=***");
+  expect(summary).toContain("--keyboard=fine");
+});
+
 test("invocationEntry distinguishes agent, script, and human", () => {
   expect(invocationEntry(true, false)).toBe("agent");
   expect(invocationEntry(false, false)).toBe("script");
@@ -182,6 +209,41 @@ test("loadSessions reclaims a dead pid and an old file with no pid", () => {
     expect(JSON.parse(readFileSync(dead, "utf8")).status).toBe("interrupted");
     expect(JSON.parse(readFileSync(stale, "utf8")).status).toBe("interrupted");
     expect(JSON.parse(readFileSync(live, "utf8")).status).toBe("running");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+
+test("RunSession.write replaces via rename without unlinking the sole .json first", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-sess-atomic-"));
+  try {
+    const file = path.join(dir, ".bolt", "sessions", "atomic.json");
+    const record: SessionRecord = {
+      session_id: "atomic",
+      started_at: new Date().toISOString(),
+      cwd: dir,
+      config: { path: path.join(dir, "bolt.yaml") },
+      invocation: { argv_summary: ["run", "hi"], entry: "human" },
+      names: ["hi"],
+      status: "running",
+      steps: [],
+    };
+    const session = new RunSession(file, record);
+    session.write();
+    expect(existsSync(file)).toBe(true);
+    expect(JSON.parse(readFileSync(file, "utf8")).status).toBe("running");
+    // Second write must replace in place. rename over existing keeps the path present;
+    // we must never rmSync the only good .json before the new file lands.
+    session.record.status = "ok";
+    session.record.finished_at = new Date().toISOString();
+    session.write();
+    expect(existsSync(file)).toBe(true);
+    const saved = JSON.parse(readFileSync(file, "utf8")) as SessionRecord;
+    expect(saved.status).toBe("ok");
+    expect(typeof saved.finished_at).toBe("string");
+    const leftovers = readdirSync(path.dirname(file)).filter((name) => name.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
