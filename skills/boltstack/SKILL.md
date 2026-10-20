@@ -5,7 +5,7 @@ description: Use when the user asks to build, update, launch, or automate Unreal
 
 # Bolt — UE Workflow Automation
 
-Bolt is a CLI tool for automating Unreal Engine workflows. Each project has its own `bolt.yaml` defining available commands. **You must never assume commands — always discover them from this project.**
+Bolt is a CLI tool for automating Unreal Engine workflows. Each project has its own `bolt.yaml` defining available commands. **You must never assume commands — always discover them from `bolt list --json`, `bolt info --json`, and `bolt ai --json`.**
 
 ## Capability gate
 
@@ -21,7 +21,16 @@ Run `bolt version --json` first. Branch on capabilities, never on the version nu
 
 Do not skip confirmation. Discover, preview, confirm, then execute. A fresh preview before every execution.
 
-1. **Discover.** `bolt list --json`, `bolt info --json`, `bolt status --json`, and `bolt inspect <names> --json` (`bolt.list/v1`, `bolt.info/v1`, `bolt.status/v1`, `bolt.inspect/v1`). `bolt doctor --json` is `bolt.doctor/v1`. `bolt why --json` is `bolt.why/v1`. Error checks and diagnostics stay in `data`; the exit stays 0 unless `--fix` or `--fail` is set. `bolt ai --json` prints `bolt.catalog/v1` (plugins and handlers; `ai: false` handlers are omitted) and writes nothing. `bolt ai --stdout` prints `.bolt/ai-context.md` and writes nothing. Use only names from this output. Do not guess a task.
+1. **Discover.** Answer "what can this project do" only from `bolt list --json`, `bolt info --json`, and `bolt ai --json`. Do not answer it from README prose, other docs, or `.bolt/ai-context.md`.
+
+   - Task names are `data.tasks` on both `bolt.list/v1` and `bolt.info/v1`. The arrays are the same strings. A task name in the answer must be one of those strings.
+   - Flows are `data.flows[].name` and `data.flows[].steps` on both. `bolt list --json` may also include `data.flows[].description`.
+   - Handler and `ai` marks are `data.plugins[].handlers[].name` and `data.plugins[].handlers[].ai` on `bolt ai --json` (`bolt.catalog/v1`). `ai` is `true` or `"confirm"`. Handlers with `ai: false` are omitted. `bolt info --json` `data.plugins` is the configured plugin list, not this catalog. `bolt ai --json` writes nothing.
+
+   These three commands do not take `--agent`. Task steps and a plan's effective `ai` are the preview below, not this answer.
+
+   `bolt status --json` is `bolt.status/v1`. `bolt inspect <names> --json` is `bolt.inspect/v1`. `bolt doctor --json` is `bolt.doctor/v1`. `bolt why --json` is `bolt.why/v1`. Error checks and diagnostics stay in `data`; the exit stays 0 unless `--fix` or `--fail` is set. `bolt ai --stdout` prints `.bolt/ai-context.md` and writes nothing. That file is not the capability source. Use only names from the JSON above. Do not guess a task.
+
 2. **Preview.** `bolt run --dry-run <names…> [--key=value] --json`. Read `data.ai`, `data.ai_reasons`, and `data.plan_hash`. This is a static preview: no plugins, hooks, handlers, or file writes.
 3. **Confirm.** If `data.ai` is `"confirm"`, show the plan and ask the user. Wait for a yes to that plan. Do not skip confirmation. If `data.ai` is `false`, stop and hand the user the command. If `data.ai` is `true`, no extra yes is required for Bolt, but still show the plan.
 4. **Execute.** Only after that preview:
