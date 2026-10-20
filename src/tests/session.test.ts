@@ -19,12 +19,13 @@ import {
   invocationEntry,
   issueFromStepError,
   loadSessions,
+  pidAlive,
   stepsFromPlanTasks,
   summarizeArgv,
   type SessionRecord,
 } from "../session";
 import { BoltStepError } from "../handler-result";
-import { INTERRUPTED_EXIT_CODE, TASK_FAILURE_EXIT_CODE } from "../exit-codes";
+import { INTERRUPTED_EXIT_CODE } from "../exit-codes";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../..");
 const MAIN = path.join(REPO_ROOT, "src/main.ts");
@@ -425,6 +426,45 @@ export default definePlugin({
   }
 }, 60_000);
 
+test("RunSession.interrupt persists interrupted status and finished_at", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-sess-interrupt-"));
+  try {
+    const file = path.join(dir, ".bolt", "sessions", "hook.json");
+    const started = new Date().toISOString();
+    const session = new RunSession(file, {
+      session_id: "hook",
+      started_at: started,
+      cwd: dir,
+      config: { path: path.join(dir, "bolt.yaml") },
+      invocation: { argv_summary: ["run", "wait"], entry: "script", pid: process.pid },
+      names: ["wait"],
+      status: "running",
+      steps: [
+        {
+          ref: "sleep",
+          index: 0,
+          status: "running",
+          node: { kind: "run", command: "sleep" },
+          started_at: started,
+        },
+        { ref: "next", index: 1, status: "pending", node: { kind: "run", command: "next" } },
+      ],
+    });
+    session.write();
+    // Same write flushInterruptHooks performs. No child process and no signal.
+    session.interrupt();
+    const saved = JSON.parse(readFileSync(file, "utf8")) as SessionRecord;
+    expect(saved.status).toBe("interrupted");
+    expect(typeof saved.finished_at).toBe("string");
+    expect(saved.steps[0]?.status).toBe("interrupted");
+    expect(typeof saved.steps[0]?.finished_at).toBe("string");
+    expect(saved.steps[1]?.status).toBe("pending");
+    expect(saved.steps[1]?.finished_at).toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("SIGINT marks the running session interrupted", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-sess-int-"));
   const env = { HOME: path.join(dir, "home"), USERPROFILE: path.join(dir, "home"), BOLT_AGENT: "" };
@@ -456,13 +496,41 @@ test("SIGINT marks the running session interrupted", async () => {
     } catch {
       process.kill(proc.pid, "SIGINT");
     }
-    const code = await proc.exited;
-    // Windows/Bun often reports exit 1 on interrupt; session interrupt + finished_at are the contract.
+
     if (process.platform === "win32") {
-      expect([INTERRUPTED_EXIT_CODE, TASK_FAILURE_EXIT_CODE]).toContain(code);
-    } else {
-      expect(code).toBe(INTERRUPTED_EXIT_CODE);
+      // Cross-process SIGINT does not enter Bun signal or exit hooks on win32.
+      // Stop the child, then require dead-pid reclaim — do not poll for an in-process write.
+      const exited = await Promise.race([
+        proc.exited.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000)),
+      ]);
+      if (!exited) {
+        try {
+          process.kill(proc.pid, "SIGKILL");
+        } catch {
+          /* already exited */
+        }
+        await proc.exited;
+      }
+      let saved = JSON.parse(readFileSync(file, "utf8")) as SessionRecord;
+      if (saved.status === "running") {
+        const pid = saved.invocation.pid;
+        expect(typeof pid).toBe("number");
+        expect(pidAlive(pid as number)).toBe(false);
+        const reclaimed = loadSessions(dir).sessions.find(
+          (item) => item.session_id === saved.session_id,
+        );
+        expect(reclaimed?.status).toBe("interrupted");
+        expect(typeof reclaimed?.finished_at).toBe("string");
+        saved = JSON.parse(readFileSync(file, "utf8")) as SessionRecord;
+      }
+      expect(saved.status).toBe("interrupted");
+      expect(typeof saved.finished_at).toBe("string");
+      return;
     }
+
+    const code = await proc.exited;
+    expect(code).toBe(INTERRUPTED_EXIT_CODE);
     const deadline = Date.now() + 5_000;
     let saved = JSON.parse(readFileSync(file, "utf8")) as {
       status: string;
@@ -485,4 +553,4 @@ test("SIGINT marks the running session interrupted", async () => {
     }
     rmSync(dir, { recursive: true, force: true });
   }
-}, 20_000);
+}, 30_000);
