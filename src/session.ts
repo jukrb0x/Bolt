@@ -81,6 +81,7 @@ export interface SessionHooks {
     error: SessionError,
     result?: HandlerResult,
   ): { ref: string; index: number; error: SessionError };
+  skip(index: number): void;
 }
 
 export function sessionsDir(configDir: string): string {
@@ -116,6 +117,15 @@ export function summarizeArgv(argv: string[]): string[] {
           out.push(clip(`--${name}=***`));
         }
         continue;
+      }
+    } else {
+      const eq = token.indexOf("=");
+      if (eq > 0) {
+        const name = token.slice(0, eq);
+        if (SECRET_FLAG.test(name)) {
+          out.push(clip(`${name}=***`));
+          continue;
+        }
       }
     }
     out.push(clip(token));
@@ -273,6 +283,14 @@ export class RunSession implements SessionHooks {
       this.write();
     }
     return { ref, index, error };
+  }
+
+  skip(index: number): void {
+    const step = this.record.steps[index];
+    if (!step || this.record.status !== "running" || step.status !== "pending") return;
+    step.status = "skipped";
+    step.finished_at = new Date().toISOString();
+    this.write();
   }
 
   finish(status: "ok" | "failed"): void {

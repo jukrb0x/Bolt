@@ -425,8 +425,10 @@ export default defineCommand({
           names,
           params,
         });
-    const session = planPreview
-      ? openRunSession({
+    let session: ReturnType<typeof openRunSession> | undefined;
+    if (planPreview) {
+      try {
+        session = openRunSession({
           configDir,
           configPath,
           cwd: process.cwd(),
@@ -437,8 +439,11 @@ export default defineCommand({
           entry: invocationEntry(false),
           logRunId,
           pid: process.pid,
-        })
-      : undefined;
+        });
+      } catch {
+        session = undefined;
+      }
+    }
     const runner = new Runner(cfg, {
       dryRun: simulate,
       logger,

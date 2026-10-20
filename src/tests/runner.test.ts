@@ -8,6 +8,8 @@ import type { Runtime } from "../runtime/types";
 import type { BoltConfig } from "../config";
 import { Notifier } from "../notify";
 import type { NotifyEvent } from "../notify";
+import { resolveRunPlan } from "../run-plan";
+import { openRunSession } from "../session";
 
 // ---------------------------------------------------------------------------
 // runTask — steps run in order
@@ -232,6 +234,43 @@ test("runFlow continues when a failing task is in continue_on_fail", async () =>
   // boom failed but flow continued to ok2.
   expect(ran).toContain("echo ok1");
   expect(ran).toContain("echo ok2");
+});
+
+test("continue_on_fail keeps session step indexes aligned after multi-leaf failure", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-runner-sess-index-"));
+  const configPath = path.join(dir, "bolt.yaml");
+  writeFileSync(configPath, "version: 1\nproject:\n  name: t\n");
+  const cfg: BoltConfig = {
+    ...testCfg,
+    tasks: {
+      partial: [{ run: "echo one" }, { uses: "missing/op" }, { run: "echo three" }],
+      after: [{ run: "echo four" }],
+    },
+    flows: { f: { steps: ["partial", "after"], continue_on_fail: ["partial"] } },
+  };
+  const planResult = resolveRunPlan(cfg, { kind: "flow", name: "f", params: {} });
+  expect(planResult.ok).toBe(true);
+  if (!planResult.ok) return;
+  const session = openRunSession({
+    configDir: dir,
+    configPath,
+    cwd: dir,
+    names: ["f"],
+    tasks: planResult.plan.tasks,
+    argv: ["run", "f"],
+    entry: "script",
+  });
+  const runner = new Runner(cfg, { dryRun: true, session, configDir: dir });
+  await runner.runFlow("f");
+  const steps = session.record.steps;
+  expect(steps.map((s) => s.index)).toEqual([0, 1, 2, 3]);
+  expect(steps.map((s) => ({ ref: s.ref, status: s.status }))).toEqual([
+    { ref: "echo one", status: "ok" },
+    { ref: "missing/op", status: "failed" },
+    { ref: "echo three", status: "skipped" },
+    { ref: "echo four", status: "ok" },
+  ]);
+  rmSync(dir, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------

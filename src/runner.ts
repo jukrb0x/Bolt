@@ -359,6 +359,7 @@ export class Runner {
       }
 
       const taskStart = Date.now();
+      const taskStepStart = this.stepIndex;
       this.opts.logger?.step(task.name);
       try {
         await this.executeNodes(task.nodes, [task.name]);
@@ -391,10 +392,34 @@ export class Runner {
           throw error;
         }
         this.opts.logger?.warn(`"${task.name}" failed but is in continue_on_fail — continuing`);
+        this.skipUnexecutedTaskLeaves(task.nodes, taskStepStart);
       }
     }
 
     await notifier.fire({ kind: "complete", ctx, duration: Date.now() - startTime, results });
+  }
+
+  /** After a failed task with continue_on_fail, align stepIndex with the full plan. */
+  private skipUnexecutedTaskLeaves(nodes: PlanNode[], taskStepStart: number): void {
+    let leafIndex = taskStepStart;
+    const walk = (walkNodes: PlanNode[]) => {
+      for (const node of walkNodes) {
+        if (node.kind === "call") {
+          walk(node.nodes);
+          continue;
+        }
+        if (leafIndex >= this.stepIndex) {
+          try {
+            this.opts.session?.skip(leafIndex);
+          } catch {
+            /* a session write must not fail the run */
+          }
+        }
+        leafIndex++;
+      }
+    };
+    walk(nodes);
+    this.stepIndex = leafIndex;
   }
 
   private async executeNodes(nodes: PlanNode[], trail: string[] = []): Promise<void> {

@@ -371,18 +371,23 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
   logger.info(
     args.confirmedByUser ? "started by agent; confirmation asserted" : "started by agent",
   );
-  const session = openRunSession({
-    configDir,
-    configPath,
-    cwd: process.cwd(),
-    names: args.names,
-    planHash: preview.plan_hash,
-    tasks: preview.tasks,
-    argv: process.argv.slice(2),
-    entry: invocationEntry(true),
-    logRunId,
-    pid: process.pid,
-  });
+  let session: ReturnType<typeof openRunSession> | undefined;
+  try {
+    session = openRunSession({
+      configDir,
+      configPath,
+      cwd: process.cwd(),
+      names: args.names,
+      planHash: preview.plan_hash,
+      tasks: preview.tasks,
+      argv: process.argv.slice(2),
+      entry: invocationEntry(true),
+      logRunId,
+      pid: process.pid,
+    });
+  } catch {
+    session = undefined;
+  }
   const runner = new Runner(cfg, {
     logger,
     configDir,
@@ -395,7 +400,7 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
     await runner.executeResolved(planned.plan, loaded.registry);
     await logger.close();
     try {
-      session.finish("ok");
+      session?.finish("ok");
     } catch {
       /* a session write must not fail the run */
     }
@@ -419,7 +424,7 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
       : undefined;
     await logger.close();
     try {
-      session.finish("failed");
+      session?.finish("failed");
     } catch {
       /* a session write must not fail the run */
     }

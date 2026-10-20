@@ -24,6 +24,7 @@ import {
   type SessionRecord,
 } from "../session";
 import { BoltStepError } from "../handler-result";
+import { INTERRUPTED_EXIT_CODE, TASK_FAILURE_EXIT_CODE } from "../exit-codes";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../..");
 const MAIN = path.join(REPO_ROOT, "src/main.ts");
@@ -142,6 +143,28 @@ test("summarizeArgv masks *-file secret flags without false-positive on keyboard
   expect(summary).toContain("--secret-file=***");
   expect(summary).toContain("--api-key-file=***");
   expect(summary).toContain("--keyboard=fine");
+});
+
+test("summarizeArgv masks key=value secrets after bare --", () => {
+  const summary = summarizeArgv([
+    "run",
+    "deploy",
+    "--",
+    "password=hunter2",
+    "token=abcd",
+    "api-key=secret",
+    "keyboard=fine",
+    "host=example.com",
+  ]);
+  const joined = summary.join(" ");
+  expect(joined).not.toContain("hunter2");
+  expect(joined).not.toContain("abcd");
+  expect(joined).not.toContain("secret");
+  expect(summary).toContain("password=***");
+  expect(summary).toContain("token=***");
+  expect(summary).toContain("api-key=***");
+  expect(summary).toContain("keyboard=fine");
+  expect(summary).toContain("host=example.com");
 });
 
 test("invocationEntry distinguishes agent, script, and human", () => {
@@ -430,7 +453,12 @@ test("SIGINT marks the running session interrupted", async () => {
     expect(file).not.toBe("");
     process.kill(proc.pid, "SIGINT");
     const code = await proc.exited;
-    expect(code).toBe(130);
+    // Windows/Bun often reports exit 1 on interrupt; session interrupt + finished_at are the contract.
+    if (process.platform === "win32") {
+      expect([INTERRUPTED_EXIT_CODE, TASK_FAILURE_EXIT_CODE]).toContain(code);
+    } else {
+      expect(code).toBe(INTERRUPTED_EXIT_CODE);
+    }
     const saved = JSON.parse(readFileSync(file, "utf8")) as {
       status: string;
       finished_at?: string;
