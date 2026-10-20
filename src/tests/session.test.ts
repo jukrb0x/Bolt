@@ -120,7 +120,6 @@ test("summarizeArgv masks secret flags and truncates", () => {
   ).toBe(true);
 });
 
-
 test("summarizeArgv masks *-file secret flags without false-positive on keyboard", () => {
   const summary = summarizeArgv([
     "run",
@@ -213,7 +212,6 @@ test("loadSessions reclaims a dead pid and an old file with no pid", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
-
 
 test("RunSession.write replaces via rename without unlinking the sole .json first", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-sess-atomic-"));

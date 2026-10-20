@@ -28,7 +28,8 @@ export const SESSION_RECLAIM_MS = 2 * 60 * 60 * 1000;
 
 const ARG_LIMIT = 160;
 const ARG_COUNT_LIMIT = 32;
-const SECRET_FLAG = /(^|[-_])(token|password|passwd|secret|api[-_]?key|access[-_]?key|key)($|[-_])/i;
+const SECRET_FLAG =
+  /(^|[-_])(token|password|passwd|secret|api[-_]?key|access[-_]?key|key)($|[-_])/i;
 const SAFE_ID = /^[A-Za-z0-9._-]+$/;
 
 export type SessionStatus = "running" | "ok" | "failed" | "interrupted";
@@ -199,7 +200,6 @@ export function pidAlive(pid: number): boolean {
     return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }
-
 
 /**
  * Persist session JSON via tmp + rename. Must not unlink the sole `.json` first:
