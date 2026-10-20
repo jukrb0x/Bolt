@@ -28,6 +28,7 @@ import {
   type HandlerResult,
   type StampedEvent,
 } from "./handler-result";
+import { issueFromStepError, type SessionError, type SessionHooks } from "./session";
 
 /** Outcome of one plugin step whose plugin declared API v2. */
 export interface StepResult extends HandlerResult {
@@ -99,6 +100,8 @@ interface RunnerOptions {
   onEvent?: (event: StampedEvent) => void;
   /** Every validated result returned by a plugin API v2 handler. */
   onStepResult?: (result: StepResult) => void;
+  /** Optional project session. Writes must not change the run outcome. */
+  session?: SessionHooks;
   /**
    * Human `bolt run` and `--simulate` write content-addressed manifests for plugins
    * this run loaded. Read-only commands leave it unset.
@@ -201,8 +204,12 @@ export class Runner {
   private aiConfinement?: Map<string, AiPathRule[]>;
   /** Set when a task fails and the plan stops. */
   failedTask?: string;
+  /** Last failed leaf, after step context is applied. `ref` is the session step ref. */
+  failedStep?: { ref: string; index: number; error: SessionError };
   private runtime: Runtime;
   private events: RunEvents;
+  private stepIndex = 0;
+  private stepResult?: HandlerResult;
 
   constructor(
     private cfg: BoltConfig,
@@ -397,11 +404,36 @@ export class Runner {
         await this.executeNodes(node.nodes, [...trail, node.name]);
         continue;
       }
+      const index = this.stepIndex++;
+      this.stepResult = undefined;
       try {
-        await this.executeStep(node, trail);
+        this.opts.session?.begin(index);
+      } catch {
+        /* a session write must not fail the run */
+      }
+      try {
+        const result = await this.executeStep(node, trail);
+        try {
+          this.opts.session?.ok(index, result);
+        } catch {
+          /* a session write must not fail the run */
+        }
       } catch (error) {
         const label = node.kind === "run" ? `run: ${node.command}` : node.ref;
-        throw withStepContext(error, [...trail, label].join(" > "));
+        const wrapped = withStepContext(error, [...trail, label].join(" > "));
+        const stepError = issueFromStepError(wrapped);
+        this.failedStep = {
+          ref: node.kind === "uses" ? node.ref : "",
+          index,
+          error: stepError,
+        };
+        try {
+          const recorded = this.opts.session?.fail(index, stepError, this.stepResult);
+          if (recorded) this.failedStep = recorded;
+        } catch {
+          /* a session write must not fail the run */
+        }
+        throw wrapped;
       }
     }
   }
@@ -409,7 +441,7 @@ export class Runner {
   private async executeStep(
     node: Exclude<PlanNode, { kind: "call" }>,
     trail: string[],
-  ): Promise<void> {
+  ): Promise<HandlerResult | undefined> {
     if (node.kind === "run") {
       this.opts.onStep?.(node.command);
       this.opts.logger?.step_detail(`run: ${node.command}`);
@@ -486,7 +518,7 @@ export class Runner {
     } finally {
       scope.settle();
     }
-    this.handleReturn(plugin, ref, step, returned);
+    return this.handleReturn(plugin, ref, step, returned);
   }
 
   /** Bind `uses: <capability>` to the selected handler before plugins are loaded. */
@@ -511,7 +543,12 @@ export class Runner {
    * exactly as before. v2: validate it, render it, and fail the step on "fail".
    * Runs after onAfterStep, so a returned "fail" behaves like a throw.
    */
-  private handleReturn(plugin: BoltPlugin, ref: string, step: string, returned: unknown): void {
+  private handleReturn(
+    plugin: BoltPlugin,
+    ref: string,
+    step: string,
+    returned: unknown,
+  ): HandlerResult | undefined {
     const logger = this.opts.logger;
     if (plugin.apiVersion !== 2) {
       if (returned !== undefined) {
@@ -519,7 +556,7 @@ export class Runner {
           `[DEBUG] ${ref} (plugin API v1) returned a value; ignored. Declare apiVersion: 2 to report results.\n`,
         );
       }
-      return;
+      return undefined;
     }
     const { result, warnings } = validateHandlerResult(returned, ref);
     for (const warning of warnings) logger?.warn(warning);
@@ -545,6 +582,7 @@ export class Runner {
     if (result.status === "fail") {
       const reason =
         result.summary ?? result.diagnostics?.find((d) => d.level === "error")?.message;
+      this.stepResult = result;
       throw new BoltStepError(
         "HANDLER_FAILED",
         reason
@@ -553,6 +591,7 @@ export class Runner {
         result.diagnostics ?? [],
       );
     }
+    return result;
   }
 
   /**

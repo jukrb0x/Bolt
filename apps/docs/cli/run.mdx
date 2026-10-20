@@ -174,7 +174,7 @@ A non-builtin `ai: true` handler is treated as `confirm` unless its namespace is
 
 `plan_hash` covers the resolved plan, including each task's `continueOnFailure` and the handler a capability step resolves to. Changing `continue_on_fail` or a `capabilities:` mapping changes the hash. `ue/ini_get` and `ue/ini_read_all` may only read a `file` inside the UE `project.path` (symlink-resolved). A path outside it is `AI_FORBIDDEN`. `--plan` without `=` is the same flag as `--plan=<hash>`.
 
-Success data is `{ preview: false, plan_hash, outcome: "ok", log }`. A failed step is `outcome: "failed"` with error `RUN_FAILED` (exit `1`).
+Success data is `{ preview: false, plan_hash, outcome: "ok", log }`. A failed step is `outcome: "failed"` with error `RUN_FAILED` (exit `1`). The same envelope also lists that step's issue (`code`, `message`, optional `hint`, plus `ref` and `index`) so it matches `steps[].error` in the session file. A real execute writes `.bolt/sessions/<session_id>.json`. See [bolt session](/cli/session).
 
 ## Exit codes
 

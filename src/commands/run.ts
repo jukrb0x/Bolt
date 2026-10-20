@@ -31,6 +31,8 @@ import {
 } from "../json-envelope";
 import { loadProjectConfigOrExit } from "../project-config";
 import { DRY_RUN_HEADER, dryRunFooter, renderDryRun } from "../dry-run";
+import { previewPlan } from "../plan-preview";
+import { invocationEntry, openRunSession } from "../session";
 import { closestMatches, formatDidYouMean } from "../suggest";
 import {
   printUsageError,
@@ -399,6 +401,7 @@ export default defineCommand({
     const logDir = path.join(configDir, ".bolt", "logs");
     mkdirSync(logDir, { recursive: true });
     const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
+    const logRunId = path.basename(logFile, ".log");
     const logger = new Logger({ logFile });
 
     for (const warning of selection.warnings) logger.warn(warning);
@@ -412,12 +415,37 @@ export default defineCommand({
       );
     }
 
+    const planPreview = simulate
+      ? undefined
+      : previewPlan({
+          cfg,
+          configPath,
+          configDir,
+          plan: planned.plan,
+          names,
+          params,
+        });
+    const session = planPreview
+      ? openRunSession({
+          configDir,
+          configPath,
+          cwd: process.cwd(),
+          names,
+          planHash: planPreview.plan_hash,
+          tasks: planPreview.tasks,
+          argv: process.argv.slice(2),
+          entry: invocationEntry(false),
+          logRunId,
+          pid: process.pid,
+        })
+      : undefined;
     const runner = new Runner(cfg, {
       dryRun: simulate,
       logger,
       configDir,
       refreshPluginCache: true,
       notifier: simulate ? Notifier.fromConfig(undefined) : Notifier.fromConfig(cfg.notifications),
+      session,
     });
 
     const start = Date.now();
@@ -426,12 +454,22 @@ export default defineCommand({
       logger.info(`Done in ${((Date.now() - start) / 1000).toFixed(1)}s`);
       if (logFile) logger.info(`Log: ${logFile}`);
       await logger.close();
+      try {
+        session?.finish("ok");
+      } catch {
+        /* a session write must not fail the run */
+      }
       process.exit(0);
     } catch (e: any) {
       // A failed step is already printed by the runner; print only other errors.
       if (!wasReported(e)) logger.error(e.message);
       if (logFile) logger.info(`Log: ${logFile}`);
       await logger.close();
+      try {
+        session?.finish("failed");
+      } catch {
+        /* a session write must not fail the run */
+      }
       process.exit(
         e instanceof BoltStepError && e.code === "AI_FORBIDDEN"
           ? AI_FORBIDDEN_EXIT_CODE

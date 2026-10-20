@@ -1,0 +1,22 @@
+---
+title: "bolt session"
+description: "List and show run sessions recorded for this project."
+---
+
+A real `bolt run` writes one session file under `.bolt/sessions/`. That includes a human `bolt run <task>` and `bolt run --execute`. Dry-run, a JSON preview, and `--simulate` do not. `.bolt/` is gitignored.
+
+```bash
+bolt session list
+bolt session list --json
+bolt session show <session_id>
+bolt session show <session_id> --json
+bolt session clear
+```
+
+`bolt session list --json` prints one `bolt.session.list/v1` document. The default list is execute sessions only. A record marked `preview` is hidden there and still available from `bolt session show`. `bolt session show --json` prints one `bolt.session/v1` document. `bolt session clear --json` prints one `bolt.session.clear/v1` document with `data.removed`. The envelope matches the other commands: `schema`, `bolt`, `ok`, `config`, `data`, `warnings`, `errors`.
+
+Status is `running`, `ok`, `failed`, or `interrupted`. There is no `stale` status. The run writes `ok` or `failed` when it finishes, and `interrupted` on a catchable SIGINT. `list` and `show` reclaim a `running` session when its pid is gone, or when it has no pid and the file is older than 2 hours.
+
+A failed step copies `{ code, message, hint? }` from the runner. On `bolt run --execute --json` that same `code` is in `errors` on the item with the step's `ref` and `index`. `errors[0]` stays `RUN_FAILED`. `invocation.argv_summary` masks token, password, key, and secret flag values. It is not the raw argv. `steps[].result` is the handler's public fields only.
+
+Session files older than 7 days are removed when you `list` or `show`, except a `running` session whose pid is still alive. `bolt session clear` deletes them immediately.

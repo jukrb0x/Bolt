@@ -9,13 +9,20 @@ const KNOWN = new Set([
   "why",
   "inspect",
   "status",
+  "session",
   "run",
   "ai",
   "version",
 ]);
 
 function commandSchema(): string {
-  const cmd = process.argv.slice(2).find((arg) => arg !== "--" && !arg.startsWith("-"));
+  const args = process.argv.slice(2).filter((arg) => arg !== "--" && !arg.startsWith("-"));
+  const cmd = args[0];
+  if (cmd === "session") {
+    if (args[1] === "list") return "bolt.session.list/v1";
+    if (args[1] === "clear") return "bolt.session.clear/v1";
+    return "bolt.session/v1";
+  }
   if (cmd && KNOWN.has(cmd)) return `bolt.${cmd}/v1`;
   return "bolt.run/v1";
 }
@@ -47,6 +54,16 @@ export function emitProcessEnvelope(
 }
 
 let installed = false;
+const onInterrupt: Array<() => void> = [];
+
+/** Best-effort work before a catchable SIGINT / SIGBREAK exit. Returns an unsubscribe. */
+export function onProcessInterrupt(fn: () => void): () => void {
+  onInterrupt.push(fn);
+  return () => {
+    const index = onInterrupt.indexOf(fn);
+    if (index >= 0) onInterrupt.splice(index, 1);
+  };
+}
 
 export function installProcessGuards(): void {
   if (installed) return;
@@ -59,7 +76,16 @@ export function installProcessGuards(): void {
     const message = err instanceof Error ? err.message : String(err);
     emitProcessEnvelope("INTERNAL", message, INTERNAL_EXIT_CODE);
   });
-  const stop = () => emitProcessEnvelope("INTERRUPTED", "interrupted", INTERRUPTED_EXIT_CODE);
+  const stop = () => {
+    for (const fn of [...onInterrupt]) {
+      try {
+        fn();
+      } catch {
+        // The exit code is the contract. Session write is best-effort.
+      }
+    }
+    emitProcessEnvelope("INTERRUPTED", "interrupted", INTERRUPTED_EXIT_CODE);
+  };
   process.on("SIGINT", stop);
   if (process.platform === "win32") process.on("SIGBREAK", stop);
 }

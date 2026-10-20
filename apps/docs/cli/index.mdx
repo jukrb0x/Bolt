@@ -20,6 +20,7 @@ Bolt provides a comprehensive CLI for Unreal Engine workflow automation.
 | [`bolt config`](/cli/config)           | Manage configuration                         |
 | [`bolt plugin`](/cli/plugin)           | Manage plugins                               |
 | [`bolt inspect`](/cli/inspect)         | Preview resolved steps for a task or flow    |
+| [`bolt session`](/cli/session)         | List and show run sessions for this project  |
 | `bolt status`                          | Context freshness, built plugins, and policy |
 | [`bolt version`](/cli/version)         | Print version                                |
 | [`bolt self-update`](/cli/self-update) | Update to latest release                     |
@@ -78,7 +79,7 @@ runs. There are two error shapes:
 
 Declared on purpose and accepted: `bolt version --json` (flat version object),
 `bolt list --json`, `bolt info --json`, `bolt check --json`, `bolt doctor --json`, `bolt why --json`, `bolt env probe --json`, `bolt env ensure --json`, `bolt inspect --json`,
-`bolt status --json`, `bolt run --json`, and `bolt ai --json` (one shared JSON envelope on stdout; logs
+`bolt status --json`, `bolt session list --json`, `bolt session show --json`, `bolt session clear --json`, `bolt run --json`, and `bolt ai --json` (one shared JSON envelope on stdout; logs
 go to stderr; `bolt ai --json` is `bolt.catalog/v1`), `bolt migrate --dry-run`, `bolt run --dry-run` / `--simulate`, `bolt env ensure --dry-run`, and on
 `bolt run`: `--agent`, `--execute`, `--plan`, and `--confirmed-by-user`. `bolt env ensure` also accepts `--execute`, `--plan`, and `--confirmed-by-user` (not `--agent`). On
 `bolt inspect`, undeclared `--dry-run` / `--simulate` still say `Unknown flag` with the

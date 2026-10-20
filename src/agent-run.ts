@@ -21,6 +21,7 @@ import {
 } from "./json-envelope";
 import { Logger } from "./logger";
 import { Notifier } from "./notify";
+import { invocationEntry, openRunSession } from "./session";
 import { artefactIntegrity } from "./plugin-cache";
 import { builtinPlugins } from "./plugins";
 import { previewPlan, type AiReason, type InspectPreview } from "./plan-preview";
@@ -364,21 +365,40 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
   const logDir = path.join(configDir, ".bolt", "logs");
   mkdirSync(logDir, { recursive: true });
   const logFile = path.join(logDir, `bolt_${timestamp()}.log`);
+  const logRunId = path.basename(logFile, ".log");
   const logger = new Logger({ logFile });
   logger.info(`agent=true confirmed_by_user=${args.confirmedByUser ? "true" : "false"}`);
   logger.info(
     args.confirmedByUser ? "started by agent; confirmation asserted" : "started by agent",
   );
+  const session = openRunSession({
+    configDir,
+    configPath,
+    cwd: process.cwd(),
+    names: args.names,
+    planHash: preview.plan_hash,
+    tasks: preview.tasks,
+    argv: process.argv.slice(2),
+    entry: invocationEntry(true),
+    logRunId,
+    pid: process.pid,
+  });
   const runner = new Runner(cfg, {
     logger,
     configDir,
     aiInvocation: true,
     refreshPluginCache: false,
     notifier: Notifier.fromConfig(cfg.notifications),
+    session,
   });
   try {
     await runner.executeResolved(planned.plan, loaded.registry);
     await logger.close();
+    try {
+      session.finish("ok");
+    } catch {
+      /* a session write must not fail the run */
+    }
     emitJsonAndExit({
       schema,
       exitCode: 0,
@@ -393,7 +413,16 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    const failed = runner.failedStep;
+    const stepIssue = failed
+      ? { ...failed.error, ref: failed.ref, index: failed.index }
+      : undefined;
     await logger.close();
+    try {
+      session.finish("failed");
+    } catch {
+      /* a session write must not fail the run */
+    }
     emitJsonAndExit({
       schema,
       exitCode: TASK_FAILURE_EXIT_CODE,
@@ -406,7 +435,10 @@ export async function dispatchJsonRun(args: JsonRunArgs): Promise<never> {
         log: slash(logFile),
       },
       warnings,
-      errors: [issue("RUN_FAILED", message)],
+      errors:
+        failed && stepIssue
+          ? [issue("RUN_FAILED", message), stepIssue]
+          : [issue("RUN_FAILED", message)],
     });
   }
 }

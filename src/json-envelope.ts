@@ -17,6 +17,9 @@ export const JSON_SCHEMA = {
   envManifest: "bolt.env.manifest/v1",
   inspect: "bolt.inspect/v1",
   status: "bolt.status/v1",
+  sessionList: "bolt.session.list/v1",
+  session: "bolt.session/v1",
+  sessionClear: "bolt.session.clear/v1",
   run: "bolt.run/v1",
   catalog: "bolt.catalog/v1",
 } as const;

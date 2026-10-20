@@ -1,0 +1,53 @@
+---
+title: "bolt session"
+description: "List and show run sessions recorded for this project"
+---
+
+{/* GENERATED FILE. Do not edit by hand. Run `bun run docs:gen` from the repo root. */}
+
+Source: [`src/commands/session.ts`](https://github.com/jukrb0x/Bolt/blob/main/src/commands/session.ts).
+
+List and show run sessions recorded for this project
+
+```bash
+bolt session <command>
+```
+
+### bolt session list
+
+List execute sessions for this project. Skips dry-run and preview records
+
+```bash
+bolt session list [options]
+```
+
+| Argument | Type    | Alias | Required | Default | Description                                            |
+| -------- | ------- | ----- | -------- | ------- | ------------------------------------------------------ |
+| `--json` | boolean |       |          | `false` | Print one bolt.session.list/v1 JSON document on stdout |
+
+### bolt session show
+
+Show one session, including preview records hidden from list
+
+```bash
+bolt session show <sessionId> [options]
+```
+
+| Argument    | Type       | Alias | Required | Default | Description                                       |
+| ----------- | ---------- | ----- | -------- | ------- | ------------------------------------------------- |
+| `sessionId` | positional |       | yes      |         | Session id under .bolt/sessions                   |
+| `--json`    | boolean    |       |          | `false` | Print one bolt.session/v1 JSON document on stdout |
+
+### bolt session clear
+
+Delete session records under .bolt/sessions
+
+```bash
+bolt session clear [options]
+```
+
+| Argument | Type    | Alias | Required | Default | Description                                             |
+| -------- | ------- | ----- | -------- | ------- | ------------------------------------------------------- |
+| `--json` | boolean |       |          | `false` | Print one bolt.session.clear/v1 JSON document on stdout |
+
+Unknown or reserved flags exit `2` before the command runs. See [Invalid flags](/cli#invalid-flags).

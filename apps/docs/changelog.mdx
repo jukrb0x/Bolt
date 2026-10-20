@@ -5,6 +5,16 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Run sessions
+
+`bolt run` writes `.bolt/sessions/<session_id>.json` when it actually executes a plan. That includes a human `bolt run <task>` and `bolt run <task> --execute`. Dry-run, JSON preview, and `--simulate` do not write a session. The directory is under `.bolt/`, which is already gitignored.
+
+`bolt session list` prints those execute sessions. `bolt session list --json` is one `bolt.session.list/v1` document. `bolt session show <session_id>` prints one session, including a `preview` record that list hides. `bolt session show --json` is `bolt.session/v1`. `bolt session clear` deletes the session files. `bolt session clear --json` is `bolt.session.clear/v1`. The envelope matches the other commands.
+
+A session is `running` until the run finishes `ok` or `failed`, or a catchable interrupt writes `interrupted`. `list` and `show` reclaim a `running` session when its pid is gone, or when it has no pid and the file is older than 2 hours. There is no `stale` status. Files older than 7 days are removed on `list` and `show`, except a `running` session whose pid is still alive.
+
+A failed step stores `{ code, message, hint? }` from the runner. On `bolt run --execute --json`, that same issue is also in `errors` with `ref` and `index`. `errors[0]` stays `RUN_FAILED`. `invocation.argv_summary` masks token, password, key, and secret flag values and does not store the raw argv. `steps[].result` is the handler's public fields only.
+
 ### Environment manifest and empty-shell rejection
 
 `bolt env manifest` prints the effective environment manifest. Checks come from `env.checks` in `bolt.yaml`, from the file named by `env.manifest`, or from `--manifest`. That path is relative to the project root. The source rules match `bolt env probe`. `--json` prints one `bolt.env.manifest/v1` document. `data` is `source`, `checks_declared`, and `checks` (each check is `id`, `require`, and `version` or `params` when set). These are declarations, not probe results.
