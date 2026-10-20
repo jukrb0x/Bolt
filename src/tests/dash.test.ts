@@ -1,8 +1,18 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "fs";
 import os from "os";
 import path from "path";
-import { startDashServer } from "../dash";
+import { compareRows, DASH_LOG_LIMIT, safeLogRunId, startDashServer } from "../dash";
+import { DASH_PAGE, shouldPollDash } from "../dash-page";
 import { SESSION_RECLAIM_MS } from "../session";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../..");
@@ -264,6 +274,270 @@ test("dash read reclaims a dead running pid and rejects writes", async () => {
     };
     expect(missing.ok).toBe(false);
     expect(missing.errors[0]?.code).toBe("SESSION_NOT_FOUND");
+  } finally {
+    await server.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("compareRows prefers steps[].node and keeps the session error code", () => {
+  const steps = [
+    { ref: "echo one", index: 0, status: "ok", node: { kind: "run", command: "echo one" } },
+    {
+      ref: "echo two",
+      index: 1,
+      status: "failed",
+      node: { kind: "run", command: "echo two" },
+      error: { code: "RUN_FAILED", message: "stopped", hint: "fix the step" },
+    },
+  ];
+  const rows = compareRows(steps, [{ kind: "run", command: "OTHER" }]);
+  expect(rows.map((row) => row.plan)).toEqual([
+    { kind: "run", command: "echo one" },
+    { kind: "run", command: "echo two" },
+  ]);
+  expect(rows[1]?.status).toBe("failed");
+  expect(rows[1]?.error).toEqual({ code: "RUN_FAILED", message: "stopped", hint: "fix the step" });
+  expect(JSON.stringify(rows)).not.toContain("OTHER");
+});
+
+test("compareRows uses a fallback plan node only when step.node is missing", () => {
+  const rows = compareRows(
+    [
+      { ref: "echo one", index: 0, status: "ok" },
+      {
+        ref: "echo two",
+        index: 1,
+        status: "failed",
+        error: { code: "RUN_FAILED", message: "stopped" },
+      },
+    ],
+    [
+      { kind: "run", command: "echo one" },
+      { kind: "run", command: "echo two" },
+    ],
+  );
+  expect(rows[1]?.plan).toEqual({ kind: "run", command: "echo two" });
+  expect(rows[1]?.status).toBe("failed");
+  expect(rows[1]?.error?.code).toBe("RUN_FAILED");
+});
+
+test("dash plan fallback is readonly inspect and stays out of the today list", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-dash-plan-"));
+  project(dir);
+  writeFileSync(
+    path.join(dir, "bolt.yaml"),
+    "version: 1\nproject:\n  name: Demo\ntasks:\n  build:\n    - run: echo one\n    - run: echo two\n    - run: echo three\n",
+  );
+  writeSession(
+    dir,
+    baseRecord("exec", {
+      names: ["build"],
+      status: "failed",
+      steps: [
+        { ref: "echo one", index: 0, status: "ok" },
+        {
+          ref: "echo two",
+          index: 1,
+          status: "failed",
+          error: { code: "RUN_FAILED", message: "stopped", hint: "fix the step" },
+        },
+        { ref: "echo three", index: 2, status: "pending" },
+      ],
+    }),
+  );
+  writeSession(dir, baseRecord("preview", { preview: true, names: ["dry"] }));
+  const before = readdirSync(path.join(dir, ".bolt", "sessions")).sort();
+  const server = startDashServer({
+    configDir: dir,
+    configPath: path.join(dir, "bolt.yaml"),
+    port: 0,
+  });
+  try {
+    expect(server.hostname).toBe("127.0.0.1");
+    const port = boundPort(server);
+    const dashSrc = readFileSync(path.join(REPO_ROOT, "src/dash.ts"), "utf8");
+    expect(dashSrc).not.toContain("--execute");
+    expect(dashSrc).not.toContain("execute:");
+
+    const planRes = await fetch(`http://127.0.0.1:${port}/sessions/exec/plan`);
+    expect(planRes.status).toBe(200);
+    const plan = (await planRes.json()) as {
+      schema: string;
+      data: { tasks: Array<{ nodes: Array<{ kind: string; command?: string }> }> };
+    };
+    expect(plan.schema).toBe("bolt.inspect/v1");
+    expect(plan.data.tasks[0]?.nodes.map((node) => node.command)).toEqual([
+      "echo one",
+      "echo two",
+      "echo three",
+    ]);
+
+    const show = (await (await fetch(`http://127.0.0.1:${port}/sessions/exec`)).json()) as {
+      data: { steps: Array<{ status: string; error?: { code: string } }> };
+    };
+    expect(show.data.steps[1]?.status).toBe("failed");
+    expect(show.data.steps[1]?.error?.code).toBe("RUN_FAILED");
+
+    const list = (await (await fetch(`http://127.0.0.1:${port}/sessions`)).json()) as {
+      data: { sessions: Array<{ session_id: string }> };
+    };
+    expect(list.data.sessions.map((row) => row.session_id)).toEqual(["exec"]);
+    expect(readdirSync(path.join(dir, ".bolt", "sessions")).sort()).toEqual(before);
+
+    const page = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+    expect(page).toContain('id="step-graph"');
+    expect(page).toContain('if (step.node && typeof step.node === "object") return step.node;');
+    expect(page).toContain("No log_run_id. Log cannot be linked.");
+    expect(page).toContain("error.code comes from the session step");
+    expect(page).not.toContain("--execute");
+    expect(page).not.toContain("0.0.0.0");
+  } finally {
+    await server.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("dash polls only while a session is running and the page is visible", () => {
+  expect(shouldPollDash("running", false, true)).toBe(true);
+  expect(shouldPollDash("ok", true, true)).toBe(true);
+  expect(shouldPollDash("failed", false, true)).toBe(false);
+  expect(shouldPollDash("interrupted", false, true)).toBe(false);
+  expect(shouldPollDash("ok", false, true)).toBe(false);
+  expect(shouldPollDash("running", true, false)).toBe(false);
+  expect(shouldPollDash("ok", true, false)).toBe(false);
+  expect(shouldPollDash(undefined, false, true)).toBe(false);
+
+  expect(DASH_PAGE).toContain("function shouldPollDash(status, listRunning, pageVisible)");
+  expect(DASH_PAGE).toContain("if (!pageVisible) return false;");
+  expect(DASH_PAGE).toContain('return status === "running" || listRunning;');
+  expect(DASH_PAGE).toContain('document.visibilityState !== "hidden"');
+  expect(DASH_PAGE).toContain("visibilitychange");
+  expect(DASH_PAGE).toContain("clearInterval");
+  const refreshFn = DASH_PAGE.slice(
+    DASH_PAGE.indexOf("async function refresh"),
+    DASH_PAGE.indexOf("async function ensurePlan"),
+  );
+  expect(refreshFn.length).toBeGreaterThan(0);
+  expect(refreshFn).toContain('getJson("/sessions")');
+  expect(refreshFn).toContain('"/sessions/"');
+  expect(refreshFn).not.toContain("/log");
+  expect(refreshFn).not.toContain("/plan");
+  expect(DASH_PAGE).not.toContain("--execute");
+});
+
+test("dash log route rejects traversal and masks secret flags", async () => {
+  expect(safeLogRunId("bolt_2026-10-20T08-00-00")).toBe(true);
+  expect(safeLogRunId("..")).toBe(false);
+  expect(safeLogRunId("foo..bar")).toBe(false);
+  expect(safeLogRunId("../secret")).toBe(false);
+  expect(safeLogRunId("/etc/passwd")).toBe(false);
+  expect(safeLogRunId("C:\\Windows\\secret")).toBe(false);
+  expect(safeLogRunId("C:/Windows/secret")).toBe(false);
+
+  const dir = mkdtempSync(path.join(os.tmpdir(), "bolt-dash-log-"));
+  project(dir);
+  const outside = path.join(dir, "secret.txt");
+  const secret = "super-secret-value";
+  writeFileSync(outside, `token=${secret}\n`);
+  const logs = path.join(dir, ".bolt", "logs");
+  mkdirSync(logs, { recursive: true });
+  writeFileSync(
+    path.join(logs, "bolt_ok.log"),
+    `keyboard=fine\n--token=${secret}\n--secret-file=/var/secret\ncode=HANDLER_FAILED\n`,
+  );
+  writeFileSync(
+    path.join(logs, "bolt_big.log"),
+    `HEAD\n${"a".repeat(DASH_LOG_LIMIT)}\n--token=${secret}\n`,
+  );
+  let linked = false;
+  try {
+    symlinkSync(outside, path.join(logs, "bolt_link.log"));
+    linked = true;
+  } catch {
+    // Symlinks are optional on some platforms. Lexical id checks still run below.
+  }
+
+  writeSession(dir, baseRecord("linked", { log_run_id: "bolt_ok" }));
+  writeSession(dir, baseRecord("none"));
+  writeSession(dir, baseRecord("dots", { log_run_id: ".." }));
+  writeSession(dir, baseRecord("abs", { log_run_id: "/etc/passwd" }));
+  writeSession(dir, baseRecord("win", { log_run_id: "C:\\Windows\\secret" }));
+  writeSession(dir, baseRecord("parent", { log_run_id: "../secret" }));
+  writeSession(dir, baseRecord("gone", { log_run_id: "bolt_missing" }));
+  writeSession(dir, baseRecord("big", { log_run_id: "bolt_big" }));
+  writeSession(
+    dir,
+    baseRecord("coded", {
+      log_run_id: "bolt_ok",
+      status: "failed",
+      steps: [
+        {
+          ref: "echo hi",
+          index: 0,
+          status: "failed",
+          node: { kind: "run", command: "echo hi" },
+          error: { code: "DISK_FULL", message: "disk full", hint: "free space" },
+        },
+      ],
+    }),
+  );
+  if (linked) writeSession(dir, baseRecord("link", { log_run_id: "bolt_link" }));
+
+  const server = startDashServer({
+    configDir: dir,
+    configPath: path.join(dir, "bolt.yaml"),
+    port: 0,
+  });
+  try {
+    expect(server.hostname).toBe("127.0.0.1");
+    const port = boundPort(server);
+    const base = `http://127.0.0.1:${port}`;
+
+    const ok = await fetch(`${base}/sessions/linked/log`);
+    expect(ok.status).toBe(200);
+    const body = await ok.text();
+    expect(body).toContain("keyboard=fine");
+    expect(body).toContain("--token=***");
+    expect(body).toContain("--secret-file=***");
+    expect(body).not.toContain(secret);
+    expect(body).not.toContain("/var/secret");
+    expect(ok.headers.get("x-bolt-log-truncated")).toBe("0");
+
+    const shown = (await (await fetch(`${base}/sessions/coded`)).json()) as {
+      data: { steps: Array<{ error?: { code: string } }> };
+    };
+    expect(shown.data.steps[0]?.error?.code).toBe("DISK_FULL");
+
+    const missingId = await fetch(`${base}/sessions/none/log`);
+    expect(missingId.status).toBe(404);
+    expect(await missingId.text()).toContain("No log_run_id");
+
+    for (const id of ["dots", "abs", "win", "parent"]) {
+      const res = await fetch(`${base}/sessions/${id}/log`);
+      expect(res.status).toBe(400);
+      const text = await res.text();
+      expect(text).not.toContain(secret);
+      expect(text).not.toContain("passwd");
+    }
+
+    const absent = await fetch(`${base}/sessions/gone/log`);
+    expect(absent.status).toBe(404);
+    expect(await absent.text()).toContain("No log file");
+
+    const big = await fetch(`${base}/sessions/big/log`);
+    expect(big.status).toBe(200);
+    expect(big.headers.get("x-bolt-log-truncated")).toBe("1");
+    const tail = await big.text();
+    expect(tail).not.toContain("HEAD");
+    expect(tail).toContain("--token=***");
+    expect(tail).not.toContain(secret);
+
+    if (linked) {
+      const link = await fetch(`${base}/sessions/link/log`);
+      expect(link.status).toBe(400);
+      expect(await link.text()).not.toContain(secret);
+    }
   } finally {
     await server.stop(true);
     rmSync(dir, { recursive: true, force: true });

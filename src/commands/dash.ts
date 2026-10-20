@@ -49,7 +49,9 @@ export default defineCommand({
     }
     const url = `http://127.0.0.1:${server.port}/`;
     console.log(url);
-    console.log("Readonly. Bound to 127.0.0.1. Not CI. Ctrl+C to stop.");
+    console.log(
+      "Readonly. Bound to 127.0.0.1. Local observer, not CI, Jenkins, or GitHub Actions. Ctrl+C to stop.",
+    );
     onProcessInterrupt(() => {
       void server.stop(true);
     });

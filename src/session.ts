@@ -162,6 +162,61 @@ export function summarizeArgv(argv: string[]): string[] {
   return out;
 }
 
+function isSecretName(name: string): boolean {
+  return SECRET_FLAG.test(name);
+}
+
+/**
+ * Mask secret flag values in log text. Same flag names as `summarizeArgv`,
+ * without the argv length clip. Does not guess `steps[].error.code`.
+ */
+export function maskSecretText(text: string): string {
+  return text.split("\n").map(maskSecretLine).join("\n");
+}
+
+function maskSecretLine(line: string): string {
+  const parts = line.split(/(\s+)/);
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const token = parts[i] ?? "";
+    if (token === "" || /^\s+$/.test(token)) {
+      out.push(token);
+      continue;
+    }
+    if (token.startsWith("--")) {
+      const eq = token.indexOf("=");
+      const name = eq === -1 ? token.slice(2) : token.slice(2, eq);
+      if (isSecretName(name)) {
+        if (eq === -1) {
+          out.push(token);
+          let j = i + 1;
+          while (j < parts.length && /^\s+$/.test(parts[j] ?? "")) j++;
+          const next = parts[j];
+          if (next !== undefined && !/^\s+$/.test(next) && !next.startsWith("-")) {
+            while (i + 1 < j) {
+              i++;
+              out.push(parts[i] ?? "");
+            }
+            out.push("***");
+            i = j;
+          }
+        } else {
+          out.push(`--${name}=***`);
+        }
+        continue;
+      }
+    } else {
+      const eq = token.indexOf("=");
+      if (eq > 0 && isSecretName(token.slice(0, eq))) {
+        out.push(`${token.slice(0, eq)}=***`);
+        continue;
+      }
+    }
+    out.push(token);
+  }
+  return out.join("");
+}
+
 export function invocationEntry(
   agent: boolean,
   stdoutIsTTY = Boolean(process.stdout.isTTY),

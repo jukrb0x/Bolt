@@ -5,6 +5,16 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Local observation on bolt dash
+
+`bolt dash` is a local observer for one project's execute sessions. It listens on `127.0.0.1` only. It is not CI, Jenkins, or GitHub Actions.
+
+Compared with the A3b dashboard, this adds three things:
+
+- **Plan vs execute.** An execute session's detail row lines up the plan node with that step's status. The plan node is `steps[].node` from the session file. `steps[].ref`, `steps[].status`, and `steps[].error` stay the execution side. If `node` is missing, the page reads `GET /sessions/<session_id>/plan` (`bolt.inspect/v1`) for those task names. That read does not run the plan, and it does not put a dry-run or preview record on the default session list.
+- **Refresh while running.** The page polls the existing list and detail reads while a session is `running` and the tab is visible. A finished, failed, or interrupted session stops the poll. Hiding the tab stops it. The server does not invent the next step.
+- **Log drawer.** A session's `log_run_id` opens a truncated tail of `.bolt/logs/<log_run_id>.log`. The id has to match the session-id character set, and `..` or an absolute path is rejected. Secret flag values are masked. With no `log_run_id`, the drawer says the log cannot be linked. The log is not the source of `steps[].error.code`.
+
 ### Local session dashboard
 
 `bolt dash` serves a readonly page on `127.0.0.1` only. The OS picks a free port unless you pass `--port`. It prints the URL and stops on Ctrl+C. The page lists this project's execute sessions, the same set as `bolt session list`. A session detail shows the step graph from `steps[]`. The stuck panel shows that step's `error.code`, `error.message`, and `error.hint`.

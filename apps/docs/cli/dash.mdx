@@ -3,7 +3,7 @@ title: "bolt dash"
 description: "Serve a localhost-only readonly page of this project's execute sessions."
 ---
 
-`bolt dash` serves a readonly page on `127.0.0.1`. It uses the same binary as the other commands. It is a local observer, not CI, and it does not run a task.
+`bolt dash` serves a readonly page on `127.0.0.1`. It uses the same binary as the other commands. It is a local observer for this project's execute sessions. It is not CI, Jenkins, or GitHub Actions, and it does not run a task.
 
 ```bash
 bolt dash
@@ -14,4 +14,10 @@ Omit `--port`, or pass `0`, and the OS picks a free port. The command prints `ht
 
 The session list is the same set as `bolt session list`: execute sessions only. Preview and dry-run records stay hidden there. Open one session to see its steps. A failed or running step is highlighted. The stuck panel shows that step's `error.code`, `error.message`, and `error.hint` from the session file.
 
-`GET /sessions` is one `bolt.session.list/v1` document. `GET /sessions/<session_id>` is one `bolt.session/v1` document, the same shape as `bolt session show --json`, including a preview record. Each read reclaims a `running` session the same way `bolt session list` does. The page has no execute button.
+On top of that A3b page, the detail view adds three things:
+
+- **Plan vs execute.** Each step row shows the plan node and the execution status together. The plan side is `steps[].node` (the inspect-shaped node stored when the run started), next to `steps[].ref`, `steps[].status`, and `steps[].error`. A failed or stopped step stays on that row. If a step has no `node`, the page reads `GET /sessions/<session_id>/plan`, which is one `bolt.inspect/v1` document for the session's task names. That read does not run the plan and does not add a preview record to the session list.
+- **Refresh while running.** While a listed or open session has `status=running` and the tab is visible, the page polls `GET /sessions` and `GET /sessions/<session_id>` about once a second. A terminal status stops the poll. Hiding the tab stops it. The server does not invent the next step.
+- **Log drawer.** When the session has `log_run_id`, the drawer shows a tail of `<project>/.bolt/logs/<log_run_id>.log`. The id uses the session-id character set and cannot contain `..` or an absolute path. The tail is truncated and secret flag values are masked. A session with no `log_run_id` says the log cannot be linked. The log is evidence. `error.code` still comes from the session step.
+
+`GET /sessions` is one `bolt.session.list/v1` document. `GET /sessions/<session_id>` is one `bolt.session/v1` document, the same shape as `bolt session show --json`, including a preview record. Each read reclaims a `running` session the same way `bolt session list` does. The page has no run button.
