@@ -451,7 +451,11 @@ test("SIGINT marks the running session interrupted", async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     expect(file).not.toBe("");
-    process.kill(proc.pid, "SIGINT");
+    try {
+      proc.kill("SIGINT");
+    } catch {
+      process.kill(proc.pid, "SIGINT");
+    }
     const code = await proc.exited;
     // Windows/Bun often reports exit 1 on interrupt; session interrupt + finished_at are the contract.
     if (process.platform === "win32") {
@@ -459,10 +463,18 @@ test("SIGINT marks the running session interrupted", async () => {
     } else {
       expect(code).toBe(INTERRUPTED_EXIT_CODE);
     }
-    const saved = JSON.parse(readFileSync(file, "utf8")) as {
+    const deadline = Date.now() + 5_000;
+    let saved = JSON.parse(readFileSync(file, "utf8")) as {
       status: string;
       finished_at?: string;
     };
+    while (saved.status === "running" && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      saved = JSON.parse(readFileSync(file, "utf8")) as {
+        status: string;
+        finished_at?: string;
+      };
+    }
     expect(saved.status).toBe("interrupted");
     expect(typeof saved.finished_at).toBe("string");
   } finally {

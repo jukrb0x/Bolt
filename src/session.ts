@@ -8,9 +8,12 @@
  * `preview: true` stays out of the default list.
  */
 import {
+  closeSync,
   copyFileSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -216,6 +219,16 @@ export function pidAlive(pid: number): boolean {
  * on Unix rename replaces atomically; on Windows fall back to overwrite-copy
  * without deleting the good file ahead of time.
  */
+function syncSessionFile(file: string): void {
+  try {
+    const fd = openSync(file, "r");
+    fsyncSync(fd);
+    closeSync(fd);
+  } catch {
+    // Best-effort: interrupt may exit immediately after write on Windows.
+  }
+}
+
 function writeSessionAtomic(file: string, body: string): void {
   const dir = path.dirname(file);
   mkdirSync(dir, { recursive: true });
@@ -228,6 +241,7 @@ function writeSessionAtomic(file: string, body: string): void {
     copyFileSync(tmp, file);
     rmSync(tmp, { force: true });
   }
+  syncSessionFile(file);
 }
 
 export class RunSession implements SessionHooks {

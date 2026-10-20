@@ -55,6 +55,17 @@ export function emitProcessEnvelope(
 
 let installed = false;
 const onInterrupt: Array<() => void> = [];
+let interruptEnvelopeEmitted = false;
+
+function flushInterruptHooks(): void {
+  for (const fn of [...onInterrupt]) {
+    try {
+      fn();
+    } catch {
+      // The exit code is the contract. Session write is best-effort.
+    }
+  }
+}
 
 /** Best-effort work before a catchable SIGINT / SIGBREAK exit. Returns an unsubscribe. */
 export function onProcessInterrupt(fn: () => void): () => void {
@@ -77,15 +88,14 @@ export function installProcessGuards(): void {
     emitProcessEnvelope("INTERNAL", message, INTERNAL_EXIT_CODE);
   });
   const stop = () => {
-    for (const fn of [...onInterrupt]) {
-      try {
-        fn();
-      } catch {
-        // The exit code is the contract. Session write is best-effort.
-      }
-    }
+    if (interruptEnvelopeEmitted) return;
+    interruptEnvelopeEmitted = true;
+    flushInterruptHooks();
     emitProcessEnvelope("INTERRUPTED", "interrupted", INTERRUPTED_EXIT_CODE);
   };
+  // Windows often exits without running SIGINT listeners; flush session hooks synchronously on exit.
+  process.on("exit", flushInterruptHooks);
   process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
   if (process.platform === "win32") process.on("SIGBREAK", stop);
 }
