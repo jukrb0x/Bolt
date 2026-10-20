@@ -76,6 +76,32 @@ export interface SessionRecord {
   preview?: boolean;
 }
 
+/** Focus step for list rows: running, then failed, then interrupted. */
+export function focusStep(record: SessionRecord): SessionStep | undefined {
+  return (
+    record.steps.find((step) => step.status === "running") ??
+    record.steps.find((step) => step.status === "failed") ??
+    record.steps.find((step) => step.status === "interrupted")
+  );
+}
+
+/** One `data.sessions[]` row. Same object `bolt session list --json` prints. */
+export function sessionListItem(record: SessionRecord) {
+  const step = focusStep(record);
+  return {
+    session_id: record.session_id,
+    started_at: record.started_at,
+    ...(record.finished_at ? { finished_at: record.finished_at } : {}),
+    status: record.status,
+    names: record.names,
+    entry: record.invocation.entry,
+    ...(record.plan_hash ? { plan_hash: record.plan_hash } : {}),
+    ...(record.log_run_id ? { log_run_id: record.log_run_id } : {}),
+    ...(record.invocation.pid !== undefined ? { pid: record.invocation.pid } : {}),
+    ...(step ? { step: { ref: step.ref, index: step.index, status: step.status } } : {}),
+  };
+}
+
 export interface SessionHooks {
   begin(index: number): void;
   ok(index: number, result?: HandlerResult): void;

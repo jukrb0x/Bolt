@@ -5,13 +5,19 @@ description: "User-visible changes and migration notes."
 
 ## Unreleased
 
+### Local session dashboard
+
+`bolt dash` serves a readonly page on `127.0.0.1` only. The OS picks a free port unless you pass `--port`. It prints the URL and stops on Ctrl+C. The page lists this project's execute sessions, the same set as `bolt session list`. A session detail shows the step graph from `steps[]`. The stuck panel shows that step's `error.code`, `error.message`, and `error.hint`.
+
+`GET /sessions` is one `bolt.session.list/v1` document. `GET /sessions/<session_id>` is one `bolt.session/v1` document, including a preview record that the list hides. The page does not run `bolt run --execute` and does not write sessions except the reclaim those reads already do. It is a local observer, not CI, and it does not listen on `0.0.0.0`.
+
 ### Run sessions
 
 `bolt run` writes `.bolt/sessions/<session_id>.json` when it actually executes a plan. That includes a human `bolt run <task>` and `bolt run <task> --execute`. Dry-run, JSON preview, and `--simulate` do not write a session. The directory is under `.bolt/`, which is already gitignored.
 
 `bolt session list` prints those execute sessions. `bolt session list --json` is one `bolt.session.list/v1` document. `bolt session show <session_id>` prints one session, including a `preview` record that list hides. `bolt session show --json` is `bolt.session/v1`. `bolt session clear` deletes the session files. `bolt session clear --json` is `bolt.session.clear/v1`. The envelope matches the other commands.
 
-A session is `running` until the run finishes `ok` or `failed`, or a catchable interrupt writes `interrupted`. `list` and `show` reclaim a `running` session when its pid is gone, or when it has no pid and the file is older than 2 hours. There is no `stale` status. Files older than 7 days are removed on `list` and `show`, except a `running` session whose pid is still alive.
+A session is `running` until the run finishes `ok` or `failed`, or a catchable interrupt writes `interrupted`. `list`, `show`, and `bolt dash` reclaim a `running` session when its pid is gone, or when it has no pid and the file is older than 2 hours. There is no `stale` status. Files older than 7 days are removed on those reads, except a `running` session whose pid is still alive.
 
 A failed step stores `{ code, message, hint? }` from the runner. On `bolt run --execute --json`, that same issue is also in `errors` with `ref` and `index`. `errors[0]` stays `RUN_FAILED`. `invocation.argv_summary` masks token, password, key, and secret flag values and does not store the raw argv. `steps[].result` is the handler's public fields only.
 

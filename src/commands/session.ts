@@ -14,36 +14,13 @@ import { loadProjectConfigOrExit } from "../project-config";
 import { printUsageError } from "../strict-args";
 import {
   clearSessions,
+  focusStep,
   loadSessions,
   safeSessionId,
+  sessionListItem,
   type SessionRecord,
-  type SessionStep,
 } from "../session";
 import path from "path";
-
-function focusStep(record: SessionRecord): SessionStep | undefined {
-  return (
-    record.steps.find((step) => step.status === "running") ??
-    record.steps.find((step) => step.status === "failed") ??
-    record.steps.find((step) => step.status === "interrupted")
-  );
-}
-
-function summary(record: SessionRecord) {
-  const step = focusStep(record);
-  return {
-    session_id: record.session_id,
-    started_at: record.started_at,
-    ...(record.finished_at ? { finished_at: record.finished_at } : {}),
-    status: record.status,
-    names: record.names,
-    entry: record.invocation.entry,
-    ...(record.plan_hash ? { plan_hash: record.plan_hash } : {}),
-    ...(record.log_run_id ? { log_run_id: record.log_run_id } : {}),
-    ...(record.invocation.pid !== undefined ? { pid: record.invocation.pid } : {}),
-    ...(step ? { step: { ref: step.ref, index: step.index, status: step.status } } : {}),
-  };
-}
 
 function printList(configPath: string, sessions: SessionRecord[]): void {
   console.log(pc.dim(`bolt.yaml: ${configPath}`));
@@ -99,7 +76,7 @@ const listCmd = defineCommand({
         schema: JSON_SCHEMA.sessionList,
         exitCode: 0,
         config: configRef(loaded.configPath),
-        data: { sessions: sessions.map(summary) },
+        data: { sessions: sessions.map(sessionListItem) },
         warnings,
       });
     }

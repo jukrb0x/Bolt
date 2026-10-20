@@ -10,6 +10,7 @@ const KNOWN = new Set([
   "inspect",
   "status",
   "session",
+  "dash",
   "run",
   "ai",
   "version",

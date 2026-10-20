@@ -1,0 +1,17 @@
+---
+title: "bolt dash"
+description: "Serve a localhost-only readonly page of this project's execute sessions."
+---
+
+`bolt dash` serves a readonly page on `127.0.0.1`. It uses the same binary as the other commands. It is a local observer, not CI, and it does not run a task.
+
+```bash
+bolt dash
+bolt dash --port=47321
+```
+
+Omit `--port`, or pass `0`, and the OS picks a free port. The command prints `http://127.0.0.1:<port>/` and stops on Ctrl+C. It never binds `0.0.0.0`. If the port is taken, pass `--port=0`.
+
+The session list is the same set as `bolt session list`: execute sessions only. Preview and dry-run records stay hidden there. Open one session to see its steps. A failed or running step is highlighted. The stuck panel shows that step's `error.code`, `error.message`, and `error.hint` from the session file.
+
+`GET /sessions` is one `bolt.session.list/v1` document. `GET /sessions/<session_id>` is one `bolt.session/v1` document, the same shape as `bolt session show --json`, including a preview record. Each read reclaims a `running` session the same way `bolt session list` does. The page has no execute button.
